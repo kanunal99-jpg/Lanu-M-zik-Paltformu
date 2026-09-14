@@ -318,6 +318,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Favorites & Downloads
+    
+    fun scanLocalMusic() {
+        viewModelScope.launch {
+            repository.scanAndSyncLocalMusic()
+        }
+    }
+
+
     fun toggleFavorite(songId: String) {
         viewModelScope.launch {
             repository.toggleFavorite(songId)

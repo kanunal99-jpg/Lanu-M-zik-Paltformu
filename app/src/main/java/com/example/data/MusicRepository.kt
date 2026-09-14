@@ -23,6 +23,7 @@ class MusicRepository(context: Context) {
     private val database = AppDatabase.getDatabase(context)
     private val dao = database.musicDao()
     private val scope = CoroutineScope(Dispatchers.IO)
+    private val localMusicScanner = LocalMusicScanner(context)
 
     // Dynamic songs list (can receive new releases)
     private val _songs = MutableStateFlow<List<Song>>(MusicCatalog.songs)
@@ -83,12 +84,36 @@ class MusicRepository(context: Context) {
         list.map { it.songId }.toSet()
     }
 
-    suspend fun toggleFavorite(songId: String) {
-        val favs = favoriteSongIds.first()
-        if (favs.contains(songId)) {
-            dao.removeFavorite(songId)
-        } else {
-            dao.addFavorite(FavoriteSongEntity(songId))
+    suspend 
+    fun scanAndSyncLocalMusic() {
+        scope.launch {
+            val localSongs = localMusicScanner.scanLocalMusic()
+            if (localSongs.isNotEmpty()) {
+                // Combine with existing songs
+                val current = _songs.value.toMutableList()
+                val existingIds = current.map { it.id }.toSet()
+                val newSongs = localSongs.filter { !existingIds.contains(it.id) }
+                
+                if (newSongs.isNotEmpty()) {
+                    current.addAll(newSongs)
+                    _songs.value = current
+                    
+                    // Save to Room
+                    dao.insertLocalSongs(newSongs.map { it.toLocalEntity(isOffline = true) })
+                }
+            }
+        }
+    }
+
+
+    fun toggleFavorite(songId: String) {
+        scope.launch {
+            val favs = favoriteSongIds.first()
+            if (favs.contains(songId)) {
+                dao.removeFavorite(songId)
+            } else {
+                dao.addFavorite(FavoriteSongEntity(songId))
+            }
         }
     }
 

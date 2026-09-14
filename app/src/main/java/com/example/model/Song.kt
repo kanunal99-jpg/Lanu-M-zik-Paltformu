@@ -19,7 +19,8 @@ enum class MusicCategory(
     HIP_HOP("hip_hop", "Hip-Hop & R&B", "Hip-Hop & R&B", Color(0xFFF857A6), Color(0xFFFF5858), "🔥"),
     ROCK_CLASSICS("rock_classics", "Rock Efsaneleri", "Rock Classics", Color(0xFF232526), Color(0xFF414345), "⚡"),
     EDM_DANCE("edm_dance", "Elektronik & Dans", "EDM & Dance", Color(0xFF00F2FE), Color(0xFF4FACFE), "🔊"),
-    CHILL_LOFI("chill_lofi", "Akustik & Chill", "Acoustic & Chill", Color(0xFF56AB2F), Color(0xFFA8E063), "☕");
+    CHILL_LOFI("chill_lofi", "Akustik & Chill", "Acoustic & Chill", Color(0xFF56AB2F), Color(0xFFA8E063), "☕"),
+    LOCAL("local", "Yerel Müzik", "Local Music", Color(0xFF2C3E50), Color(0xFF3498DB), "📁");
 
     val displayNameTr: String get() = titleTr
     val displayNameEn: String get() = titleEn

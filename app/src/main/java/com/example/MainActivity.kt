@@ -50,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.service.MusicPlaybackService
 import com.example.ui.components.ArtistDetailSheet
 import com.example.ui.components.AddToPlaylistDialog
 import com.example.ui.components.CreatePlaylistDialog
@@ -70,64 +69,41 @@ import com.example.ui.theme.LanuTextMuted
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
-    private var playbackService: MusicPlaybackService? = null
-    private var isBound = false
-
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val binder = service as? MusicPlaybackService.LocalBinder
-            playbackService = binder?.getService()
-            isBound = true
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            playbackService = null
-            isBound = false
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Bind playback service
-        val serviceIntent = Intent(this, MusicPlaybackService::class.java)
-        bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE)
-
+        
         setContent {
             MyApplicationTheme {
-                MainAppScreen(
-                    playbackService = playbackService
-                )
+                MainAppScreen()
             }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (isBound) {
-            unbindService(connection)
-            isBound = false
         }
     }
 }
 
 @Composable
 fun MainAppScreen(
-    playbackService: MusicPlaybackService?,
     viewModel: MainViewModel = viewModel()
 ) {
     val context = LocalContext.current
 
     // Request notification permission for Android 13+
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
+    // Permissions for MediaStore and Notifications
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> 
+        viewModel.scanLocalMusic() // Scan when permissions are granted
+    }
 
     LaunchedEffect(Unit) {
+        val permissionsToRequest = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
+        } else {
+            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
+        permissionsLauncher.launch(permissionsToRequest.toTypedArray())
     }
 
     // State collections
@@ -167,7 +143,6 @@ fun MainAppScreen(
     LaunchedEffect(currentSong, isPlaying) {
         currentSong?.let { song ->
             try {
-                playbackService?.startForegroundWithNotification(song.title, song.artist, isPlaying)
             } catch (e: Exception) {
                 // Ignore service sync errors
             }

@@ -1,4 +1,6 @@
-package com.example.service
+import re
+
+controller_kt = """package com.example.service
 
 import android.content.ComponentName
 import android.content.Context
@@ -11,8 +13,6 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.model.Song
-import com.example.model.EqualizerState
-import com.example.model.EqualizerPreset
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CoroutineScope
@@ -251,9 +251,8 @@ class AudioPlayerController(private val context: Context) {
         controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 }
+"""
 
-enum class RepeatMode {
-    OFF, ALL, ONE
-}
-
+with open('app/src/main/java/com/example/service/AudioPlayerController.kt', 'w') as f:
+    f.write(controller_kt)
 
