@@ -43,11 +43,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = MusicRepository(application)
     val playerController = AudioPlayerController(application)
 
-    // Current navigation tab
     private val _currentTab = MutableStateFlow(MainTab.HOME)
     val currentTab: StateFlow<MainTab> = _currentTab.asStateFlow()
 
-    // Full screen player visibility
     private val _isNowPlayingExpanded = MutableStateFlow(false)
     val isNowPlayingExpanded: StateFlow<Boolean> = _isNowPlayingExpanded.asStateFlow()
     val isPlayerExpanded: StateFlow<Boolean> get() = _isNowPlayingExpanded
@@ -56,7 +54,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isNowPlayingExpanded.value = expanded
     }
 
-    // Now Playing Tab: 0: Cover, 1: Lyrics, 2: Quick EQ
     private val _nowPlayingTab = MutableStateFlow(0)
     val nowPlayingTab: StateFlow<Int> = _nowPlayingTab.asStateFlow()
 
@@ -64,7 +61,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _nowPlayingTab.value = tab
     }
 
-    // Settings dialog state
     private val _showSettingsDialog = MutableStateFlow(false)
     val showSettingsDialog: StateFlow<Boolean> = _showSettingsDialog.asStateFlow()
 
@@ -72,7 +68,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _showSettingsDialog.value = show
     }
 
-    // Recommendation alert
     private val _recommendationAlert = MutableStateFlow<String?>(null)
     val recommendationAlert: StateFlow<String?> = _recommendationAlert.asStateFlow()
 
@@ -80,50 +75,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _recommendationAlert.value = null
     }
 
-    // Lyrics vs Cover mode inside Now Playing screen
     private val _showLyricsInNowPlaying = MutableStateFlow(false)
     val showLyricsInNowPlaying: StateFlow<Boolean> = _showLyricsInNowPlaying.asStateFlow()
 
-    // Selected artist for detail modal
     private val _selectedArtist = MutableStateFlow<Artist?>(null)
     val selectedArtist: StateFlow<Artist?> = _selectedArtist.asStateFlow()
 
-    // Selected playlist for detail modal
     private val _selectedPlaylist = MutableStateFlow<PlaylistEntity?>(null)
     val selectedPlaylist: StateFlow<PlaylistEntity?> = _selectedPlaylist.asStateFlow()
 
-    // Dialog states
     private val _showCreatePlaylistDialog = MutableStateFlow(false)
     val showCreatePlaylistDialog: StateFlow<Boolean> = _showCreatePlaylistDialog.asStateFlow()
 
     private val _songToAddToPlaylist = MutableStateFlow<Song?>(null)
     val songToAddToPlaylist: StateFlow<Song?> = _songToAddToPlaylist.asStateFlow()
 
-    // Loading state for visual feedback
+    // Loading is reserved for real asynchronous operations; there is no artificial network delay.
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    init {
-        simulateNetworkLoading(1500)
-    }
+    /**
+     * Compatibility shim for callers that used the old fake-loading API.
+     * It deliberately does nothing: UI latency must come from real work, not timers.
+     */
+    @Deprecated("Artificial network loading was removed; use real operation state instead.")
+    fun simulateNetworkLoading(delayMs: Long = 0) = Unit
 
-    fun simulateNetworkLoading(delayMs: Long = 800) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            kotlinx.coroutines.delay(delayMs) // Simulating network delay
-            _isLoading.value = false
-        }
-    }
-
-    // Audio Quality preference
     private val _audioQuality = MutableStateFlow(AudioQuality.HIGH)
     val audioQuality: StateFlow<AudioQuality> = _audioQuality.asStateFlow()
 
-    // Language preference ("tr" / "en")
     private val _appLanguage = MutableStateFlow("tr")
     val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
 
-    // Search query & filters
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -131,7 +114,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val selectedCategoryFilter: StateFlow<MusicCategory?> = _selectedCategoryFilter.asStateFlow()
     val selectedCategory: StateFlow<MusicCategory?> get() = selectedCategoryFilter
 
-    // State flows from Repository
     val allSongs: StateFlow<List<Song>> = repository.songs
     val artists: List<Artist> = repository.artists
     val friendActivities: StateFlow<List<FriendActivity>> = repository.friendActivities
@@ -175,24 +157,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Room-cached songs Flow
     val cachedSongs: StateFlow<List<Song>> = repository.cachedSongs.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
 
-    // Reactive search directly backed by Room database query (matches by title or artist)
     @OptIn(ExperimentalCoroutinesApi::class)
     val roomCachedSearchResults: StateFlow<List<Song>> = _searchQuery
-        .flatMapLatest { query ->
-            repository.searchCachedSongs(query)
-        }
+        .flatMapLatest { query -> repository.searchCachedSongs(query) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun searchSongsFromRoom(query: String): Flow<List<Song>> {
-        return repository.searchCachedSongs(query)
-    }
+    fun searchSongsFromRoom(query: String): Flow<List<Song>> = repository.searchCachedSongs(query)
 
     val playlists: StateFlow<List<PlaylistEntity>> = repository.playlists.stateIn(
         scope = viewModelScope,
@@ -200,7 +176,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = emptyList()
     )
 
-    // Player State flows
     val currentSong: StateFlow<Song?> = playerController.currentSong
     val isPlaying: StateFlow<Boolean> = playerController.isPlaying
     val currentPositionMs: StateFlow<Long> = playerController.currentPositionMs
@@ -217,34 +192,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val equalizerState: StateFlow<EqualizerState> = playerController.equalizerState
-
     val equalizerSettings: StateFlow<EqualizerSettings> = equalizerState
         .map { it.toSettings() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EqualizerSettings())
 
-    // Navigation & Player actions
-    fun setTab(tab: MainTab) {
-        _currentTab.value = tab
-    }
-
-    fun openNowPlaying() {
-        _isNowPlayingExpanded.value = true
-    }
-
-    fun closeNowPlaying() {
-        _isNowPlayingExpanded.value = false
-    }
-
-    fun toggleLyricsInNowPlaying() {
-        _showLyricsInNowPlaying.value = !_showLyricsInNowPlaying.value
-    }
+    fun setTab(tab: MainTab) { _currentTab.value = tab }
+    fun openNowPlaying() { _isNowPlayingExpanded.value = true }
+    fun closeNowPlaying() { _isNowPlayingExpanded.value = false }
+    fun toggleLyricsInNowPlaying() { _showLyricsInNowPlaying.value = !_showLyricsInNowPlaying.value }
 
     fun playSong(song: Song, queue: List<Song> = listOf(song)) {
         val index = queue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
         playerController.setQueue(queue, index, autoPlay = true)
-        viewModelScope.launch {
-            repository.recordPlayedSong(song.id)
-        }
+        viewModelScope.launch { repository.recordPlayedSong(song.id) }
     }
 
     fun togglePlayPause() {
@@ -258,98 +218,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playerController.togglePlayPause()
     }
 
-    fun nextSong() {
-        playerController.next()
-    }
+    fun nextSong() { playerController.next() }
+    fun prevSong() { playerController.previous() }
+    fun seekTo(positionMs: Long) { playerController.seekTo(positionMs) }
+    fun toggleShuffle() { playerController.toggleShuffle() }
+    fun toggleRepeat() { playerController.toggleRepeat() }
 
-    fun prevSong() {
-        playerController.previous()
-    }
+    fun setEqualizerPreset(preset: EqualizerPreset) { playerController.setEqualizerPreset(preset) }
+    fun setBandLevel(bandIndex: Int, levelDb: Float) { playerController.setBandLevel(bandIndex, levelDb) }
+    fun setBassBoost(percent: Float) { playerController.setBassBoost(percent) }
+    fun setVirtualizer(percent: Float) { playerController.setVirtualizer(percent) }
+    fun toggleEqualizer() { playerController.toggleEqualizerEnabled() }
 
-    fun seekTo(positionMs: Long) {
-        playerController.seekTo(positionMs)
-    }
+    fun setAudioQuality(quality: AudioQuality) { _audioQuality.value = quality }
+    fun setAppLanguage(lang: String) { _appLanguage.value = lang }
+    fun updateSearchQuery(query: String) { _searchQuery.value = query }
+    fun filterByCategory(category: MusicCategory?) { _selectedCategoryFilter.value = category }
 
-    fun toggleShuffle() {
-        playerController.toggleShuffle()
-    }
-
-    fun toggleRepeat() {
-        playerController.toggleRepeat()
-    }
-
-    // Equalizer
-    fun setEqualizerPreset(preset: EqualizerPreset) {
-        playerController.setEqualizerPreset(preset)
-    }
-
-    fun setBandLevel(bandIndex: Int, levelDb: Float) {
-        playerController.setBandLevel(bandIndex, levelDb)
-    }
-
-    fun setBassBoost(percent: Float) {
-        playerController.setBassBoost(percent)
-    }
-
-    fun setVirtualizer(percent: Float) {
-        playerController.setVirtualizer(percent)
-    }
-
-    fun toggleEqualizer() {
-        playerController.toggleEqualizerEnabled()
-    }
-
-    // Quality & Language
-    fun setAudioQuality(quality: AudioQuality) {
-        _audioQuality.value = quality
-    }
-
-    fun setAppLanguage(lang: String) {
-        _appLanguage.value = lang
-    }
-
-    // Search
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun filterByCategory(category: MusicCategory?) {
-        _selectedCategoryFilter.value = category
-    }
-
-    // Favorites & Downloads
-    
     fun scanLocalMusic() {
-        viewModelScope.launch {
-            repository.scanAndSyncLocalMusic()
-        }
+        viewModelScope.launch { repository.scanAndSyncLocalMusic() }
     }
-
 
     fun toggleFavorite(songId: String) {
-        viewModelScope.launch {
-            repository.toggleFavorite(songId)
-        }
+        viewModelScope.launch { repository.toggleFavorite(songId) }
     }
 
     fun toggleDownload(song: Song) {
-        viewModelScope.launch {
-            repository.toggleDownload(song, _audioQuality.value)
-        }
+        viewModelScope.launch { repository.toggleDownload(song, _audioQuality.value) }
     }
 
-    // Playlists
-    fun openCreatePlaylistDialog() {
-        _showCreatePlaylistDialog.value = true
-    }
-
-    fun closeCreatePlaylistDialog() {
-        _showCreatePlaylistDialog.value = false
-    }
+    fun openCreatePlaylistDialog() { _showCreatePlaylistDialog.value = true }
+    fun closeCreatePlaylistDialog() { _showCreatePlaylistDialog.value = false }
 
     fun createPlaylist(name: String, description: String = "") {
         viewModelScope.launch {
-            val id = repository.createPlaylist(name, description)
+            repository.createPlaylist(name, description)
             _showCreatePlaylistDialog.value = false
         }
     }
@@ -357,23 +260,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deletePlaylist(playlistId: String) {
         viewModelScope.launch {
             repository.deletePlaylist(playlistId)
-            if (_selectedPlaylist.value?.id == playlistId) {
-                _selectedPlaylist.value = null
-            }
+            if (_selectedPlaylist.value?.id == playlistId) _selectedPlaylist.value = null
         }
     }
 
-    fun selectPlaylist(playlist: PlaylistEntity?) {
-        _selectedPlaylist.value = playlist
-    }
-
-    fun openAddToPlaylist(song: Song) {
-        _songToAddToPlaylist.value = song
-    }
-
-    fun closeAddToPlaylist() {
-        _songToAddToPlaylist.value = null
-    }
+    fun selectPlaylist(playlist: PlaylistEntity?) { _selectedPlaylist.value = playlist }
+    fun openAddToPlaylist(song: Song) { _songToAddToPlaylist.value = song }
+    fun closeAddToPlaylist() { _songToAddToPlaylist.value = null }
 
     fun addSongToPlaylist(playlistId: String, songId: String) {
         viewModelScope.launch {
@@ -383,23 +276,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeSongFromPlaylist(playlistId: String, songId: String) {
-        viewModelScope.launch {
-            repository.removeSongFromPlaylist(playlistId, songId)
-        }
+        viewModelScope.launch { repository.removeSongFromPlaylist(playlistId, songId) }
     }
 
     fun getSongsForPlaylist(playlistId: String) = repository.getSongsForPlaylist(playlistId)
 
-    // Artist modal
-    fun selectArtist(artist: Artist?) {
-        _selectedArtist.value = artist
-    }
+    fun selectArtist(artist: Artist?) { _selectedArtist.value = artist }
 
-    fun getSongsForArtist(artistId: String): List<Song> {
-        return allSongs.value.filter { it.artistId == artistId }
-    }
+    fun getSongsForArtist(artistId: String): List<Song> = allSongs.value.filter { it.artistId == artistId }
 
-    // Social Sharing
     fun shareSong(context: Context, song: Song) {
         val shareText = "🎵 ${song.title} - ${song.artist}\n\nLANU Müzik'te şimdi dinle:\nhttps://lanumusic.app/track/${song.id}\n\nSöz: \"${song.lyrics.firstOrNull()?.text ?: ""}\""
         val sendIntent = Intent().apply {
@@ -436,19 +321,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         context.startActivity(shareIntent)
     }
 
-    fun likeFriendActivity(activityId: String) {
-        repository.likeFriendActivity(activityId)
-    }
-
+    fun likeFriendActivity(activityId: String) { repository.likeFriendActivity(activityId) }
     fun shareRecommendationToFriends(friendName: String, song: Song, note: String) {
         repository.shareRecommendationToFriends(friendName, song, note)
     }
 
-    fun simulateNewReleasePush() {
-        repository.pushSimulatedNewRelease()
-    }
-
-    fun dismissNewReleaseNotification() {
-        repository.dismissNewReleaseNotification()
-    }
+    fun simulateNewReleasePush() { repository.pushSimulatedNewRelease() }
+    fun dismissNewReleaseNotification() { repository.dismissNewReleaseNotification() }
 }
