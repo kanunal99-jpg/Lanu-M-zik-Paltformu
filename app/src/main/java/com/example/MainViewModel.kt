@@ -94,10 +94,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    /**
-     * Compatibility shim for callers that used the old fake-loading API.
-     * It deliberately does nothing: UI latency must come from real work, not timers.
-     */
+    /** Compatibility shim for callers that used the old fake-loading API. */
     @Deprecated("Artificial network loading was removed; use real operation state instead.")
     fun simulateNetworkLoading(delayMs: Long = 0) = Unit
 
@@ -147,15 +144,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val searchResults: StateFlow<List<Song>> = combine(allSongs, _searchQuery, _selectedCategoryFilter) { songs, query, cat ->
+        val normalizedQuery = normalizeSearch(query)
         songs.filter { song ->
-            val matchesQuery = query.isBlank() ||
-                    song.title.contains(query, ignoreCase = true) ||
-                    song.artist.contains(query, ignoreCase = true) ||
-                    song.album.contains(query, ignoreCase = true)
+            val matchesQuery = normalizedQuery.isBlank() ||
+                    listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } ||
+                    song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
             val matchesCat = cat == null || song.category == cat
             matchesQuery && matchesCat
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun normalizeSearch(value: String): String = value.trim().lowercase()
+        .replace('ı', 'i').replace('İ', 'i').replace('ş', 's').replace('Ş', 's')
+        .replace('ğ', 'g').replace('Ğ', 'g').replace('ü', 'u').replace('Ü', 'u')
+        .replace('ö', 'o').replace('Ö', 'o').replace('ç', 'c').replace('Ç', 'c')
 
     val cachedSongs: StateFlow<List<Song>> = repository.cachedSongs.stateIn(
         scope = viewModelScope,
