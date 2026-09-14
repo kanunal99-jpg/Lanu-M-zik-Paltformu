@@ -61,10 +61,10 @@ class DownloadManager(private val context: Context) {
                 temp.delete()
 
                 val resolver = context.contentResolver
+                val total = resolveSourceLength(resolver, uri)
                 val input = openInputStream(resolver, uri)
                     ?: throw IllegalStateException("SOURCE_NOT_READABLE")
                 input.use { stream ->
-                    val total = stream.available().toLong().takeIf { it > 0L } ?: -1L
                     var copied = 0L
                     updateState(song.id, DownloadStatus.DOWNLOADING, 0f, 0L, total)
                     temp.outputStream().use { out ->
@@ -117,6 +117,13 @@ class DownloadManager(private val context: Context) {
         activeJobs[songId]?.cancel()
     }
 
+    fun close() {
+        activeJobs.values.forEach { it.cancel() }
+        activeJobs.clear()
+        scope.cancel()
+        _downloadStates.value = emptyMap()
+    }
+
     fun deleteDownloadedFile(songId: String): Boolean {
         cancelDownload(songId)
         val dir = File(context.filesDir, "offline_audio")
@@ -132,6 +139,17 @@ class DownloadManager(private val context: Context) {
         "content" -> resolver.openInputStream(uri)
         "file" -> FileInputStream(File(uri.path ?: throw IllegalArgumentException("INVALID_FILE_URI")))
         else -> null
+    }
+
+    private fun resolveSourceLength(resolver: ContentResolver, uri: Uri): Long {
+        return when (uri.scheme?.lowercase()) {
+            "file" -> File(uri.path ?: return -1L).length()
+            "content" -> runCatching {
+                resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor -> descriptor.length }
+                    ?: -1L
+            }.getOrDefault(-1L)
+            else -> -1L
+        }
     }
 
     private fun updateState(state: DownloadProgress) {

@@ -9,6 +9,8 @@ import com.example.model.MusicCategory
 import com.example.model.Song
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,7 @@ class MusicRepository(context: Context) {
     private val context = context.applicationContext
     private val database = AppDatabase.getDatabase(context)
     private val dao = database.musicDao()
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val localMusicScanner = LocalMusicScanner(context)
     val downloadManager = com.example.player.DownloadManager(context)
 
@@ -183,4 +185,9 @@ class MusicRepository(context: Context) {
 
     fun pushSimulatedNewRelease() { }
     fun dismissNewReleaseNotification() { _newReleaseNotification.value = null }
+
+    fun close() {
+        scope.cancel()
+        downloadManager.close()
+    }
 }

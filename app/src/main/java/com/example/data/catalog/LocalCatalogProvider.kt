@@ -11,15 +11,18 @@ import java.time.Instant
 class LocalCatalogProvider(private val dao: MusicDao) : CatalogProvider {
 
     override suspend fun searchSongs(query: String): Result<List<Song>> {
+        val normalizedQuery = normalizeSearch(query)
         val songs = dao.getAllLocalSongs().first().filter {
-            it.title.contains(query, ignoreCase = true) || it.artist.contains(query, ignoreCase = true)
+            normalizedQuery.isBlank() ||
+                listOf(it.title, it.artist, it.album).any { value -> normalizeSearch(value).contains(normalizedQuery) }
         }.map { it.toSong() }
         return Result.success(songs)
     }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> {
+        val normalizedQuery = normalizeSearch(query)
         val songs = dao.getAllLocalSongs().first().map { it.toSong() }
-        val artists = songs.filter { it.artist.contains(query, ignoreCase = true) }
+        val artists = songs.filter { normalizedQuery.isBlank() || normalizeSearch(it.artist).contains(normalizedQuery) }
             .distinctBy { it.artistId }
             .map {
                 Artist(
@@ -76,6 +79,11 @@ class LocalCatalogProvider(private val dao: MusicDao) : CatalogProvider {
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> {
-        return Result.success(emptyList()) // Local has no remote-sync releases of its own
+        return Result.success(emptyList())
     }
+
+    private fun normalizeSearch(value: String): String = value.trim().lowercase()
+        .replace('ı', 'i').replace('İ', 'i').replace('ş', 's').replace('Ş', 's')
+        .replace('ğ', 'g').replace('Ğ', 'g').replace('ü', 'u').replace('Ü', 'u')
+        .replace('ö', 'o').replace('Ö', 'o').replace('ç', 'c').replace('Ç', 'c')
 }

@@ -3,6 +3,7 @@ package com.example
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.DownloadedSongEntity
@@ -238,7 +239,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun filterByCategory(category: MusicCategory?) { _selectedCategoryFilter.value = category }
 
     fun scanLocalMusic() {
-        viewModelScope.launch { repository.scanAndSyncLocalMusic() }
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                repository.scanAndSyncLocalMusic()
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Local music scan failed", e)
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
     fun toggleFavorite(songId: String) {
@@ -330,4 +340,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun simulateNewReleasePush() { repository.pushSimulatedNewRelease() }
     fun dismissNewReleaseNotification() { repository.dismissNewReleaseNotification() }
+
+    override fun onCleared() {
+        playerController.release()
+        repository.close()
+        super.onCleared()
+    }
 }
