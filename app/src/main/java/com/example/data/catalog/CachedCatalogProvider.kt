@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.first
 import java.time.Instant
 
 class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
-    
     override suspend fun searchSongs(query: String): Result<List<Song>> {
         val cached = dao.searchCachedSongsByTitleOrArtist(query).first()
         return Result.success(cached.map { it.toSong() })
@@ -24,7 +23,9 @@ class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
                     id = it.artistId,
                     name = it.artist,
                     genre = it.category.titleTr,
-                    bio = "Cached Bio for ${it.artist}",
+                    // Cached catalog does not contain a verified artist biography.
+                    // Never manufacture metadata just to fill the UI.
+                    bio = "",
                     imageUrl = it.coverUrl,
                     monthlyListeners = "N/A"
                 )
@@ -44,7 +45,8 @@ class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
                 id = song.artistId,
                 name = song.artist,
                 genre = song.category.titleTr,
-                bio = "Cached Bio for ${song.artist}",
+                // Cached catalog does not contain a verified artist biography.
+                bio = "",
                 imageUrl = song.coverUrl,
                 monthlyListeners = "N/A"
             )
