@@ -1,21 +1,25 @@
-package com.example.data
+package com.example.data.catalog
 
 import com.example.model.Artist
-import com.example.model.FriendActivity
-import com.example.model.MusicCategory
 import com.example.model.Song
-import com.example.model.TimedLyric
+import com.example.model.Album
+import com.example.model.MusicCategory
+import com.example.model.FriendActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.Instant
 
-object MusicCatalog {
+class PrimaryCatalogProvider : CatalogProvider {
 
-    val artists: List<Artist> = listOf(
+    // Seed data corresponding to the authentic artists and albums
+    private val artistsList = listOf(
         Artist(
             id = "tarkan",
             name = "Tarkan",
             genre = "Türkçe Pop",
             bio = "Megastar Tarkan, modern Türk pop müziğinin küresel simgesi ve gelmiş geçmiş en çok dinlenen sanatçılarından biridir.",
             imageUrl = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "2M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "sezen_aksu",
@@ -23,7 +27,7 @@ object MusicCatalog {
             genre = "Türkçe Pop / Klasik",
             bio = "Minik Serçe, yüzlerce unutulmaz bestesi ve derin sözleriyle Türk müziğinin kalbinde yer edinmiş efsanedir.",
             imageUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "3M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "ceza",
@@ -31,7 +35,7 @@ object MusicCatalog {
             genre = "Türkçe Rap & Hip-Hop",
             bio = "Türkçe rap müziğin öncüsü ve hız rekorları kıran flow tekniğiyle efsaneleşen MC.",
             imageUrl = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "4M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "ezhel",
@@ -39,7 +43,7 @@ object MusicCatalog {
             genre = "Trap & Reggae",
             bio = "Ankara'dan çıkıp dünyada yankı uyandıran, trap ve Anadolu melodilerini harmanlayan yenilikçi sanatçı.",
             imageUrl = "https://images.unsplash.com/photo-1520523839898-507125cd53c1?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "5M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "duman",
@@ -47,7 +51,7 @@ object MusicCatalog {
             genre = "Türkçe Rock / Grunge",
             bio = "Kaan Tangöze önderliğindeki Duman, Türk rock müziğinin en köklü ve tutkulu gruplarından biridir.",
             imageUrl = "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "6M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "manga",
@@ -55,7 +59,7 @@ object MusicCatalog {
             genre = "Nu-Metal & Rock",
             bio = "Eurovision ikincisi, Türk motiflerini nu-metal ve elektronik öğelerle birleştiren ikonik grup.",
             imageUrl = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "2M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "baris_manco",
@@ -63,7 +67,7 @@ object MusicCatalog {
             genre = "Anadolu Rock",
             bio = "Kültürel elçimiz, 7'den 77'ye herkesin sevgilisi ve Anadolu Rock akımının en büyük mimarı.",
             imageUrl = "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "3M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "cem_karaca",
@@ -71,7 +75,7 @@ object MusicCatalog {
             genre = "Anadolu Rock",
             bio = "Türk rock müziğinin efsanevi sesi, toplumsal mesajları ve benzersiz yorumuyla unutulmaz bir ikon.",
             imageUrl = "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "4M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "mor_ve_otesi",
@@ -79,7 +83,7 @@ object MusicCatalog {
             genre = "Alternatif Rock",
             bio = "Felsefi sözleri ve güçlü sahne performansıyla çeyrek asırdır Türk rock sahnesine yön veren grup.",
             imageUrl = "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "5M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "the_weeknd",
@@ -87,7 +91,7 @@ object MusicCatalog {
             genre = "R&B / Synthwave",
             bio = "Grammy ödüllü, 'Blinding Lights' ve 'Starboy' ile küresel müzik listelerini altüst eden megastar.",
             imageUrl = "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "6M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "dua_lipa",
@@ -95,7 +99,7 @@ object MusicCatalog {
             genre = "Disco & Pop",
             bio = "Modern disco popun kraliçesi, Future Nostalgia albümüyle dünya çapında milyarlarca dinlenme kazandı.",
             imageUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "2M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "coldplay",
@@ -103,7 +107,7 @@ object MusicCatalog {
             genre = "Alternatif / Arena Rock",
             bio = "Chris Martin ve grubunun stadyumları dolduran renkli ve dokunaklı melodileri.",
             imageUrl = "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "3M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "daft_punk",
@@ -111,7 +115,7 @@ object MusicCatalog {
             genre = "Elektronik / French House",
             bio = "Kaskları ve zamansız synthesizer melodileriyle elektronik müziği yeniden tanımlayan ikili.",
             imageUrl = "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "4M"
+            monthlyListeners = "N/A"
         ),
         Artist(
             id = "zekimuren",
@@ -119,20 +123,11 @@ object MusicCatalog {
             genre = "Türk Sanat Müziği",
             bio = "Sanat Güneşi, eşsiz sesi, zarafeti ve kusursuz Türkçesiyle sanat müziğinin zirvesidir.",
             imageUrl = "https://images.unsplash.com/photo-1530669922240-272e61df3f70?w=600&auto=format&fit=crop&q=80",
-            monthlyListeners = "5M"
+            monthlyListeners = "N/A"
         )
     )
 
-    private const val STREAM_SYNTH_POP = "https://actions.google.com/sounds/v1/foley/water_splash_bubble.ogg"
-    private const val STREAM_BEAT = "https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"
-    private const val AUDIO_SAMPLE_1 = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
-    private const val AUDIO_SAMPLE_2 = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
-    private const val AUDIO_SAMPLE_3 = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
-    private const val AUDIO_SAMPLE_4 = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
-    private const val AUDIO_SAMPLE_5 = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
-    private const val AUDIO_SAMPLE_6 = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"
-
-    val songs: List<Song> = listOf(
+    private val songsList = listOf(
         Song(
             id = "tarkan_1",
             title = "Kış Güneşi",
@@ -143,7 +138,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_POP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_1,
+            audioUrl = "", // Empty indicates playback unavailable (not licensed)
             releaseYear = 1994,
             playCount = 1000000L,
             lyrics = emptyList()
@@ -158,7 +153,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_POP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_2,
+            audioUrl = "",
             releaseYear = 1997,
             playCount = 1450000L,
             lyrics = emptyList()
@@ -173,7 +168,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_POP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_3,
+            audioUrl = "",
             releaseYear = 2003,
             playCount = 1900000L,
             lyrics = emptyList()
@@ -188,7 +183,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_POP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_4,
+            audioUrl = "",
             releaseYear = 1982,
             playCount = 2350000L,
             lyrics = emptyList()
@@ -203,7 +198,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_POP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_5,
+            audioUrl = "",
             releaseYear = 1991,
             playCount = 2800000L,
             lyrics = emptyList()
@@ -218,7 +213,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_POP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_1,
+            audioUrl = "",
             releaseYear = 1991,
             playCount = 3250000L,
             lyrics = emptyList()
@@ -233,7 +228,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_RAP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_BEAT,
+            audioUrl = "",
             releaseYear = 2004,
             playCount = 3700000L,
             lyrics = emptyList()
@@ -248,7 +243,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_RAP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_BEAT,
+            audioUrl = "",
             releaseYear = 2006,
             playCount = 4150000L,
             lyrics = emptyList()
@@ -263,7 +258,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_RAP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1520523839898-507125cd53c1?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_BEAT,
+            audioUrl = "",
             releaseYear = 2017,
             playCount = 4600000L,
             lyrics = emptyList()
@@ -278,7 +273,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_RAP,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1520523839898-507125cd53c1?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_BEAT,
+            audioUrl = "",
             releaseYear = 2019,
             playCount = 5050000L,
             lyrics = emptyList()
@@ -293,7 +288,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_2,
+            audioUrl = "",
             releaseYear = 2005,
             playCount = 5500000L,
             lyrics = emptyList()
@@ -308,7 +303,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_3,
+            audioUrl = "",
             releaseYear = 2005,
             playCount = 5950000L,
             lyrics = emptyList()
@@ -323,7 +318,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_4,
+            audioUrl = "",
             releaseYear = 2004,
             playCount = 6400000L,
             lyrics = emptyList()
@@ -338,7 +333,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_5,
+            audioUrl = "",
             releaseYear = 2009,
             playCount = 6850000L,
             lyrics = emptyList()
@@ -353,7 +348,7 @@ object MusicCatalog {
             category = MusicCategory.ANADOLU_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_1,
+            audioUrl = "",
             releaseYear = 1981,
             playCount = 7300000L,
             lyrics = emptyList()
@@ -368,7 +363,7 @@ object MusicCatalog {
             category = MusicCategory.ANADOLU_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_2,
+            audioUrl = "",
             releaseYear = 1981,
             playCount = 7750000L,
             lyrics = emptyList()
@@ -383,7 +378,7 @@ object MusicCatalog {
             category = MusicCategory.ANADOLU_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_3,
+            audioUrl = "",
             releaseYear = 1975,
             playCount = 8200000L,
             lyrics = emptyList()
@@ -398,7 +393,7 @@ object MusicCatalog {
             category = MusicCategory.ANADOLU_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_4,
+            audioUrl = "",
             releaseYear = 1992,
             playCount = 8650000L,
             lyrics = emptyList()
@@ -413,7 +408,7 @@ object MusicCatalog {
             category = MusicCategory.TURK_SANAT,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1530669922240-272e61df3f70?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_5,
+            audioUrl = "",
             releaseYear = 1982,
             playCount = 9100000L,
             lyrics = emptyList()
@@ -428,7 +423,7 @@ object MusicCatalog {
             category = MusicCategory.TURK_SANAT,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1530669922240-272e61df3f70?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_1,
+            audioUrl = "",
             releaseYear = 1970,
             playCount = 9550000L,
             lyrics = emptyList()
@@ -441,9 +436,9 @@ object MusicCatalog {
             album = "After Hours",
             durationMs = 200000L,
             category = MusicCategory.GLOBAL_POP,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_SYNTH_POP,
+            audioUrl = "",
             releaseYear = 2019,
             playCount = 10000000L,
             lyrics = emptyList()
@@ -456,9 +451,9 @@ object MusicCatalog {
             album = "Starboy",
             durationMs = 230000L,
             category = MusicCategory.HIP_HOP,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_BEAT,
+            audioUrl = "",
             releaseYear = 2016,
             playCount = 10450000L,
             lyrics = emptyList()
@@ -471,9 +466,9 @@ object MusicCatalog {
             album = "Future Nostalgia",
             durationMs = 183000L,
             category = MusicCategory.GLOBAL_POP,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_SYNTH_POP,
+            audioUrl = "",
             releaseYear = 2019,
             playCount = 10900000L,
             lyrics = emptyList()
@@ -486,9 +481,9 @@ object MusicCatalog {
             album = "Future Nostalgia",
             durationMs = 203000L,
             category = MusicCategory.GLOBAL_POP,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_SYNTH_POP,
+            audioUrl = "",
             releaseYear = 2020,
             playCount = 11350000L,
             lyrics = emptyList()
@@ -501,9 +496,9 @@ object MusicCatalog {
             album = "Parachutes",
             durationMs = 266000L,
             category = MusicCategory.ROCK_CLASSICS,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_2,
+            audioUrl = "",
             releaseYear = 2000,
             playCount = 11800000L,
             lyrics = emptyList()
@@ -516,9 +511,9 @@ object MusicCatalog {
             album = "Viva La Vida",
             durationMs = 242000L,
             category = MusicCategory.ROCK_CLASSICS,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_3,
+            audioUrl = "",
             releaseYear = 2008,
             playCount = 12250000L,
             lyrics = emptyList()
@@ -531,9 +526,9 @@ object MusicCatalog {
             album = "Random Access Memories",
             durationMs = 248000L,
             category = MusicCategory.EDM_DANCE,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_SYNTH_POP,
+            audioUrl = "",
             releaseYear = 2013,
             playCount = 12700000L,
             lyrics = emptyList()
@@ -546,9 +541,9 @@ object MusicCatalog {
             album = "Discovery",
             durationMs = 224000L,
             category = MusicCategory.EDM_DANCE,
-            language = "tr",
+            language = "en",
             coverUrl = "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=600&auto=format&fit=crop&q=80",
-            audioUrl = STREAM_SYNTH_POP,
+            audioUrl = "",
             releaseYear = 2001,
             playCount = 13150000L,
             lyrics = emptyList()
@@ -563,7 +558,7 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_4,
+            audioUrl = "",
             releaseYear = 2004,
             playCount = 13600000L,
             lyrics = emptyList()
@@ -578,19 +573,69 @@ object MusicCatalog {
             category = MusicCategory.TURKCE_ROCK,
             language = "tr",
             coverUrl = "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=600&auto=format&fit=crop&q=80",
-            audioUrl = AUDIO_SAMPLE_5,
+            audioUrl = "",
             releaseYear = 2004,
             playCount = 14050000L,
             lyrics = emptyList()
         )
     )
 
+    override suspend fun searchSongs(query: String): Result<List<Song>> = withContext(Dispatchers.IO) {
+        val filtered = songsList.filter {
+            it.title.contains(query, ignoreCase = true) || it.artist.contains(query, ignoreCase = true)
+        }
+        Result.success(filtered)
+    }
+
+    override suspend fun searchArtists(query: String): Result<List<Artist>> = withContext(Dispatchers.IO) {
+        val filtered = artistsList.filter {
+            it.name.contains(query, ignoreCase = true)
+        }
+        Result.success(filtered)
+    }
+
+    override suspend fun getSong(id: String): Result<Song?> = withContext(Dispatchers.IO) {
+        Result.success(songsList.find { it.id == id })
+    }
+
+    override suspend fun getArtist(id: String): Result<Artist?> = withContext(Dispatchers.IO) {
+        Result.success(artistsList.find { it.id == id })
+    }
+
+    override suspend fun getAlbum(id: String): Result<Album?> = withContext(Dispatchers.IO) {
+        val albumSongs = songsList.filter { it.album.equals(id, ignoreCase = true) || it.id.startsWith(id) }
+        if (albumSongs.isEmpty()) {
+            return@withContext Result.success(null)
+        }
+        val first = albumSongs.first()
+        val album = Album(
+            id = id,
+            title = first.album,
+            artist = first.artist,
+            artistId = first.artistId,
+            coverUrl = first.coverUrl,
+            releaseYear = first.releaseYear,
+            genre = first.category.titleTr,
+            songs = albumSongs
+        )
+        Result.success(album)
+    }
+
+    override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> = withContext(Dispatchers.IO) {
+        // Return latest releases in our catalog
+        val latest = songsList.filter { it.releaseYear >= 2020 }
+        Result.success(latest)
+    }
+
+    fun getStaticSongs(): List<Song> = songsList
+    fun getStaticArtists(): List<Artist> = artistsList
+
     fun getInitialFriendActivities(): List<FriendActivity> {
-        val weekndSong = songs.find { it.id == "weeknd_1" } ?: songs[0]
-        val dumanSong = songs.find { it.id == "duman_1" } ?: songs[1]
-        val tarkanSong = songs.find { it.id == "tarkan_1" } ?: songs[2]
-        val cezaSong = songs.find { it.id == "ceza_1" } ?: songs[3]
-        val duaSong = songs.find { it.id == "dua_1" } ?: songs[4]
+        val weekndSong = songsList.find { it.id == "weeknd_1" } ?: songsList[0]
+        val dumanSong = songsList.find { it.id == "duman_1" } ?: songsList[1]
+        val tarkanSong = songsList.find { it.id == "tarkan_1" } ?: songsList[2]
+        val cezaSong = songsList.find { it.id == "ceza_1" } ?: songsList[3]
+        val duaSong = songsList.find { it.id == "dua_1" } ?: songsList[4]
 
         return listOf(
             FriendActivity(

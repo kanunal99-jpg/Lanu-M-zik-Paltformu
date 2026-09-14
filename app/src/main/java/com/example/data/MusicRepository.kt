@@ -19,21 +19,28 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+import java.io.File
+import android.util.Log
+
 class MusicRepository(context: Context) {
+    private val context = context.applicationContext
     private val database = AppDatabase.getDatabase(context)
     private val dao = database.musicDao()
     private val scope = CoroutineScope(Dispatchers.IO)
     private val localMusicScanner = LocalMusicScanner(context)
+    
+    private val catalogProvider = com.example.data.catalog.PrimaryCatalogProvider()
+    val downloadManager = com.example.player.DownloadManager(context)
 
     // Dynamic songs list (can receive new releases)
-    private val _songs = MutableStateFlow<List<Song>>(MusicCatalog.songs)
+    private val _songs = MutableStateFlow<List<Song>>(catalogProvider.getStaticSongs())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
     // Artists
-    val artists: List<Artist> = MusicCatalog.artists
+    val artists: List<Artist> = catalogProvider.getStaticArtists()
 
     // Friends activity feed
-    private val _friendActivities = MutableStateFlow<List<FriendActivity>>(MusicCatalog.getInitialFriendActivities())
+    private val _friendActivities = MutableStateFlow<List<FriendActivity>>(catalogProvider.getInitialFriendActivities())
     val friendActivities: StateFlow<List<FriendActivity>> = _friendActivities.asStateFlow()
 
     // New release announcement banner state
@@ -43,8 +50,15 @@ class MusicRepository(context: Context) {
     init {
         // Cache songs into Room Database
         scope.launch {
-            dao.insertCachedSongs(MusicCatalog.songs.map { it.toCachedEntity() })
-            dao.insertLocalSongs(MusicCatalog.songs.map { it.toLocalEntity(isOffline = false) })
+            dao.insertCachedSongs(catalogProvider.getStaticSongs().map { it.toCachedEntity() })
+            dao.insertLocalSongs(catalogProvider.getStaticSongs().map { it.toLocalEntity(isOffline = false) })
+            
+            // Sync offline storage state (P0-07)
+            try {
+                syncOfflineStorage()
+            } catch (e: Exception) {
+                Log.e("MusicRepository", "Failed to sync offline storage on initialization", e)
+            }
         }
 
         // Seed a default sample playlist if empty
@@ -60,9 +74,9 @@ class MusicRepository(context: Context) {
                         createdAt = System.currentTimeMillis()
                     )
                 )
-                dao.addSongToPlaylist(PlaylistSongEntity(pId1, "tr_tarkan_1", 0))
-                dao.addSongToPlaylist(PlaylistSongEntity(pId1, "tr_sezen_1", 1))
-                dao.addSongToPlaylist(PlaylistSongEntity(pId1, "tr_duman_1", 2))
+                dao.addSongToPlaylist(PlaylistSongEntity(pId1, "tarkan_1", 0))
+                dao.addSongToPlaylist(PlaylistSongEntity(pId1, "sezen_1", 1))
+                dao.addSongToPlaylist(PlaylistSongEntity(pId1, "duman_1", 2))
 
                 val pId2 = "pl_gece_surusu"
                 dao.insertPlaylist(
@@ -73,8 +87,38 @@ class MusicRepository(context: Context) {
                         createdAt = System.currentTimeMillis() + 1000
                     )
                 )
-                dao.addSongToPlaylist(PlaylistSongEntity(pId2, "en_weeknd_1", 0))
-                dao.addSongToPlaylist(PlaylistSongEntity(pId2, "en_daft_1", 1))
+                dao.addSongToPlaylist(PlaylistSongEntity(pId2, "weeknd_1", 0))
+                dao.addSongToPlaylist(PlaylistSongEntity(pId2, "daft_1", 1))
+            }
+        }
+    }
+
+    suspend fun syncOfflineStorage() {
+        val downloadedEntities = dao.getDownloadedSongs().first()
+        val offlineSongsOnDiskDir = File(context.filesDir, "offline_audio")
+        
+        val physicalFiles = if (offlineSongsOnDiskDir.exists()) {
+            offlineSongsOnDiskDir.listFiles()?.filter { it.isFile && it.name.endsWith(".mp3") } ?: emptyList()
+        } else {
+            emptyList()
+        }
+        val physicalFileNames = physicalFiles.map { it.name }.toSet()
+
+        for (entity in downloadedEntities) {
+            val fileName = "${entity.songId}.mp3"
+            if (!physicalFileNames.contains(fileName)) {
+                Log.w("MusicRepository", "Offline track missing on disk: ${entity.songId}. Syncing DB.")
+                dao.removeDownload(entity.songId)
+                dao.setSongOfflineAvailability(entity.songId, false)
+            }
+        }
+
+        val dbDownloadedIds = downloadedEntities.map { it.songId }.toSet()
+        for (file in physicalFiles) {
+            val songId = file.nameWithoutExtension
+            if (!dbDownloadedIds.contains(songId)) {
+                Log.i("MusicRepository", "Cleaning orphaned offline file: ${file.name}")
+                file.delete()
             }
         }
     }
@@ -133,9 +177,15 @@ class MusicRepository(context: Context) {
     suspend fun toggleDownload(song: Song, quality: AudioQuality) {
         val downloaded = downloadedSongIds.first()
         if (downloaded.contains(song.id)) {
+            // Cancel and delete physically from disk
+            downloadManager.deleteDownloadedFile(song.id)
+            
             dao.removeDownload(song.id)
             dao.setSongOfflineAvailability(song.id, false)
         } else {
+            // Trigger physical download task in the background
+            downloadManager.startDownload(song, quality)
+
             val estimatedSize = when (quality) {
                 AudioQuality.STANDARD -> "4.2 MB"
                 AudioQuality.HIGH -> "10.8 MB"
@@ -155,8 +205,8 @@ class MusicRepository(context: Context) {
             )
             dao.insertLocalSong(
                 song.toLocalEntity(
-                    localAudioPath = "/data/user/0/com.example/files/offline_audio/${song.id}.mp3",
-                    localCoverPath = "/data/user/0/com.example/files/offline_covers/${song.id}.jpg",
+                    localAudioPath = "${context.filesDir.absolutePath}/offline_audio/${song.id}.mp3",
+                    localCoverPath = "",
                     isOffline = true,
                     audioQuality = quality.title,
                     fileSizeBytes = estimatedSizeBytes
@@ -284,35 +334,7 @@ class MusicRepository(context: Context) {
 
     // Dynamic New Release simulation ("Yeni şarkı çıktığında uygulamama yüklensin")
     fun pushSimulatedNewRelease() {
-        val currentList = _songs.value
-        val uniqueId = "release_${System.currentTimeMillis().toString().takeLast(4)}"
-        val newSong = Song(
-            id = uniqueId,
-            title = "Ateş ve Su (2026 Özel)",
-            artist = "Megastar Tarkan",
-            artistId = "tarkan",
-            album = "LANU Yeni Sezon",
-            durationMs = 214000L,
-            category = MusicCategory.TURKCE_POP,
-            language = "tr",
-            coverUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80",
-            audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-            releaseYear = 2026,
-            isNewRelease = true,
-            playCount = 1000L,
-            lyrics = listOf(
-                TimedLyric(0L, "♪ Yepyeni 2026 Çıkışı ♪"),
-                TimedLyric(10000L, "Ateşle suyun dansı gibi"),
-                TimedLyric(18000L, "Kavuşamaz derlerdi bize"),
-                TimedLyric(26000L, "Ama aşk her engeli aşar"),
-                TimedLyric(34000L, "LANU Müzik'te ilk kez seninle!")
-            )
-        )
-        _songs.value = listOf(newSong) + currentList
-        _newReleaseNotification.value = newSong
-        scope.launch {
-            dao.insertCachedSongs(listOf(newSong.toCachedEntity()))
-        }
+        // Disabled in production to prevent fake catalog entries.
     }
 
     fun dismissNewReleaseNotification() {

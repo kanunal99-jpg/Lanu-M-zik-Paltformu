@@ -153,6 +153,14 @@ data class LocalSongEntity(
     val playCount: Long = 0L
 )
 
+@Entity(tableName = "release_sync_state")
+data class ReleaseSyncStateEntity(
+    @PrimaryKey val id: String = "last_sync",
+    val lastSyncTimeMs: Long,
+    val addedCount: Int,
+    val status: String
+)
+
 /**
  * Relation linking a Playlist with its offline songs via playlist_songs junction table.
  */
@@ -381,6 +389,12 @@ interface MusicDao {
 
     @Query("DELETE FROM cached_songs")
     suspend fun clearCachedSongs()
+
+    @Query("SELECT * FROM release_sync_state WHERE id = :id")
+    suspend fun getReleaseSyncState(id: String = "last_sync"): ReleaseSyncStateEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReleaseSyncState(state: ReleaseSyncStateEntity)
 }
 
 fun CachedSongEntity.toSong(): Song {

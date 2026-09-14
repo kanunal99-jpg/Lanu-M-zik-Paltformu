@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -13,9 +15,10 @@ import androidx.room.RoomDatabase
         PlaylistSongEntity::class,
         HistoryEntity::class,
         CachedSongEntity::class,
-        LocalSongEntity::class
+        LocalSongEntity::class,
+        ReleaseSyncStateEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,13 +28,21 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `release_sync_state` (`id` TEXT NOT NULL, `lastSyncTimeMs` INTEGER NOT NULL, `addedCount` INTEGER NOT NULL, `status` TEXT NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "lanu_music_db"
-                ).fallbackToDestructiveMigration(true).build()
+                )
+                .addMigrations(MIGRATION_3_4)
+                .build()
                 INSTANCE = instance
                 instance
             }

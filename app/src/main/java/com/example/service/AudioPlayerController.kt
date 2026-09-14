@@ -103,14 +103,26 @@ class AudioPlayerController(private val context: Context) {
 
     fun setQueue(songs: List<Song>, startIndex: Int = 0, autoPlay: Boolean = true) {
         if (songs.isEmpty()) return
+        val targetSong = songs.getOrNull(startIndex)
+        if (targetSong != null && targetSong.audioUrl.isEmpty()) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(
+                    context,
+                    "Playback Unavailable: Bu parçanın telif hakları nedeniyle yayını bulunmamaktadır.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+            return
+        }
         _queue.value = songs
         val validIndex = startIndex.coerceIn(0, songs.size - 1)
         _queueIndex.value = validIndex
         
         val mediaItems = songs.map { song ->
+            val uriStr = if (song.audioUrl.isEmpty()) "https://lanumusic.app/empty_fallback.mp3" else song.audioUrl
             MediaItem.Builder()
                 .setMediaId(song.id)
-                .setUri(Uri.parse(song.audioUrl))
+                .setUri(Uri.parse(uriStr))
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(song.title)

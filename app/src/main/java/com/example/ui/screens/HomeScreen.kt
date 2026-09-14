@@ -134,31 +134,6 @@ fun HomeScreen(
                     )
                 }
             }
-
-            // Button to simulate live new track drop
-            Button(
-                onClick = onSimulateNewRelease,
-                colors = ButtonDefaults.buttonColors(containerColor = LanuDarkSurfaceElevated),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                modifier = Modifier
-                    .border(1.dp, LanuPurple, RoundedCornerShape(20.dp))
-                    .testTag("button_simulate_new_release")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FiberNew,
-                    contentDescription = null,
-                    tint = LanuPurple,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Yeni Parça İndir",
-                    color = LanuPurple,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
         }
 
         // Live New Release Banner Notification (if active)
