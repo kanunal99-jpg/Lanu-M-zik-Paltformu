@@ -30,6 +30,7 @@ class AudioPlayerController(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var progressJob: Job? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var audioEffects: AudioEffectsController? = null
     var mediaController: MediaController? = null
 
     private val _isPlaying = MutableStateFlow(false)
@@ -55,8 +56,9 @@ class AudioPlayerController(private val context: Context) {
         val sessionToken = SessionToken(context, ComponentName(context, LanuMediaSessionService::class.java))
         controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
         controllerFuture?.addListener({
-            mediaController = controllerFuture?.get()
+            mediaController = runCatching { controllerFuture?.get() }.getOrNull()
             setupControllerListener()
+            ensureAudioEffects()
         }, ContextCompat.getMainExecutor(context))
     }
 
@@ -65,12 +67,22 @@ class AudioPlayerController(private val context: Context) {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
                 if (isPlaying) startProgressTracker() else stopProgressTracker()
+                ensureAudioEffects()
             }
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
                     _durationMs.value = mediaController?.duration?.coerceAtLeast(1) ?: 1L
+                    ensureAudioEffects()
+                    audioEffects?.apply(_equalizerState.value)
                 }
+            }
+
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                audioEffects?.release()
+                audioEffects = null
+                ensureAudioEffects(audioSessionId)
+                audioEffects?.apply(_equalizerState.value)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -85,28 +97,37 @@ class AudioPlayerController(private val context: Context) {
         })
     }
 
+    private fun ensureAudioEffects(sessionIdHint: Int? = null) {
+        if (audioEffects?.isSupported() == true) return
+        val sessionId = sessionIdHint ?: runCatching {
+            val method = mediaController?.javaClass?.methods?.firstOrNull { it.name == "getAudioSessionId" && it.parameterTypes.isEmpty() }
+                ?: return
+            (method.invoke(mediaController) as? Int) ?: 0
+        }.getOrDefault(0)
+        if (sessionId > 0) {
+            audioEffects?.release()
+            audioEffects = AudioEffectsController(sessionId)
+            audioEffects?.apply(_equalizerState.value)
+        }
+    }
+
     fun setQueue(songs: List<Song>, startIndex: Int = 0, autoPlay: Boolean = true) {
         if (songs.isEmpty()) return
-
         val requestedSong = songs.getOrNull(startIndex)
         if (requestedSong == null || requestedSong.audioUrl.isBlank()) {
             showUnavailablePlayback()
             return
         }
-
         val playableSongs = songs.filter { it.audioUrl.isNotBlank() }
         if (playableSongs.isEmpty()) {
             showUnavailablePlayback()
             return
         }
-
         val validIndex = playableSongs.indexOfFirst { it.id == requestedSong.id }
         if (validIndex < 0) {
-            // The requested track itself is not playable. Do not silently substitute another song.
             showUnavailablePlayback()
             return
         }
-
         _queue.value = playableSongs
         _queueIndex.value = validIndex
         val mediaItems = playableSongs.map { song ->
@@ -120,8 +141,7 @@ class AudioPlayerController(private val context: Context) {
                         .setAlbumTitle(song.album)
                         .setArtworkUri(song.coverUrl.takeIf { it.isNotBlank() }?.let(Uri::parse))
                         .build()
-                )
-                .build()
+                ).build()
         }
         mediaController?.setMediaItems(mediaItems, validIndex, 0L)
         mediaController?.prepare()
@@ -130,11 +150,7 @@ class AudioPlayerController(private val context: Context) {
 
     private fun showUnavailablePlayback() {
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(
-                context,
-                "Bu parçanın doğrulanmış bir yayın kaynağı bulunmuyor.",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(context, "Bu parçanın doğrulanmış bir yayın kaynağı bulunmuyor.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -144,14 +160,10 @@ class AudioPlayerController(private val context: Context) {
             _queueIndex.value = existingIndex
             mediaController?.seekTo(existingIndex, 0L)
             if (autoPlay) mediaController?.play()
-        } else {
-            setQueue(listOf(song), 0, autoPlay)
-        }
+        } else setQueue(listOf(song), 0, autoPlay)
     }
 
-    fun togglePlayPause() {
-        mediaController?.let { if (it.isPlaying) it.pause() else it.play() }
-    }
+    fun togglePlayPause() { mediaController?.let { if (it.isPlaying) it.pause() else it.play() } }
 
     fun next() {
         mediaController?.let { controller ->
@@ -196,16 +208,37 @@ class AudioPlayerController(private val context: Context) {
         }
     }
 
-    // These state controls are intentionally UI-only until a real audio-session DSP implementation is wired.
-    fun toggleEqualizerEnabled() { _equalizerState.value = _equalizerState.value.copy(isEnabled = !_equalizerState.value.isEnabled) }
-    fun setEqualizerPreset(preset: EqualizerPreset) { _equalizerState.value = _equalizerState.value.copy(activePreset = preset) }
+    fun toggleEqualizerEnabled() {
+        _equalizerState.value = _equalizerState.value.copy(isEnabled = !_equalizerState.value.isEnabled)
+        ensureAudioEffects()
+        audioEffects?.apply(_equalizerState.value)
+    }
+
+    fun setEqualizerPreset(preset: EqualizerPreset) {
+        ensureAudioEffects()
+        _equalizerState.value = audioEffects?.applyPreset(preset, _equalizerState.value)
+            ?: _equalizerState.value.copy(activePreset = preset, bands = EqualizerState.getPresetBands(preset))
+    }
+
     fun setBandLevel(bandIndex: Int, levelDb: Float) {
         val bands = _equalizerState.value.bands.toMutableList()
-        if (bandIndex in bands.indices) bands[bandIndex] = bands[bandIndex].copy(levelDb = levelDb)
+        if (bandIndex in bands.indices) bands[bandIndex] = bands[bandIndex].copy(levelDb = levelDb.coerceIn(-12f, 12f))
         _equalizerState.value = _equalizerState.value.copy(bands = bands, activePreset = EqualizerPreset.CUSTOM)
+        ensureAudioEffects()
+        audioEffects?.apply(_equalizerState.value)
     }
-    fun setBassBoost(percent: Float) { _equalizerState.value = _equalizerState.value.copy(bassBoostPercent = percent.coerceIn(0f, 1f)) }
-    fun setVirtualizer(percent: Float) { _equalizerState.value = _equalizerState.value.copy(virtualizerPercent = percent.coerceIn(0f, 1f)) }
+
+    fun setBassBoost(percent: Float) {
+        _equalizerState.value = _equalizerState.value.copy(bassBoostPercent = percent.coerceIn(0f, 1f))
+        ensureAudioEffects()
+        audioEffects?.apply(_equalizerState.value)
+    }
+
+    fun setVirtualizer(percent: Float) {
+        _equalizerState.value = _equalizerState.value.copy(virtualizerPercent = percent.coerceIn(0f, 1f))
+        ensureAudioEffects()
+        audioEffects?.apply(_equalizerState.value)
+    }
 
     private fun startProgressTracker() {
         progressJob?.cancel()
@@ -224,7 +257,11 @@ class AudioPlayerController(private val context: Context) {
 
     fun release() {
         stopProgressTracker()
+        audioEffects?.release()
+        audioEffects = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
+        mediaController = null
     }
 }
 
