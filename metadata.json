@@ -1,0 +1,6 @@
+{
+  "name": "LANU Müzik",
+  "description": "LANU Müzik Platformu - Tüm Türkçe ve yabancı şarkılar, senkronize şarkı sözleri, gelişmiş ekolayzır, çalma listeleri ve çevrimdışı dinleme.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
