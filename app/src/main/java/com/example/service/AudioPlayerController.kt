@@ -87,24 +87,29 @@ class AudioPlayerController(private val context: Context) {
 
     fun setQueue(songs: List<Song>, startIndex: Int = 0, autoPlay: Boolean = true) {
         if (songs.isEmpty()) return
+
+        val requestedSong = songs.getOrNull(startIndex)
+        if (requestedSong == null || requestedSong.audioUrl.isBlank()) {
+            showUnavailablePlayback()
+            return
+        }
+
         val playableSongs = songs.filter { it.audioUrl.isNotBlank() }
         if (playableSongs.isEmpty()) {
             showUnavailablePlayback()
             return
         }
 
-        val requestedSong = songs.getOrNull(startIndex)
-        val validSongs = if (requestedSong != null && requestedSong.audioUrl.isNotBlank()) {
-            playableSongs
-        } else {
+        val validIndex = playableSongs.indexOfFirst { it.id == requestedSong.id }
+        if (validIndex < 0) {
+            // The requested track itself is not playable. Do not silently substitute another song.
             showUnavailablePlayback()
-            playableSongs
+            return
         }
-        val validIndex = validSongs.indexOfFirst { it.id == requestedSong?.id }.takeIf { it >= 0 } ?: 0
 
-        _queue.value = validSongs
+        _queue.value = playableSongs
         _queueIndex.value = validIndex
-        val mediaItems = validSongs.map { song ->
+        val mediaItems = playableSongs.map { song ->
             MediaItem.Builder()
                 .setMediaId(song.id)
                 .setUri(Uri.parse(song.audioUrl))
