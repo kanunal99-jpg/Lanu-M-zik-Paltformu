@@ -17,10 +17,10 @@ import com.example.model.AudioQuality
 import com.example.model.EqualizerPreset
 import com.example.model.EqualizerSettings
 import com.example.model.EqualizerState
-import com.example.model.toSettings
 import com.example.model.FriendActivity
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.model.toSettings
 import com.example.service.AudioPlayerController
 import com.example.service.RepeatMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,30 +55,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isNowPlayingExpanded: StateFlow<Boolean> = _isNowPlayingExpanded.asStateFlow()
     val isPlayerExpanded: StateFlow<Boolean> get() = _isNowPlayingExpanded
 
-    fun setPlayerExpanded(expanded: Boolean) {
-        _isNowPlayingExpanded.value = expanded
-    }
+    fun setPlayerExpanded(expanded: Boolean) { _isNowPlayingExpanded.value = expanded }
 
     private val _nowPlayingTab = MutableStateFlow(0)
     val nowPlayingTab: StateFlow<Int> = _nowPlayingTab.asStateFlow()
-
-    fun setNowPlayingTab(tab: Int) {
-        _nowPlayingTab.value = tab
-    }
+    fun setNowPlayingTab(tab: Int) { _nowPlayingTab.value = tab }
 
     private val _showSettingsDialog = MutableStateFlow(false)
     val showSettingsDialog: StateFlow<Boolean> = _showSettingsDialog.asStateFlow()
-
-    fun setShowSettingsDialog(show: Boolean) {
-        _showSettingsDialog.value = show
-    }
+    fun setShowSettingsDialog(show: Boolean) { _showSettingsDialog.value = show }
 
     private val _recommendationAlert = MutableStateFlow<String?>(null)
     val recommendationAlert: StateFlow<String?> = _recommendationAlert.asStateFlow()
-
-    fun clearRecommendationAlert() {
-        _recommendationAlert.value = null
-    }
+    fun clearRecommendationAlert() { _recommendationAlert.value = null }
 
     private val _showLyricsInNowPlaying = MutableStateFlow(false)
     val showLyricsInNowPlaying: StateFlow<Boolean> = _showLyricsInNowPlaying.asStateFlow()
@@ -95,11 +84,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _songToAddToPlaylist = MutableStateFlow<Song?>(null)
     val songToAddToPlaylist: StateFlow<Song?> = _songToAddToPlaylist.asStateFlow()
 
-    // Loading is reserved for real asynchronous operations; there is no artificial network delay.
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    /** Compatibility shim for callers that used the old fake-loading API. */
     @Deprecated("Artificial network loading was removed; use real operation state instead.")
     fun simulateNetworkLoading(delayMs: Long = 0) = Unit
 
@@ -122,29 +109,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val newReleaseNotification: StateFlow<Song?> = repository.newReleaseNotification
 
     val session: StateFlow<AuthSession?> = repository.userSession
-    val history: StateFlow<List<HistoryRecord>> = repository.history.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val history: StateFlow<List<HistoryRecord>> = repository.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val favoriteSongIds: StateFlow<Set<String>> = repository.favoriteSongIds.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptySet()
-    )
+    val favoriteSongIds: StateFlow<Set<String>> = repository.favoriteSongIds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
-    val downloadedSongs: StateFlow<List<DownloadedSongEntity>> = repository.downloadedSongs.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val downloadedSongIds: StateFlow<Set<String>> = repository.downloadedSongIds.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptySet()
-    )
+    val downloadedSongs: StateFlow<List<DownloadedSongEntity>> = repository.downloadedSongs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val downloadedSongIds: StateFlow<Set<String>> = repository.downloadedSongIds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
     val offlineSongIds: StateFlow<Set<String>> get() = downloadedSongIds
 
     val favoriteSongs: StateFlow<List<Song>> = combine(allSongs, favoriteSongIds) { songs, favIds ->
@@ -159,8 +129,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val normalizedQuery = normalizeSearch(query)
         songs.filter { song ->
             val matchesQuery = normalizedQuery.isBlank() ||
-                    listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } ||
-                    song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
+                listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } ||
+                song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
             val matchesCat = cat == null || song.category == cat
             matchesQuery && matchesCat
         }
@@ -171,11 +141,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .replace('ğ', 'g').replace('Ğ', 'g').replace('ü', 'u').replace('Ü', 'u')
         .replace('ö', 'o').replace('Ö', 'o').replace('ç', 'c').replace('Ç', 'c')
 
-    val cachedSongs: StateFlow<List<Song>> = repository.cachedSongs.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val cachedSongs: StateFlow<List<Song>> = repository.cachedSongs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val roomCachedSearchResults: StateFlow<List<Song>> = _searchQuery
@@ -184,11 +150,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun searchSongsFromRoom(query: String): Flow<List<Song>> = repository.searchCachedSongs(query)
 
-    val playlists: StateFlow<List<PlaylistEntity>> = repository.playlists.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val playlists: StateFlow<List<PlaylistEntity>> = repository.playlists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val currentSong: StateFlow<Song?> = playerController.currentSong
     val isPlaying: StateFlow<Boolean> = playerController.isPlaying
@@ -196,8 +158,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val durationMs: StateFlow<Long> = playerController.durationMs
     val isShuffle: StateFlow<Boolean> = playerController.isShuffle
     val repeatMode: StateFlow<RepeatMode> = playerController.repeatMode
-    val isRepeat: StateFlow<Boolean> = repeatMode.map { it != RepeatMode.OFF }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isRepeat: StateFlow<Boolean> = repeatMode.map { it != RepeatMode.OFF }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val activeLyricIndex: StateFlow<Int> = combine(currentSong, currentPositionMs) { song, posMs ->
         val lyrics = song?.lyrics ?: emptyList()
@@ -206,9 +167,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val equalizerState: StateFlow<EqualizerState> = playerController.equalizerState
-    val equalizerSettings: StateFlow<EqualizerSettings> = equalizerState
-        .map { it.toSettings() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EqualizerSettings())
+    val equalizerSettings: StateFlow<EqualizerSettings> = equalizerState.map { it.toSettings() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EqualizerSettings())
 
     fun setTab(tab: MainTab) { _currentTab.value = tab }
     fun openNowPlaying() { _isNowPlayingExpanded.value = true }
@@ -252,23 +211,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun scanLocalMusic() {
         viewModelScope.launch {
             _isLoading.value = true
-            try {
-                repository.scanAndSyncLocalMusic()
-            } catch (e: Exception) {
-                Log.e("MainViewModel", "Local music scan failed", e)
-            } finally {
-                _isLoading.value = false
-            }
+            try { repository.scanAndSyncLocalMusic() }
+            catch (e: Exception) { Log.e("MainViewModel", "Local music scan failed", e) }
+            finally { _isLoading.value = false }
         }
     }
 
-    fun toggleFavorite(songId: String) {
-        viewModelScope.launch { repository.toggleFavorite(songId) }
-    }
-
-    fun toggleDownload(song: Song) {
-        viewModelScope.launch { repository.toggleDownload(song, _audioQuality.value) }
-    }
+    fun toggleFavorite(songId: String) { viewModelScope.launch { repository.toggleFavorite(songId) } }
+    fun toggleDownload(song: Song) { viewModelScope.launch { repository.toggleDownload(song, _audioQuality.value) } }
 
     fun signOut() {
         viewModelScope.launch {
@@ -289,6 +239,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun renamePlaylist(playlistId: String, name: String) {
+        viewModelScope.launch { runCatching { repository.renamePlaylist(playlistId, name) }.onFailure { Log.e("MainViewModel", "Playlist rename failed", it) } }
+    }
+
+    fun reorderPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
+        viewModelScope.launch { runCatching { repository.reorderPlaylist(playlistId, fromIndex, toIndex) }.onFailure { Log.e("MainViewModel", "Playlist reorder failed", it) } }
+    }
+
     fun deletePlaylist(playlistId: String) {
         viewModelScope.launch {
             repository.deletePlaylist(playlistId)
@@ -307,56 +265,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun removeSongFromPlaylist(playlistId: String, songId: String) {
-        viewModelScope.launch { repository.removeSongFromPlaylist(playlistId, songId) }
-    }
-
+    fun removeSongFromPlaylist(playlistId: String, songId: String) { viewModelScope.launch { repository.removeSongFromPlaylist(playlistId, songId) } }
     fun getSongsForPlaylist(playlistId: String) = repository.getSongsForPlaylist(playlistId)
-
     fun selectArtist(artist: Artist?) { _selectedArtist.value = artist }
-
     fun getSongsForArtist(artistId: String): List<Song> = allSongs.value.filter { it.artistId == artistId }
 
     fun shareSong(context: Context, song: Song) {
-        val shareText = "🎵 ${song.title} - ${song.artist}\n\nLANU Müzik'te şimdi dinle:\nhttps://lanumusic.app/track/${song.id}\n\nSöz: \"${song.lyrics.firstOrNull()?.text ?: ""}\""
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, shareText)
-            type = "text/plain"
-        }
-        val shareIntent = Intent.createChooser(sendIntent, "Parçayı Paylaş")
-        shareIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(shareIntent)
+        val shareText = "🎵 ${song.title} - ${song.artist}\n\nLANU Müzik'te şimdi dinle:\nlanumusic://track/${song.id}"
+        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, shareText); type = "text/plain" }, "Parçayı Paylaş").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
     }
 
     fun sharePlaylist(context: Context, playlist: PlaylistEntity) {
-        val shareText = "🎶 '${playlist.name}' Çalma Listesi\n\nLANU Müzik'te harika şarkılar dinliyorum, listeme göz at!\nhttps://lanumusic.app/playlist/${playlist.id}"
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, shareText)
-            type = "text/plain"
-        }
-        val shareIntent = Intent.createChooser(sendIntent, "Çalma Listesini Paylaş")
-        shareIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(shareIntent)
+        val shareText = "🎶 '${playlist.name}' Çalma Listesi\n\nLANU Müzik'te aç:\nlanumusic://playlist/${playlist.id}"
+        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, shareText); type = "text/plain" }, "Çalma Listesini Paylaş").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
     }
 
     fun shareArtist(context: Context, artist: Artist) {
-        val shareText = "🌟 ${artist.name} (${artist.genre})\n\nLANU Müzik'te tüm şarkılarını ve albümlerini keşfet!\nhttps://lanumusic.app/artist/${artist.id}"
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, shareText)
-            type = "text/plain"
-        }
-        val shareIntent = Intent.createChooser(sendIntent, "Sanatçıyı Paylaş")
-        shareIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(shareIntent)
+        val shareText = "🌟 ${artist.name}\n\nLANU Müzik'te aç:\nlanumusic://artist/${artist.id}"
+        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, shareText); type = "text/plain" }, "Sanatçıyı Paylaş").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
     }
 
     fun likeFriendActivity(activityId: String) { repository.likeFriendActivity(activityId) }
-    fun shareRecommendationToFriends(friendName: String, song: Song, note: String) {
-        repository.shareRecommendationToFriends(friendName, song, note)
-    }
+    fun shareRecommendationToFriends(friendName: String, song: Song, note: String) { repository.shareRecommendationToFriends(friendName, song, note) }
 
     fun simulateNewReleasePush() { repository.pushSimulatedNewRelease() }
     fun dismissNewReleaseNotification() { repository.dismissNewReleaseNotification() }
