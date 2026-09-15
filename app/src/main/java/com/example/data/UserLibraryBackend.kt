@@ -22,6 +22,7 @@ interface UserLibraryBackend {
         description: String = "",
         nowMs: Long = System.currentTimeMillis()
     ): PlaylistRecord
+    suspend fun deletePlaylist(userId: String, playlistId: String)
     suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long = System.currentTimeMillis())
     suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String)
     suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long = System.currentTimeMillis())
@@ -104,6 +105,11 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         )
         writePlaylists(userId, readPlaylists(userId) + playlist)
         return playlist
+    }
+
+    override suspend fun deletePlaylist(userId: String, playlistId: String) {
+        requireValidUserId(userId)
+        writePlaylists(userId, readPlaylists(userId).filterNot { it.id == playlistId })
     }
 
     override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) {
