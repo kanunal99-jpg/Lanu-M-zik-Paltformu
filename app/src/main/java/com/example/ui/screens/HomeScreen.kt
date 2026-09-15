@@ -64,26 +64,30 @@ fun HomeScreen(
     onDismissNewReleaseAlert: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val actualArtists = artists.filter { it.id.isNotBlank() && it.name.isNotBlank() }
+    val actualArtists = songs
+        .filter { it.artistId.isNotBlank() && it.artist.isNotBlank() }
+        .distinctBy { it.artistId }
+        .map {
+            Artist(
+                id = it.artistId,
+                name = it.artist,
+                genre = it.category.titleTr,
+                bio = "Yerel veya doğrulanmış katalog verisi",
+                imageUrl = it.coverUrl,
+                monthlyListeners = ""
+            )
+        }
     val categories = songs.map { it.category }.distinct()
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(LanuDarkBg)
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 120.dp)
-            .testTag("home_screen")
+        modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().verticalScroll(rememberScrollState()).padding(bottom = 120.dp).testTag("home_screen")
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Surface(color = LanuGreen, shape = RoundedCornerShape(10.dp), modifier = Modifier.size(38.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Headphones, contentDescription = null, tint = Color.Black, modifier = Modifier.size(23.dp))
-                }
+                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Headphones, contentDescription = null, tint = Color.Black, modifier = Modifier.size(23.dp)) }
             }
             Spacer(Modifier.width(10.dp))
             Column {
@@ -96,13 +100,8 @@ fun HomeScreen(
             EmptyHomeState()
         } else {
             HomeSectionTitle("Kitaplığındaki Müzikler", "Cihazında veya doğrulanmış yerel katalogda bulunan parçalar")
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items(songs.take(20), key = { it.id }) { song ->
-                    LocalSongCard(song = song, onClick = { onPlaySong(song, songs) })
-                }
+            LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                items(songs.take(20), key = { it.id }) { song -> LocalSongCard(song, { onPlaySong(song, songs) }) }
             }
 
             if (categories.isNotEmpty()) {
@@ -113,11 +112,7 @@ fun HomeScreen(
                 ) {
                     categories.forEach { category ->
                         Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .border(1.dp, LanuDarkBorder, RoundedCornerShape(20.dp))
-                                .clickable { onCategoryClick(category) }
-                                .padding(horizontal = 14.dp, vertical = 9.dp)
+                            modifier = Modifier.clip(RoundedCornerShape(20.dp)).border(1.dp, LanuDarkBorder, RoundedCornerShape(20.dp)).clickable { onCategoryClick(category) }.padding(horizontal = 14.dp, vertical = 9.dp)
                         ) { Text(category.titleTr, color = LanuTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                     }
                 }
@@ -125,26 +120,15 @@ fun HomeScreen(
 
             if (actualArtists.isNotEmpty()) {
                 HomeSectionTitle("Sanatçılar", "Mevcut müziklerinden çıkarılan sanatçı listesi")
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(actualArtists, key = { it.id }) { artist ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(96.dp).clickable { onSelectArtist(artist) }
-                        ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(96.dp).clickable { onSelectArtist(artist) }) {
                             if (artist.imageUrl.isBlank()) {
                                 Surface(color = LanuDarkSurface, shape = RoundedCornerShape(48.dp), modifier = Modifier.size(86.dp)) {
                                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = LanuGreen, modifier = Modifier.size(32.dp)) }
                                 }
                             } else {
-                                AsyncImage(
-                                    model = artist.imageUrl,
-                                    contentDescription = artist.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(86.dp).clip(RoundedCornerShape(48.dp))
-                                )
+                                AsyncImage(artist.imageUrl, contentDescription = artist.name, contentScale = ContentScale.Crop, modifier = Modifier.size(86.dp).clip(RoundedCornerShape(48.dp)))
                             }
                             Spacer(Modifier.height(7.dp))
                             Text(artist.name, color = LanuTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -158,24 +142,13 @@ fun HomeScreen(
 
 @Composable
 private fun EmptyHomeState() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 72.dp)
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 72.dp)) {
         Surface(color = LanuDarkSurface, shape = RoundedCornerShape(24.dp), modifier = Modifier.size(92.dp)) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = LanuGreen, modifier = Modifier.size(44.dp))
-            }
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.LibraryMusic, null, tint = LanuGreen, modifier = Modifier.size(44.dp)) }
         }
         Spacer(Modifier.height(18.dp))
         Text("Henüz müzik bulunamadı", color = LanuTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text(
-            "Cihazınızdaki müzikleri taradığınızda veya doğrulanmış bir katalog kaynağı hazır olduğunda parçalar burada görünecek.",
-            color = LanuTextSecondary,
-            fontSize = 13.sp,
-            lineHeight = 19.sp,
-            modifier = Modifier.padding(top = 8.dp)
-        )
+        Text("Cihazınızdaki müzikleri taradığınızda veya doğrulanmış bir katalog kaynağı hazır olduğunda parçalar burada görünecek.", color = LanuTextSecondary, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -189,25 +162,15 @@ private fun HomeSectionTitle(title: String, subtitle: String) {
 
 @Composable
 private fun LocalSongCard(song: Song, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.width(140.dp).clip(RoundedCornerShape(14.dp)).clickable { onClick() }
-    ) {
-        Box(
-            modifier = Modifier.size(140.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, LanuDarkBorder, RoundedCornerShape(14.dp))
-        ) {
+    Column(modifier = Modifier.width(140.dp).clip(RoundedCornerShape(14.dp)).clickable { onClick() }) {
+        Box(modifier = Modifier.size(140.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, LanuDarkBorder, RoundedCornerShape(14.dp))) {
             if (song.coverUrl.isBlank()) {
-                Box(Modifier.fillMaxSize().background(LanuDarkSurface), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.MusicNote, contentDescription = null, tint = LanuGreen, modifier = Modifier.size(42.dp))
-                }
+                Box(Modifier.fillMaxSize().background(LanuDarkSurface), contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = LanuGreen, modifier = Modifier.size(42.dp)) }
             } else {
                 AsyncImage(song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
-            Surface(
-                color = LanuGreen,
-                shape = RoundedCornerShape(50.dp),
-                modifier = Modifier.align(Alignment.BottomEnd).padding(7.dp).size(34.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.PlayArrow, contentDescription = "Oynat", tint = Color.Black, modifier = Modifier.size(20.dp)) }
+            Surface(color = LanuGreen, shape = RoundedCornerShape(50.dp), modifier = Modifier.align(Alignment.BottomEnd).padding(7.dp).size(34.dp)) {
+                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.PlayArrow, "Oynat", tint = Color.Black, modifier = Modifier.size(20.dp)) }
             }
         }
         Text(song.title, color = LanuTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
