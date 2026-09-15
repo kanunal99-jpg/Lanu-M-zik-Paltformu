@@ -3,9 +3,12 @@ package com.example.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -17,8 +20,6 @@ import androidx.glance.layout.padding
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import androidx.glance.unit.dp
-import androidx.glance.unit.sp
 import android.graphics.Color
 
 class LanuQuickWidget : GlanceAppWidget() {
@@ -31,10 +32,10 @@ class LanuQuickWidget : GlanceAppWidget() {
 
 @Composable
 private fun LanuQuickWidgetContent() {
-    val openApp = Intent("android.intent.action.VIEW").apply {
+    val openApp = Intent(Intent.ACTION_VIEW).apply {
         data = android.net.Uri.parse("lanumusic://home")
     }
-    val openLibrary = Intent("android.intent.action.VIEW").apply {
+    val openLibrary = Intent(Intent.ACTION_VIEW).apply {
         data = android.net.Uri.parse("lanumusic://library")
     }
 
@@ -69,6 +70,6 @@ private fun LanuQuickWidgetContent() {
     }
 }
 
-class LanuQuickWidgetReceiver : androidx.glance.appwidget.GlanceAppWidgetReceiver() {
+class LanuQuickWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = LanuQuickWidget()
 }
