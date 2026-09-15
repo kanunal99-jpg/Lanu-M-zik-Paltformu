@@ -9,10 +9,10 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.example.data.MusicRepository
 import com.example.model.Song
-import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 
 /**
@@ -54,7 +54,7 @@ class LanuMediaSessionService : MediaLibraryService() {
             override fun onGetLibraryRoot(
                 session: MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
-                params: LibraryParams?
+                params: MediaLibraryService.LibraryParams?
             ) = Futures.immediateFuture(
                 LibraryResult.ofItem(rootItem(), params)
             )
@@ -65,7 +65,7 @@ class LanuMediaSessionService : MediaLibraryService() {
                 parentId: String,
                 page: Int,
                 pageSize: Int,
-                params: LibraryParams?
+                params: MediaLibraryService.LibraryParams?
             ) = Futures.immediateFuture(
                 LibraryResult.ofItemList(childrenFor(parentId, page, pageSize), params)
             )
@@ -84,14 +84,10 @@ class LanuMediaSessionService : MediaLibraryService() {
                 query: String,
                 page: Int,
                 pageSize: Int,
-                params: LibraryParams?
+                params: MediaLibraryService.LibraryParams?
             ) = Futures.immediateFuture(
                 LibraryResult.ofItemList(
-                    paginate(
-                        repository.searchSongs(query).toList(),
-                        page,
-                        pageSize
-                    ),
+                    paginate(repository.searchSongs(query).map(::toMediaItem), page, pageSize),
                     params
                 )
             )
