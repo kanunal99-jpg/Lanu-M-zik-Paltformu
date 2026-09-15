@@ -167,17 +167,19 @@ class AudioPlayerController(private val context: Context) {
 
     fun next() {
         mediaController?.let { controller ->
-            if (controller.hasNextMediaItem()) controller.seekToNextMediaItem()
-            else if (_queue.value.isNotEmpty()) controller.seekTo(0, 0L)
+            when (val action = PlaybackQueuePolicy.nextAction(controller.currentMediaItemIndex, _queue.value.size, _repeatMode.value)) {
+                is PlaybackQueuePolicy.NextAction.MoveTo -> controller.seekTo(action.index, 0L)
+                PlaybackQueuePolicy.NextAction.Stop -> controller.pause()
+            }
         }
     }
 
     fun previous() {
         mediaController?.let { controller ->
-            when {
-                controller.currentPosition > 3000 -> controller.seekTo(0L)
-                controller.hasPreviousMediaItem() -> controller.seekToPreviousMediaItem()
-                _queue.value.isNotEmpty() -> controller.seekTo(_queue.value.size - 1, 0L)
+            when (val action = PlaybackQueuePolicy.previousAction(controller.currentMediaItemIndex, controller.currentPosition, _queue.value.size, _repeatMode.value)) {
+                PlaybackQueuePolicy.PreviousAction.RestartCurrent -> controller.seekTo(0L)
+                is PlaybackQueuePolicy.PreviousAction.MoveTo -> controller.seekTo(action.index, 0L)
+                PlaybackQueuePolicy.PreviousAction.Stop -> controller.pause()
             }
         }
     }
