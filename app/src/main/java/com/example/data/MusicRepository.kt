@@ -186,6 +186,16 @@ class MusicRepository(context: Context) {
         return result.getOrElse { error("Çalma listesi oluşturulamadı: ${it.message}") }.id
     }
 
+    suspend fun renamePlaylist(playlistId: String, name: String) {
+        val result = userLibraryService.renamePlaylist(playlistId, name)
+        if (result is AuthResult.Failure) error(result.message)
+    }
+
+    suspend fun reorderPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
+        val result = userLibraryService.reorderPlaylist(playlistId, fromIndex, toIndex)
+        if (result is AuthResult.Failure) error(result.message)
+    }
+
     suspend fun deletePlaylist(playlistId: String) {
         val result = userLibraryService.deletePlaylist(playlistId)
         if (result is AuthResult.Failure) error(result.message)
