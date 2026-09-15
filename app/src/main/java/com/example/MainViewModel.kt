@@ -6,7 +6,10 @@ import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.auth.AuthResult
+import com.example.auth.AuthSession
 import com.example.data.DownloadedSongEntity
+import com.example.data.HistoryRecord
 import com.example.data.MusicRepository
 import com.example.data.PlaylistEntity
 import com.example.model.Artist
@@ -37,7 +40,8 @@ enum class MainTab(val titleTr: String) {
     SEARCH("Keşfet"),
     LIBRARY("Kitaplığım"),
     FRIENDS("Arkadaşlar"),
-    EQUALIZER("Ekolayzır")
+    EQUALIZER("Ekolayzır"),
+    ACCOUNT("Hesabım")
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -116,6 +120,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val artists: List<Artist> = repository.artists
     val friendActivities: StateFlow<List<FriendActivity>> = repository.friendActivities
     val newReleaseNotification: StateFlow<Song?> = repository.newReleaseNotification
+
+    val session: StateFlow<AuthSession?> = repository.userSession
+    val history: StateFlow<List<HistoryRecord>> = repository.history.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val favoriteSongIds: StateFlow<Set<String>> = repository.favoriteSongIds.stateIn(
         scope = viewModelScope,
@@ -257,6 +268,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleDownload(song: Song) {
         viewModelScope.launch { repository.toggleDownload(song, _audioQuality.value) }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            when (val result = repository.signOut()) {
+                is AuthResult.Failure -> Log.e("MainViewModel", "Sign out failed: ${result.message}")
+                is AuthResult.Success -> _currentTab.value = MainTab.HOME
+            }
+        }
     }
 
     fun openCreatePlaylistDialog() { _showCreatePlaylistDialog.value = true }

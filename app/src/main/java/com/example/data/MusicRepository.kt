@@ -211,6 +211,8 @@ class MusicRepository(context: Context) {
 
     val history: Flow<List<HistoryRecord>> = userLibrarySnapshot.map { it?.history.orEmpty() }
 
+    suspend fun signOut(): AuthResult = userLibraryService.signOut()
+
     val cachedSongs: Flow<List<Song>> = dao.getAllCachedSongs().map { it.map { item -> item.toSong() } }
 
     fun searchCachedSongs(query: String): Flow<List<Song>> {
