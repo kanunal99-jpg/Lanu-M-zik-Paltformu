@@ -54,9 +54,7 @@ class LanuMediaSessionService : MediaLibraryService() {
                 session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
                 params: MediaLibraryService.LibraryParams?
-            ) = Futures.immediateFuture(
-                LibraryResult.ofItem(rootItem(), params)
-            )
+            ) = Futures.immediateFuture(LibraryResult.ofItem(rootItem(), params))
 
             override fun onGetChildren(
                 session: MediaLibraryService.MediaLibrarySession,
@@ -73,9 +71,7 @@ class LanuMediaSessionService : MediaLibraryService() {
                 session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
                 mediaId: String
-            ) = Futures.immediateFuture(
-                LibraryResult.ofItem(itemFor(mediaId), null)
-            )
+            ) = Futures.immediateFuture(LibraryResult.ofItem(itemFor(mediaId), null))
 
             override fun onGetSearchResult(
                 session: MediaLibraryService.MediaLibrarySession,
