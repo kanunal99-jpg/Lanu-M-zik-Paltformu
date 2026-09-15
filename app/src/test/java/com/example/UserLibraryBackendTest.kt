@@ -78,6 +78,42 @@ class UserLibraryBackendTest {
     }
 
     @Test
+    fun `renaming playlist persists and is isolated by user`() = runBlocking {
+        val userA = backend.createPlaylist("user-a", "Gece")
+        val userB = backend.createPlaylist("user-b", "Sabah")
+
+        backend.renamePlaylist("user-a", userA.id, "Gece Sürüşü", nowMs = 500L)
+
+        val a = backend.snapshot("user-a").playlists.single()
+        val b = backend.snapshot("user-b").playlists.single()
+        assertEquals("Gece Sürüşü", a.name)
+        assertEquals(500L, a.updatedAtMs)
+        assertEquals("Sabah", b.name)
+        assertNotEquals(a.name, b.name)
+    }
+
+    @Test
+    fun `reordering playlist preserves exact song order`() = runBlocking {
+        val playlist = backend.createPlaylist("user-a", "Sıra")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-1")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-2")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-3")
+
+        backend.reorderPlaylist("user-a", playlist.id, fromIndex = 0, toIndex = 2, nowMs = 900L)
+
+        val updated = backend.snapshot("user-a").playlists.single()
+        assertEquals(listOf("song-2", "song-3", "song-1"), updated.songIds)
+        assertEquals(900L, updated.updatedAtMs)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `reordering rejects invalid source index`() = runBlocking {
+        val playlist = backend.createPlaylist("user-a", "Sıra")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-1")
+        backend.reorderPlaylist("user-a", playlist.id, fromIndex = 2, toIndex = 0)
+    }
+
+    @Test
     fun `history keeps latest fifty unique song entries`() = runBlocking {
         repeat(55) { index ->
             backend.recordPlay("user-a", "song-$index", playedAtMs = index.toLong())

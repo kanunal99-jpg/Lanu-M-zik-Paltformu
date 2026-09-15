@@ -2,8 +2,8 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
-import com.example.auth.LocalAuthBackend
 import com.example.auth.AuthResult
+import com.example.auth.LocalAuthBackend
 import com.example.model.Artist
 import com.example.model.AudioQuality
 import com.example.model.FriendActivity
@@ -51,7 +51,6 @@ class MusicRepository(context: Context) {
     private val _newReleaseNotification = MutableStateFlow<Song?>(null)
     val newReleaseNotification: StateFlow<Song?> = _newReleaseNotification.asStateFlow()
 
-    /** User-owned library is now the primary source for favorites, playlists and history. */
     val userLibrarySnapshot: StateFlow<UserLibrarySnapshot?> = userLibraryService.snapshot
     val userSession = userLibraryService.session
 
@@ -74,22 +73,16 @@ class MusicRepository(context: Context) {
         val session = userLibraryService.session.value ?: return
         val snapshot = userLibraryService.snapshot.value ?: return
         if (snapshot.favorites.isEmpty()) {
-            dao.getFavoriteSongs().first().forEach { favorite ->
-                userLibraryService.addFavorite(favorite.songId)
-            }
+            dao.getFavoriteSongs().first().forEach { favorite -> userLibraryService.addFavorite(favorite.songId) }
         }
         if (snapshot.playlists.isEmpty()) {
             dao.getAllPlaylists().first().forEach { playlist ->
                 val created = userLibraryService.createPlaylist(playlist.name, playlist.description).getOrNull() ?: return@forEach
-                dao.getSongsForPlaylist(playlist.id).first().forEach { relation ->
-                    userLibraryService.addSongToPlaylist(created.id, relation.songId)
-                }
+                dao.getSongsForPlaylist(playlist.id).first().forEach { relation -> userLibraryService.addSongToPlaylist(created.id, relation.songId) }
             }
         }
         if (snapshot.history.isEmpty()) {
-            dao.getHistory().first().reversed().forEach { history ->
-                userLibraryService.recordPlay(history.songId)
-            }
+            dao.getHistory().first().reversed().forEach { history -> userLibraryService.recordPlay(history.songId) }
         }
         Log.d("MusicRepository", "User library ready for ${session.userId}")
     }
@@ -110,8 +103,7 @@ class MusicRepository(context: Context) {
         files.filter { it.nameWithoutExtension !in dbIds }.forEach { it.delete() }
     }
 
-    val favoriteSongIds: Flow<Set<String>> = userLibrarySnapshot
-        .map { snapshot -> snapshot?.favorites?.map { it.songId }?.toSet().orEmpty() }
+    val favoriteSongIds: Flow<Set<String>> = userLibrarySnapshot.map { snapshot -> snapshot?.favorites?.map { it.songId }?.toSet().orEmpty() }
 
     suspend fun scanAndSyncLocalMusic() {
         val localSongs = localMusicScanner.scanLocalMusic()
@@ -119,15 +111,37 @@ class MusicRepository(context: Context) {
         val byId = _songs.value.associateBy { it.id }.toMutableMap()
         localSongs.forEach { byId[it.id] = it }
         _songs.value = byId.values.toList()
-        dao.insertLocalSongs(localSongs.map { it.toLocalEntity(isOffline = true) })
+        dao.insertLocalSongs(localSongs.map(::toVerifiedLocalEntity))
     }
+
+    private fun toVerifiedLocalEntity(song: Song): LocalSongEntity = LocalSongEntity(
+        id = song.id,
+        title = song.title,
+        artist = song.artist,
+        artistId = song.artistId,
+        album = song.album,
+        durationMs = song.durationMs,
+        categoryName = song.category.name,
+        language = song.language,
+        localAudioPath = song.audioUrl,
+        localCoverPath = song.coverUrl,
+        remoteAudioUrl = song.audioUrl,
+        remoteCoverUrl = song.coverUrl,
+        mimeType = "audio/*",
+        bitrate = "",
+        fileSizeBytes = 0L,
+        audioQuality = "Yerel",
+        isAvailableOffline = true,
+        lyricsText = song.lyrics.joinToString("\n") { it.text },
+        downloadedAt = System.currentTimeMillis(),
+        lastPlayedAt = null,
+        playCount = song.playCount
+    )
 
     suspend fun toggleFavorite(songId: String) {
         val current = userLibrarySnapshot.value?.favorites?.any { it.songId == songId } == true
         val result = if (current) userLibraryService.removeFavorite(songId) else userLibraryService.addFavorite(songId)
-        if (result is AuthResult.Failure) {
-            Log.e("MusicRepository", "User favorite operation failed: ${result.message}")
-        }
+        if (result is AuthResult.Failure) Log.e("MusicRepository", "User favorite operation failed: ${result.message}")
     }
 
     val downloadedSongs: Flow<List<DownloadedSongEntity>> = dao.getDownloadedSongs()
@@ -186,6 +200,16 @@ class MusicRepository(context: Context) {
         return result.getOrElse { error("Çalma listesi oluşturulamadı: ${it.message}") }.id
     }
 
+    suspend fun renamePlaylist(playlistId: String, name: String) {
+        val result = userLibraryService.renamePlaylist(playlistId, name)
+        if (result is AuthResult.Failure) error(result.message)
+    }
+
+    suspend fun reorderPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
+        val result = userLibraryService.reorderPlaylist(playlistId, fromIndex, toIndex)
+        if (result is AuthResult.Failure) error(result.message)
+    }
+
     suspend fun deletePlaylist(playlistId: String) {
         val result = userLibraryService.deletePlaylist(playlistId)
         if (result is AuthResult.Failure) error(result.message)
@@ -205,15 +229,11 @@ class MusicRepository(context: Context) {
 
     suspend fun recordPlayedSong(songId: String) {
         val result = userLibraryService.recordPlay(songId)
-        if (result is AuthResult.Failure) {
-            Log.e("MusicRepository", "History operation failed: ${result.message}")
-        }
+        if (result is AuthResult.Failure) Log.e("MusicRepository", "History operation failed: ${result.message}")
     }
 
     suspend fun clearHistory(): AuthResult = userLibraryService.clearHistory()
-
     val history: Flow<List<HistoryRecord>> = userLibrarySnapshot.map { it?.history.orEmpty() }
-
     suspend fun signOut(): AuthResult = userLibraryService.signOut()
 
     val cachedSongs: Flow<List<Song>> = dao.getAllCachedSongs().map { it.map { item -> item.toSong() } }
@@ -254,7 +274,7 @@ class MusicRepository(context: Context) {
         _friendActivities.value = listOf(newActivity) + _friendActivities.value
     }
 
-    fun pushSimulatedNewRelease() { }
+    fun pushSimulatedNewRelease() {}
     fun dismissNewReleaseNotification() { _newReleaseNotification.value = null }
 
     fun close() {
