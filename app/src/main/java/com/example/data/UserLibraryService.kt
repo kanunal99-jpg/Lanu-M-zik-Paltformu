@@ -15,7 +15,6 @@ class UserLibraryService(
 ) {
     private val _session = MutableStateFlow<AuthSession?>(null)
     val session: StateFlow<AuthSession?> = _session.asStateFlow()
-
     private val _snapshot = MutableStateFlow<UserLibrarySnapshot?>(null)
     val snapshot: StateFlow<UserLibrarySnapshot?> = _snapshot.asStateFlow()
 
@@ -37,33 +36,22 @@ class UserLibraryService(
 
     suspend fun signOut(): AuthResult {
         val result = authBackend.signOut()
-        if (result is AuthResult.Success) {
-            _session.value = null
-            _snapshot.value = null
-        }
+        if (result is AuthResult.Success) { _session.value = null; _snapshot.value = null }
         return result
     }
 
-    suspend fun addFavorite(songId: String): AuthResult = withSession { userId ->
-        libraryBackend.addFavorite(userId, songId)
-        refreshSnapshot(userId)
-    }
-
-    suspend fun removeFavorite(songId: String): AuthResult = withSession { userId ->
-        libraryBackend.removeFavorite(userId, songId)
-        refreshSnapshot(userId)
-    }
+    suspend fun addFavorite(songId: String): AuthResult = withSession { userId -> libraryBackend.addFavorite(userId, songId); refreshSnapshot(userId) }
+    suspend fun removeFavorite(songId: String): AuthResult = withSession { userId -> libraryBackend.removeFavorite(userId, songId); refreshSnapshot(userId) }
 
     suspend fun createPlaylist(name: String, description: String = ""): Result<PlaylistRecord> {
-        val userId = _session.value?.userId
-            ?: return Result.failure(IllegalStateException("Aktif LANU oturumu yok"))
-        return runCatching {
-            libraryBackend.createPlaylist(userId, name, description).also { refreshSnapshot(userId) }
-        }
+        val userId = _session.value?.userId ?: return Result.failure(IllegalStateException("Aktif LANU oturumu yok"))
+        return runCatching { libraryBackend.createPlaylist(userId, name, description).also { refreshSnapshot(userId) } }
     }
 
-    suspend fun deletePlaylist(playlistId: String): AuthResult = withSession { userId ->
-        libraryBackend.deletePlaylist(userId, playlistId)
+    suspend fun deletePlaylist(playlistId: String): AuthResult = withSession { userId -> libraryBackend.deletePlaylist(userId, playlistId); refreshSnapshot(userId) }
+
+    suspend fun renamePlaylist(playlistId: String, name: String, description: String = ""): AuthResult = withSession { userId ->
+        libraryBackend.renamePlaylist(userId, playlistId, name, description)
         refreshSnapshot(userId)
     }
 
@@ -77,32 +65,20 @@ class UserLibraryService(
         refreshSnapshot(userId)
     }
 
-    suspend fun recordPlay(songId: String): AuthResult = withSession { userId ->
-        libraryBackend.recordPlay(userId, songId)
+    suspend fun moveSongInPlaylist(playlistId: String, songId: String, targetIndex: Int): AuthResult = withSession { userId ->
+        libraryBackend.moveSongInPlaylist(userId, playlistId, songId, targetIndex)
         refreshSnapshot(userId)
     }
 
-    suspend fun clearHistory(): AuthResult = withSession { userId ->
-        libraryBackend.clearHistory(userId)
-        refreshSnapshot(userId)
-    }
+    suspend fun recordPlay(songId: String): AuthResult = withSession { userId -> libraryBackend.recordPlay(userId, songId); refreshSnapshot(userId) }
+    suspend fun clearHistory(): AuthResult = withSession { userId -> libraryBackend.clearHistory(userId); refreshSnapshot(userId) }
+    suspend fun clearCurrentUser(): AuthResult = withSession { userId -> libraryBackend.clearUser(userId); refreshSnapshot(userId) }
 
-    suspend fun clearCurrentUser(): AuthResult = withSession { userId ->
-        libraryBackend.clearUser(userId)
-        refreshSnapshot(userId)
-    }
-
-    private suspend fun refreshSnapshot(userId: String) {
-        _snapshot.value = libraryBackend.snapshot(userId)
-    }
+    private suspend fun refreshSnapshot(userId: String) { _snapshot.value = libraryBackend.snapshot(userId) }
 
     private suspend fun withSession(action: suspend (String) -> Unit): AuthResult {
-        val session = _session.value
-            ?: return AuthResult.Failure(AuthFailure.NOT_CONFIGURED, "Aktif LANU oturumu yok")
-        return runCatching {
-            action(session.userId)
-            AuthResult.Success(session)
-        }.getOrElse { error ->
+        val session = _session.value ?: return AuthResult.Failure(AuthFailure.NOT_CONFIGURED, "Aktif LANU oturumu yok")
+        return runCatching { action(session.userId); AuthResult.Success(session) }.getOrElse { error ->
             AuthResult.Failure(AuthFailure.UNKNOWN, error.message ?: "Kullanıcı kitaplığı işlemi başarısız")
         }
     }

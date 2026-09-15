@@ -1,0 +1,1 @@
+Professional hardening scope: playlist controls, Media3 player state, history transitions, offline validation, verified-only sharing.

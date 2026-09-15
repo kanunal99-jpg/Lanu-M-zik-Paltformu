@@ -1,0 +1,1 @@
+LANU Music hardening validation scope: playlist management, Media3 playback state, history transitions, offline file validation, and verified-only sharing.

@@ -52,7 +52,6 @@ class UserLibraryBackendTest {
     fun `removing favorite only affects selected user`() = runBlocking {
         backend.addFavorite("user-a", "song-1", nowMs = 10L)
         backend.addFavorite("user-b", "song-1", nowMs = 20L)
-
         backend.removeFavorite("user-a", "song-1")
 
         assertTrue(backend.snapshot("user-a").favorites.isEmpty())
@@ -70,7 +69,6 @@ class UserLibraryBackendTest {
     fun `deleted playlist is removed without touching another user`() = runBlocking {
         val userAPlaylist = backend.createPlaylist("user-a", "A")
         val userBPlaylist = backend.createPlaylist("user-b", "B")
-
         backend.deletePlaylist("user-a", userAPlaylist.id)
 
         assertTrue(backend.snapshot("user-a").playlists.isEmpty())
@@ -78,10 +76,39 @@ class UserLibraryBackendTest {
     }
 
     @Test
+    fun `playlist can be renamed without changing its song order`() = runBlocking {
+        val playlist = backend.createPlaylist("user-a", "Gece")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-1")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-2")
+
+        backend.renamePlaylist("user-a", playlist.id, "Gece Yolculuğu", "Uzun yol listesi", nowMs = 500L)
+
+        val updated = backend.snapshot("user-a").playlists.single()
+        assertEquals("Gece Yolculuğu", updated.name)
+        assertEquals("Uzun yol listesi", updated.description)
+        assertEquals(listOf("song-1", "song-2"), updated.songIds)
+        assertEquals(500L, updated.updatedAtMs)
+    }
+
+    @Test
+    fun `playlist reordering persists deterministically`() = runBlocking {
+        val playlist = backend.createPlaylist("user-a", "Sıra")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-1")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-2")
+        backend.addSongToPlaylist("user-a", playlist.id, "song-3")
+
+        backend.moveSongInPlaylist("user-a", playlist.id, "song-3", targetIndex = 0, nowMs = 600L)
+        assertEquals(listOf("song-3", "song-1", "song-2"), backend.snapshot("user-a").playlists.single().songIds)
+
+        backend.moveSongInPlaylist("user-a", playlist.id, "song-1", targetIndex = 2, nowMs = 700L)
+        val updated = backend.snapshot("user-a").playlists.single()
+        assertEquals(listOf("song-3", "song-2", "song-1"), updated.songIds)
+        assertEquals(700L, updated.updatedAtMs)
+    }
+
+    @Test
     fun `history keeps latest fifty unique song entries`() = runBlocking {
-        repeat(55) { index ->
-            backend.recordPlay("user-a", "song-$index", playedAtMs = index.toLong())
-        }
+        repeat(55) { index -> backend.recordPlay("user-a", "song-$index", playedAtMs = index.toLong()) }
         val history = backend.snapshot("user-a").history
         assertEquals(50, history.size)
         assertEquals("song-54", history.first().songId)
@@ -92,7 +119,6 @@ class UserLibraryBackendTest {
     fun `clearing history only affects selected user`() = runBlocking {
         backend.recordPlay("user-a", "song-a", playedAtMs = 10L)
         backend.recordPlay("user-b", "song-b", playedAtMs = 20L)
-
         backend.clearHistory("user-a")
 
         assertTrue(backend.snapshot("user-a").history.isEmpty())
