@@ -67,6 +67,17 @@ class UserLibraryBackendTest {
     }
 
     @Test
+    fun `deleted playlist is removed without touching another user`() = runBlocking {
+        val userAPlaylist = backend.createPlaylist("user-a", "A")
+        val userBPlaylist = backend.createPlaylist("user-b", "B")
+
+        backend.deletePlaylist("user-a", userAPlaylist.id)
+
+        assertTrue(backend.snapshot("user-a").playlists.isEmpty())
+        assertEquals(listOf(userBPlaylist.id), backend.snapshot("user-b").playlists.map { it.id })
+    }
+
+    @Test
     fun `history keeps latest fifty unique song entries`() = runBlocking {
         repeat(55) { index ->
             backend.recordPlay("user-a", "song-$index", playedAtMs = index.toLong())

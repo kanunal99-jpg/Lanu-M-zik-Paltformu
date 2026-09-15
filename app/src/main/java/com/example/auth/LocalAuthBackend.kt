@@ -25,6 +25,27 @@ class LocalAuthBackend(context: Context) : AuthBackend {
         )
     }
 
+    /**
+     * Creates/returns a device-local identity without pretending that a cloud account exists.
+     * This is the safe default used until a real remote provider is configured.
+     */
+    suspend fun ensureLocalSession(): AuthSession {
+        currentSession()?.let { return it }
+        val createdAt = System.currentTimeMillis()
+        val userId = "local-${UUID.randomUUID()}"
+        preferences.edit()
+            .putString(KEY_USER_ID, userId)
+            .putString(KEY_DISPLAY_NAME, "LANU Kullanıcısı")
+            .putLong(KEY_CREATED_AT, createdAt)
+            .apply()
+        return AuthSession(
+            userId = userId,
+            displayName = "LANU Kullanıcısı",
+            provider = AuthProvider.LOCAL,
+            createdAtMs = createdAt
+        )
+    }
+
     override suspend fun signIn(identifier: String, secret: String): AuthResult {
         if (identifier.isBlank() || secret.isBlank()) {
             return AuthResult.Failure(

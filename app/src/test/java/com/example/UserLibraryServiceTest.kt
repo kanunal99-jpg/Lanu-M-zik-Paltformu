@@ -5,7 +5,6 @@ import com.example.auth.AuthFailure
 import com.example.auth.AuthProvider
 import com.example.auth.AuthResult
 import com.example.auth.AuthSession
-import com.example.data.LocalUserLibraryBackend
 import com.example.data.UserLibraryService
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -80,6 +79,7 @@ class UserLibraryServiceTest {
         override suspend fun addFavorite(userId: String, songId: String, nowMs: Long) = delegate.addFavorite(userId, songId, nowMs)
         override suspend fun removeFavorite(userId: String, songId: String) = delegate.removeFavorite(userId, songId)
         override suspend fun createPlaylist(userId: String, name: String, description: String, nowMs: Long) = delegate.createPlaylist(userId, name, description, nowMs)
+        override suspend fun deletePlaylist(userId: String, playlistId: String) = delegate.deletePlaylist(userId, playlistId)
         override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) = delegate.addSongToPlaylist(userId, playlistId, songId, nowMs)
         override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) = delegate.removeSongFromPlaylist(userId, playlistId, songId)
         override suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long) = delegate.recordPlay(userId, songId, playedAtMs)
@@ -103,6 +103,9 @@ class UserLibraryServiceTest {
             val item = com.example.data.PlaylistRecord("pl-1", name, description, nowMs, nowMs, emptyList())
             playlists.getOrPut(userId) { mutableListOf() }.add(item)
             return item
+        }
+        override suspend fun deletePlaylist(userId: String, playlistId: String) {
+            playlists[userId]?.removeAll { it.id == playlistId }
         }
         override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) {
             playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = (it.songIds + songId).distinct()) else it }.toMutableList()

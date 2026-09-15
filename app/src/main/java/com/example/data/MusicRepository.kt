@@ -2,6 +2,8 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import com.example.auth.LocalAuthBackend
+import com.example.auth.AuthResult
 import com.example.model.Artist
 import com.example.model.AudioQuality
 import com.example.model.FriendActivity
@@ -30,6 +32,12 @@ class MusicRepository(context: Context) {
     private val localMusicScanner = LocalMusicScanner(context)
     val downloadManager = com.example.player.DownloadManager(context)
 
+    private val localAuthBackend = LocalAuthBackend(context)
+    private val userLibraryService = UserLibraryService(
+        authBackend = localAuthBackend,
+        libraryBackend = LocalUserLibraryBackend(context)
+    )
+
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
@@ -43,15 +51,46 @@ class MusicRepository(context: Context) {
     private val _newReleaseNotification = MutableStateFlow<Song?>(null)
     val newReleaseNotification: StateFlow<Song?> = _newReleaseNotification.asStateFlow()
 
+    /** User-owned library is now the primary source for favorites, playlists and history. */
+    val userLibrarySnapshot: StateFlow<UserLibrarySnapshot?> = userLibraryService.snapshot
+    val userSession = userLibraryService.session
+
     init {
         scope.launch {
             runCatching {
+                localAuthBackend.ensureLocalSession()
+                userLibraryService.restoreSession()
                 val cached = dao.getAllCachedSongs().first().map { it.toSong() }
                 val local = dao.getAllLocalSongs().first().map { it.toSong() }
                 _songs.value = (local + cached).distinctBy { it.id }
+                migrateLegacyLibraryIfNeeded()
                 syncOfflineStorage()
             }.onFailure { Log.e("MusicRepository", "Stored music initialization failed", it) }
         }
+    }
+
+    private suspend fun migrateLegacyLibraryIfNeeded() {
+        val session = userLibraryService.session.value ?: return
+        val snapshot = userLibraryService.snapshot.value ?: return
+        if (snapshot.favorites.isEmpty()) {
+            dao.getFavoriteSongs().first().forEach { favorite ->
+                userLibraryService.addFavorite(favorite.songId)
+            }
+        }
+        if (snapshot.playlists.isEmpty()) {
+            dao.getAllPlaylists().first().forEach { playlist ->
+                val created = userLibraryService.createPlaylist(playlist.name, playlist.description).getOrNull() ?: return@forEach
+                dao.getSongsForPlaylist(playlist.id).first().forEach { relation ->
+                    userLibraryService.addSongToPlaylist(created.id, relation.songId)
+                }
+            }
+        }
+        if (snapshot.history.isEmpty()) {
+            dao.getHistory().first().reversed().forEach { history ->
+                userLibraryService.recordPlay(history.songId)
+            }
+        }
+        Log.d("MusicRepository", "User library ready for ${session.userId}")
     }
 
     suspend fun syncOfflineStorage() {
@@ -70,7 +109,8 @@ class MusicRepository(context: Context) {
         files.filter { it.nameWithoutExtension !in dbIds }.forEach { it.delete() }
     }
 
-    val favoriteSongIds: Flow<Set<String>> = dao.getFavoriteSongs().map { it.map { fav -> fav.songId }.toSet() }
+    val favoriteSongIds: Flow<Set<String>> = userLibrarySnapshot
+        .map { snapshot -> snapshot?.favorites?.map { it.songId }?.toSet().orEmpty() }
 
     suspend fun scanAndSyncLocalMusic() {
         val localSongs = localMusicScanner.scanLocalMusic()
@@ -81,10 +121,11 @@ class MusicRepository(context: Context) {
         dao.insertLocalSongs(localSongs.map { it.toLocalEntity(isOffline = true) })
     }
 
-    fun toggleFavorite(songId: String) {
-        scope.launch {
-            val favs = favoriteSongIds.first()
-            if (songId in favs) dao.removeFavorite(songId) else dao.addFavorite(FavoriteSongEntity(songId))
+    suspend fun toggleFavorite(songId: String) {
+        val current = userLibrarySnapshot.value?.favorites?.any { it.songId == songId } == true
+        val result = if (current) userLibraryService.removeFavorite(songId) else userLibraryService.addFavorite(songId)
+        if (result is AuthResult.Failure) {
+            Log.e("MusicRepository", "User favorite operation failed: ${result.message}")
         }
     }
 
@@ -119,31 +160,56 @@ class MusicRepository(context: Context) {
 
     fun getOfflineSongsForPlaylist(playlistId: String): Flow<List<LocalSongEntity>> = dao.getLocalSongsForPlaylist(playlistId)
     suspend fun setPlaylistOfflineStatus(playlistId: String, isOffline: Boolean) = dao.setPlaylistOfflineStatus(playlistId, isOffline)
-    val playlists: Flow<List<PlaylistEntity>> = dao.getAllPlaylists()
 
-    fun getSongsForPlaylist(playlistId: String): Flow<List<Song>> = dao.getSongsForPlaylist(playlistId).combine(songs) { playlistSongs, allSongs ->
+    val playlists: Flow<List<PlaylistEntity>> = userLibrarySnapshot.map { snapshot ->
+        snapshot?.playlists.orEmpty().map { playlist ->
+            PlaylistEntity(
+                id = playlist.id,
+                name = playlist.name,
+                description = playlist.description,
+                createdAt = playlist.createdAtMs,
+                updatedAt = playlist.updatedAtMs,
+                totalSongsCount = playlist.songIds.size
+            )
+        }
+    }
+
+    fun getSongsForPlaylist(playlistId: String): Flow<List<Song>> = userLibrarySnapshot.combine(songs) { snapshot, allSongs ->
+        val ids = snapshot?.playlists?.firstOrNull { it.id == playlistId }?.songIds.orEmpty()
         val songMap = allSongs.associateBy { it.id }
-        playlistSongs.mapNotNull { songMap[it.songId] }
+        ids.mapNotNull { songMap[it] }
     }
 
     suspend fun createPlaylist(name: String, description: String = ""): String {
-        val id = "pl_${UUID.randomUUID().toString().take(8)}"
-        dao.insertPlaylist(PlaylistEntity(id, name.ifBlank { "Yeni Çalma Listem" }, description, System.currentTimeMillis()))
-        return id
+        val result = userLibraryService.createPlaylist(name, description)
+        return result.getOrElse { error("Çalma listesi oluşturulamadı: ${it.message}") }.id
     }
 
     suspend fun deletePlaylist(playlistId: String) {
-        dao.deletePlaylist(playlistId)
+        val result = userLibraryService.deletePlaylist(playlistId)
+        if (result is AuthResult.Failure) error(result.message)
         dao.deletePlaylistSongs(playlistId)
+        dao.deletePlaylist(playlistId)
     }
 
     suspend fun addSongToPlaylist(playlistId: String, songId: String) {
-        val currentCount = dao.getSongsForPlaylist(playlistId).first().size
-        dao.addSongToPlaylist(PlaylistSongEntity(playlistId, songId, currentCount))
+        val result = userLibraryService.addSongToPlaylist(playlistId, songId)
+        if (result is AuthResult.Failure) error(result.message)
     }
 
-    suspend fun removeSongFromPlaylist(playlistId: String, songId: String) = dao.removeSongFromPlaylist(playlistId, songId)
-    suspend fun recordPlayedSong(songId: String) = dao.addToHistory(HistoryEntity(songId = songId))
+    suspend fun removeSongFromPlaylist(playlistId: String, songId: String) {
+        val result = userLibraryService.removeSongFromPlaylist(playlistId, songId)
+        if (result is AuthResult.Failure) error(result.message)
+    }
+
+    suspend fun recordPlayedSong(songId: String) {
+        val result = userLibraryService.recordPlay(songId)
+        if (result is AuthResult.Failure) {
+            Log.e("MusicRepository", "History operation failed: ${result.message}")
+        }
+    }
+
+    val history: Flow<List<HistoryRecord>> = userLibrarySnapshot.map { it?.history.orEmpty() }
 
     val cachedSongs: Flow<List<Song>> = dao.getAllCachedSongs().map { it.map { item -> item.toSong() } }
 
