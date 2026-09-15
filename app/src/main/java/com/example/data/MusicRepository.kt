@@ -56,6 +56,7 @@ class MusicRepository(context: Context) {
     val userSession = userLibraryService.session
 
     init {
+        RepositoryRegistry.repository = this
         scope.launch {
             runCatching {
                 localAuthBackend.ensureLocalSession()
@@ -209,6 +210,8 @@ class MusicRepository(context: Context) {
         }
     }
 
+    suspend fun clearHistory(): AuthResult = userLibraryService.clearHistory()
+
     val history: Flow<List<HistoryRecord>> = userLibrarySnapshot.map { it?.history.orEmpty() }
 
     suspend fun signOut(): AuthResult = userLibraryService.signOut()
@@ -255,6 +258,7 @@ class MusicRepository(context: Context) {
     fun dismissNewReleaseNotification() { _newReleaseNotification.value = null }
 
     fun close() {
+        if (RepositoryRegistry.repository === this) RepositoryRegistry.repository = null
         scope.cancel()
         downloadManager.close()
     }
