@@ -2,7 +2,6 @@ package com.example
 
 import android.Manifest
 import android.app.Activity
-import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -71,9 +70,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            MyApplicationTheme { MainAppScreen() }
-        }
+        setContent { MyApplicationTheme { MainAppScreen() } }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -89,9 +86,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val incomingUri = remember(context) { (context as? Activity)?.intent?.data }
     val deepLink = remember(incomingUri) { LanuDeepLink.parse(incomingUri) }
 
-    val permissionsLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { viewModel.scanLocalMusic() }
+    val permissionsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.scanLocalMusic() }
 
     LaunchedEffect(Unit) {
         val permissionsToRequest = mutableListOf<String>()
@@ -155,14 +150,20 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                     )
                 )
             }
+            is LanuDeepLink.PlayerAction -> when (target.action) {
+                LanuDeepLink.Action.PLAY_PAUSE -> viewModel.togglePlayPause()
+                LanuDeepLink.Action.NEXT -> viewModel.nextSong()
+                LanuDeepLink.Action.PREVIOUS -> viewModel.prevSong()
+                LanuDeepLink.Action.OPEN_PLAYER -> viewModel.openNowPlaying()
+            }
             null -> Unit
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(LanuDarkBg)) {
+    Box(Modifier.fillMaxSize().background(LanuDarkBg)) {
         Scaffold(
             bottomBar = {
-                Column(modifier = Modifier.navigationBarsPadding()) {
+                Column(Modifier.navigationBarsPadding()) {
                     if (!isNowPlayingExpanded) {
                         PlayerBottomAppBar(
                             song = currentSong,
@@ -183,11 +184,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                         )
                     }
 
-                    NavigationBar(
-                        containerColor = LanuDarkSurface,
-                        tonalElevation = 8.dp,
-                        modifier = Modifier.testTag("bottom_navigation_bar")
-                    ) {
+                    NavigationBar(containerColor = LanuDarkSurface, tonalElevation = 8.dp, modifier = Modifier.testTag("bottom_navigation_bar")) {
                         val tabs = listOf(
                             Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home),
                             Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search),
@@ -258,32 +255,19 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                         onVirtualizerChanged = { viewModel.setVirtualizer(it) },
                         onToggleEqualizer = { viewModel.toggleEqualizer() }
                     )
-                    MainTab.ACCOUNT -> AccountHistoryScreen(
-                        session = session,
-                        history = history,
-                        allSongs = allSongs,
-                        onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) },
-                        onSignOut = { viewModel.signOut() }
-                    )
+                    MainTab.ACCOUNT -> AccountHistoryScreen(session = session, history = history, allSongs = allSongs, onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) }, onSignOut = { viewModel.signOut() })
                 }
 
                 if (isLoading) {
                     Box(
-                        modifier = Modifier.fillMaxSize().background(LanuDarkBg.copy(alpha = 0.5f)).clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) {},
+                        modifier = Modifier.fillMaxSize().background(LanuDarkBg.copy(alpha = 0.5f)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
                         contentAlignment = Alignment.Center
                     ) { CircularProgressIndicator(color = LanuGreen, strokeWidth = 4.dp) }
                 }
             }
         }
 
-        AnimatedVisibility(
-            visible = isNowPlayingExpanded && currentSong != null,
-            enter = slideInVertically(initialOffsetY = { it }),
-            exit = slideOutVertically(targetOffsetY = { it })
-        ) {
+        AnimatedVisibility(visible = isNowPlayingExpanded && currentSong != null, enter = slideInVertically(initialOffsetY = { it }), exit = slideOutVertically(targetOffsetY = { it })) {
             currentSong?.let { song ->
                 NowPlayingSheet(
                     song = song,
@@ -315,10 +299,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
         }
 
         if (showCreatePlaylistDialog) {
-            CreatePlaylistDialog(
-                onDismiss = { viewModel.closeCreatePlaylistDialog() },
-                onCreate = { name, desc -> viewModel.createPlaylist(name, desc) }
-            )
+            CreatePlaylistDialog(onDismiss = { viewModel.closeCreatePlaylistDialog() }, onCreate = { name, desc -> viewModel.createPlaylist(name, desc) })
         }
 
         songToAddToPlaylist?.let { song ->
