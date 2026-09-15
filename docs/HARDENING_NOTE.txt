@@ -1,0 +1,1 @@
+LANU Music product hardening: playlist rename/reorder, player command buffering, persistent shuffle/repeat, automatic play history, offline download validation, and verified-only share text. Remote services remain provider-agnostic and local-first.
