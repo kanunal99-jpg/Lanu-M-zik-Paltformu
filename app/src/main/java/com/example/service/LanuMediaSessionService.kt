@@ -9,7 +9,6 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
-import androidx.media3.session.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.example.data.MusicRepository
 import com.example.model.Song
@@ -20,7 +19,7 @@ import com.google.common.util.concurrent.Futures
  * The library is built only from the repository's real current catalog.
  */
 class LanuMediaSessionService : MediaLibraryService() {
-    private var mediaLibrarySession: MediaLibrarySession? = null
+    private var mediaLibrarySession: MediaLibraryService.MediaLibrarySession? = null
     private var player: ExoPlayer? = null
     private lateinit var repository: MusicRepository
 
@@ -50,9 +49,9 @@ class LanuMediaSessionService : MediaLibraryService() {
             )
         }
 
-        val callback = object : MediaLibrarySession.Callback {
+        val callback = object : MediaLibraryService.MediaLibrarySession.Callback {
             override fun onGetLibraryRoot(
-                session: MediaLibrarySession,
+                session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
                 params: MediaLibraryService.LibraryParams?
             ) = Futures.immediateFuture(
@@ -60,7 +59,7 @@ class LanuMediaSessionService : MediaLibraryService() {
             )
 
             override fun onGetChildren(
-                session: MediaLibrarySession,
+                session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
                 parentId: String,
                 page: Int,
@@ -71,7 +70,7 @@ class LanuMediaSessionService : MediaLibraryService() {
             )
 
             override fun onGetItem(
-                session: MediaLibrarySession,
+                session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
                 mediaId: String
             ) = Futures.immediateFuture(
@@ -79,7 +78,7 @@ class LanuMediaSessionService : MediaLibraryService() {
             )
 
             override fun onGetSearchResult(
-                session: MediaLibrarySession,
+                session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
                 query: String,
                 page: Int,
@@ -93,12 +92,12 @@ class LanuMediaSessionService : MediaLibraryService() {
             )
         }
 
-        val builder = MediaLibrarySession.Builder(this, createdPlayer, callback)
+        val builder = MediaLibraryService.MediaLibrarySession.Builder(this, createdPlayer, callback)
         if (sessionActivity != null) builder.setSessionActivity(sessionActivity)
         mediaLibrarySession = builder.build()
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = mediaLibrarySession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibraryService.MediaLibrarySession? = mediaLibrarySession
 
     override fun onDestroy() {
         mediaLibrarySession?.release()
