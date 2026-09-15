@@ -86,6 +86,7 @@ dependencies {
   implementation(libs.androidx.media3.common)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
+  implementation(libs.glance.appwidget)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)

@@ -5,24 +5,24 @@ import com.example.data.toSong
 import com.example.model.Song
 import com.example.model.Artist
 import com.example.model.Album
+import com.example.search.TypoTolerantSearch
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 
 class LocalCatalogProvider(private val dao: MusicDao) : CatalogProvider {
 
     override suspend fun searchSongs(query: String): Result<List<Song>> {
-        val normalizedQuery = normalizeSearch(query)
         val songs = dao.getAllLocalSongs().first().filter {
-            normalizedQuery.isBlank() ||
-                listOf(it.title, it.artist, it.album).any { value -> normalizeSearch(value).contains(normalizedQuery) }
+            TypoTolerantSearch.matches(query, it.title) ||
+                TypoTolerantSearch.matches(query, it.artist) ||
+                TypoTolerantSearch.matches(query, it.album)
         }.map { it.toSong() }
         return Result.success(songs)
     }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> {
-        val normalizedQuery = normalizeSearch(query)
         val songs = dao.getAllLocalSongs().first().map { it.toSong() }
-        val artists = songs.filter { normalizedQuery.isBlank() || normalizeSearch(it.artist).contains(normalizedQuery) }
+        val artists = songs.filter { TypoTolerantSearch.matches(query, it.artist) }
             .distinctBy { it.artistId }
             .map {
                 Artist(
@@ -79,11 +79,7 @@ class LocalCatalogProvider(private val dao: MusicDao) : CatalogProvider {
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> {
+        // Local storage is not a release feed. Never infer "latest" from local scan order.
         return Result.success(emptyList())
     }
-
-    private fun normalizeSearch(value: String): String = value.trim().lowercase()
-        .replace('ı', 'i').replace('İ', 'i').replace('ş', 's').replace('Ş', 's')
-        .replace('ğ', 'g').replace('Ğ', 'g').replace('ü', 'u').replace('Ü', 'u')
-        .replace('ö', 'o').replace('Ö', 'o').replace('ç', 'c').replace('Ç', 'c')
 }
