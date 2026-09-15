@@ -1,13 +1,9 @@
 package com.example
 
 import android.Manifest
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Build
 import android.os.Bundle
-import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -29,6 +25,7 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -37,28 +34,27 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.ui.components.ArtistDetailSheet
 import com.example.ui.components.AddToPlaylistDialog
+import com.example.ui.components.ArtistDetailSheet
 import com.example.ui.components.CreatePlaylistDialog
 import com.example.ui.components.EqualizerView
 import com.example.ui.components.FriendActivityView
-import com.example.ui.components.MiniPlayer
 import com.example.ui.components.NowPlayingSheet
 import com.example.ui.components.PlayerBottomAppBar
 import com.example.ui.components.PlaylistDetailSheet
+import com.example.ui.screens.AccountHistoryScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.SearchScreen
@@ -72,7 +68,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
         setContent {
             MyApplicationTheme {
                 MainAppScreen()
@@ -87,12 +82,10 @@ fun MainAppScreen(
 ) {
     val context = LocalContext.current
 
-    // Request notification permission for Android 13+
-    // Permissions for MediaStore and Notifications
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> 
-        viewModel.scanLocalMusic() // Scan when permissions are granted
+    ) {
+        viewModel.scanLocalMusic()
     }
 
     LaunchedEffect(Unit) {
@@ -106,7 +99,6 @@ fun MainAppScreen(
         permissionsLauncher.launch(permissionsToRequest.toTypedArray())
     }
 
-    // State collections
     val currentTab by viewModel.currentTab.collectAsState()
     val isNowPlayingExpanded by viewModel.isNowPlayingExpanded.collectAsState()
     val showLyricsInNowPlaying by viewModel.showLyricsInNowPlaying.collectAsState()
@@ -122,38 +114,27 @@ fun MainAppScreen(
 
     val allSongs by viewModel.allSongs.collectAsState()
     val cachedSongs by viewModel.cachedSongs.collectAsState()
-    val artists = viewModel.artists
     val favoriteIds by viewModel.favoriteSongIds.collectAsState()
     val downloadedEntities by viewModel.downloadedSongs.collectAsState()
     val downloadedSongIds by viewModel.downloadedSongIds.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val friendActivities by viewModel.friendActivities.collectAsState()
     val newReleaseAlert by viewModel.newReleaseNotification.collectAsState()
+    val session by viewModel.session.collectAsState()
+    val history by viewModel.history.collectAsState()
 
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
-
     val selectedArtist by viewModel.selectedArtist.collectAsState()
     val selectedPlaylist by viewModel.selectedPlaylist.collectAsState()
     val showCreatePlaylistDialog by viewModel.showCreatePlaylistDialog.collectAsState()
     val songToAddToPlaylist by viewModel.songToAddToPlaylist.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    // Sync playback state with foreground service notification
-    LaunchedEffect(currentSong, isPlaying) {
-        currentSong?.let { song ->
-            try {
-            } catch (e: Exception) {
-                // Ignore service sync errors
-            }
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize().background(LanuDarkBg)) {
         Scaffold(
             bottomBar = {
                 Column(modifier = Modifier.navigationBarsPadding()) {
-                    // Persistent BottomAppBar component as the primary music player controller
                     if (!isNowPlayingExpanded) {
                         PlayerBottomAppBar(
                             song = currentSong,
@@ -174,7 +155,6 @@ fun MainAppScreen(
                         )
                     }
 
-                    // Bottom Navigation Bar
                     NavigationBar(
                         containerColor = LanuDarkSurface,
                         tonalElevation = 8.dp,
@@ -185,7 +165,8 @@ fun MainAppScreen(
                             Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search),
                             Triple(MainTab.LIBRARY, "Arşivim", Icons.Default.LibraryMusic),
                             Triple(MainTab.FRIENDS, "Sosyal", Icons.Default.Group),
-                            Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer)
+                            Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer),
+                            Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person)
                         )
 
                         tabs.forEach { (tab, label, icon) ->
@@ -194,7 +175,6 @@ fun MainAppScreen(
                                 selected = isSelected,
                                 onClick = {
                                     if (currentTab != tab) {
-                                        viewModel.simulateNetworkLoading()
                                         viewModel.setTab(tab)
                                     }
                                 },
@@ -233,7 +213,7 @@ fun MainAppScreen(
                     MainTab.HOME -> {
                         HomeScreen(
                             songs = allSongs,
-                            artists = artists,
+                            artists = viewModel.artists,
                             newReleaseAlert = newReleaseAlert,
                             onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
                             onSelectArtist = { artist -> viewModel.selectArtist(artist) },
@@ -294,8 +274,18 @@ fun MainAppScreen(
                             onToggleEqualizer = { viewModel.toggleEqualizer() }
                         )
                     }
+
+                    MainTab.ACCOUNT -> {
+                        AccountHistoryScreen(
+                            session = session,
+                            history = history,
+                            allSongs = allSongs,
+                            onPlaySong = { song -> viewModel.playSong(song, listOf(song)) },
+                            onSignOut = { viewModel.signOut() }
+                        )
+                    }
                 }
-                
+
                 if (isLoading) {
                     Box(
                         modifier = Modifier
@@ -316,7 +306,6 @@ fun MainAppScreen(
             }
         }
 
-        // Full-Screen Now Playing Sheet with Slide Animation
         AnimatedVisibility(
             visible = isNowPlayingExpanded && currentSong != null,
             enter = slideInVertically(initialOffsetY = { it }),
@@ -355,7 +344,6 @@ fun MainAppScreen(
             }
         }
 
-        // Create Playlist Dialog
         if (showCreatePlaylistDialog) {
             CreatePlaylistDialog(
                 onDismiss = { viewModel.closeCreatePlaylistDialog() },
@@ -363,7 +351,6 @@ fun MainAppScreen(
             )
         }
 
-        // Add to Playlist Dialog
         songToAddToPlaylist?.let { song ->
             AddToPlaylistDialog(
                 song = song,
@@ -377,7 +364,6 @@ fun MainAppScreen(
             )
         }
 
-        // Selected Artist Detail Modal
         selectedArtist?.let { artist ->
             val artistSongs = viewModel.getSongsForArtist(artist.id)
             ArtistDetailSheet(
@@ -389,7 +375,6 @@ fun MainAppScreen(
             )
         }
 
-        // Selected Playlist Detail Modal
         selectedPlaylist?.let { playlist ->
             val playlistSongsFlow = viewModel.getSongsForPlaylist(playlist.id).collectAsState(initial = emptyList())
             PlaylistDetailSheet(
