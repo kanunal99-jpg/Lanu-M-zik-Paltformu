@@ -53,5 +53,7 @@ data class Song(
     val releaseYear: Int,
     val lyrics: List<TimedLyric> = emptyList(),
     val isNewRelease: Boolean = false,
-    val playCount: Long = 100000L
+    // 0 means the count is unknown/not supplied by a verified catalog provider.
+    // Never present a fabricated popularity number as real data.
+    val playCount: Long = 0L
 )
