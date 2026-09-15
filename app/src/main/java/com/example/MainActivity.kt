@@ -39,7 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -85,17 +87,15 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val incomingUri = remember(context) { (context as? Activity)?.intent?.data }
     val deepLink = remember(incomingUri) { LanuDeepLink.parse(incomingUri) }
+    var handledResourceRoute by remember(incomingUri) { mutableStateOf<LanuDeepLink?>(null) }
 
     val permissionsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.scanLocalMusic() }
-
     LaunchedEffect(Unit) {
         val permissionsToRequest = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-        } else {
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
+        } else permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         permissionsLauncher.launch(permissionsToRequest.toTypedArray())
     }
 
@@ -128,35 +128,35 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val songToAddToPlaylist by viewModel.songToAddToPlaylist.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    LaunchedEffect(deepLink, allSongs, playlists) {
+    LaunchedEffect(deepLink) {
         when (val target = deepLink) {
             LanuDeepLink.Home -> viewModel.setTab(MainTab.HOME)
             LanuDeepLink.Library -> viewModel.setTab(MainTab.LIBRARY)
-            is LanuDeepLink.Search -> {
-                viewModel.updateSearchQuery(target.query)
-                viewModel.setTab(MainTab.SEARCH)
-            }
-            is LanuDeepLink.Track -> allSongs.firstOrNull { it.id == target.id }?.let { viewModel.playSong(it, listOf(it)) }
-            is LanuDeepLink.Playlist -> playlists.firstOrNull { it.id == target.id }?.let { viewModel.selectPlaylist(it) }
-            is LanuDeepLink.Artist -> allSongs.firstOrNull { it.artistId == target.id }?.let {
-                viewModel.selectArtist(
-                    com.example.model.Artist(
-                        id = it.artistId,
-                        name = it.artist,
-                        genre = it.category.titleTr,
-                        bio = "Yerel veya doğrulanmış katalog verisi",
-                        imageUrl = it.coverUrl,
-                        monthlyListeners = ""
-                    )
-                )
-            }
+            is LanuDeepLink.Search -> { viewModel.updateSearchQuery(target.query); viewModel.setTab(MainTab.SEARCH) }
             is LanuDeepLink.PlayerAction -> when (target.action) {
                 LanuDeepLink.Action.PLAY_PAUSE -> viewModel.togglePlayPause()
                 LanuDeepLink.Action.NEXT -> viewModel.nextSong()
                 LanuDeepLink.Action.PREVIOUS -> viewModel.prevSong()
                 LanuDeepLink.Action.OPEN_PLAYER -> viewModel.openNowPlaying()
             }
-            null -> Unit
+            else -> Unit
+        }
+    }
+
+    LaunchedEffect(deepLink, allSongs, playlists) {
+        val target = deepLink ?: return@LaunchedEffect
+        if (handledResourceRoute == target) return@LaunchedEffect
+        when (target) {
+            is LanuDeepLink.Track -> allSongs.firstOrNull { it.id == target.id }?.let {
+                viewModel.playSong(it, listOf(it)); handledResourceRoute = target
+            }
+            is LanuDeepLink.Playlist -> playlists.firstOrNull { it.id == target.id }?.let {
+                viewModel.selectPlaylist(it); handledResourceRoute = target
+            }
+            is LanuDeepLink.Artist -> allSongs.firstOrNull { it.artistId == target.id }?.let {
+                viewModel.selectArtist(com.example.model.Artist(id = it.artistId, name = it.artist, genre = it.category.titleTr, bio = "Yerel veya doğrulanmış katalog verisi", imageUrl = it.coverUrl, monthlyListeners = "")); handledResourceRoute = target
+            }
+            else -> Unit
         }
     }
 
@@ -166,42 +166,26 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                 Column(Modifier.navigationBarsPadding()) {
                     if (!isNowPlayingExpanded) {
                         PlayerBottomAppBar(
-                            song = currentSong,
-                            isPlaying = isPlaying,
-                            currentPositionMs = currentPositionMs,
-                            durationMs = durationMs,
-                            isFavorite = currentSong?.let { favoriteIds.contains(it.id) } ?: false,
-                            isShuffle = isShuffle,
-                            repeatMode = repeatMode,
-                            onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it.id) } },
-                            onTogglePlayPause = { viewModel.togglePlayPause() },
-                            onPrevious = { viewModel.prevSong() },
-                            onNext = { viewModel.nextSong() },
-                            onToggleShuffle = { viewModel.toggleShuffle() },
-                            onToggleRepeat = { viewModel.toggleRepeat() },
-                            onExpand = { viewModel.openNowPlaying() },
-                            onSeekTo = { viewModel.seekTo(it) }
+                            song = currentSong, isPlaying = isPlaying, currentPositionMs = currentPositionMs, durationMs = durationMs,
+                            isFavorite = currentSong?.let { favoriteIds.contains(it.id) } ?: false, isShuffle = isShuffle, repeatMode = repeatMode,
+                            onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it.id) } }, onTogglePlayPause = { viewModel.togglePlayPause() },
+                            onPrevious = { viewModel.prevSong() }, onNext = { viewModel.nextSong() }, onToggleShuffle = { viewModel.toggleShuffle() },
+                            onToggleRepeat = { viewModel.toggleRepeat() }, onExpand = { viewModel.openNowPlaying() }, onSeekTo = { viewModel.seekTo(it) }
                         )
                     }
-
                     NavigationBar(containerColor = LanuDarkSurface, tonalElevation = 8.dp, modifier = Modifier.testTag("bottom_navigation_bar")) {
                         val tabs = listOf(
-                            Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home),
-                            Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search),
-                            Triple(MainTab.LIBRARY, "Arşivim", Icons.Default.LibraryMusic),
-                            Triple(MainTab.FRIENDS, "Sosyal", Icons.Default.Group),
-                            Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer),
-                            Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person)
+                            Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home), Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search),
+                            Triple(MainTab.LIBRARY, "Arşivim", Icons.Default.LibraryMusic), Triple(MainTab.FRIENDS, "Sosyal", Icons.Default.Group),
+                            Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer), Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person)
                         )
                         tabs.forEach { (tab, label, icon) ->
                             val isSelected = currentTab == tab
                             NavigationBarItem(
-                                selected = isSelected,
-                                onClick = { if (currentTab != tab) viewModel.setTab(tab) },
+                                selected = isSelected, onClick = { if (currentTab != tab) viewModel.setTab(tab) },
                                 icon = { Icon(icon, contentDescription = label, tint = if (isSelected) LanuGreen else LanuTextMuted, modifier = Modifier.size(24.dp)) },
                                 label = { Text(label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) LanuGreen else LanuTextMuted) },
-                                colors = NavigationBarItemDefaults.colors(indicatorColor = LanuGreen.copy(alpha = 0.15f)),
-                                modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
+                                colors = NavigationBarItemDefaults.colors(indicatorColor = LanuGreen.copy(alpha = 0.15f)), modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
                             )
                         }
                     }
@@ -210,129 +194,39 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
         ) { innerPadding ->
             Box(Modifier.fillMaxSize().padding(innerPadding)) {
                 when (currentTab) {
-                    MainTab.HOME -> HomeScreen(
-                        songs = allSongs,
-                        artists = viewModel.artists,
-                        newReleaseAlert = newReleaseAlert,
-                        onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
-                        onSelectArtist = { viewModel.selectArtist(it) },
-                        onCategoryClick = { category -> viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) },
-                        onSimulateNewRelease = { viewModel.simulateNewReleasePush() },
-                        onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() }
-                    )
-                    MainTab.SEARCH -> SearchScreen(
-                        searchQuery = searchQuery,
-                        selectedCategory = selectedCategoryFilter,
-                        allSongs = allSongs,
-                        cachedSongs = cachedSongs,
-                        onQueryChange = { viewModel.updateSearchQuery(it) },
-                        onSelectCategory = { viewModel.filterByCategory(it) },
-                        onPlaySong = { song, queue -> viewModel.playSong(song, queue) }
-                    )
-                    MainTab.LIBRARY -> LibraryScreen(
-                        playlists = playlists,
-                        downloadedEntities = downloadedEntities,
-                        favoriteIds = favoriteIds,
-                        allSongs = allSongs,
-                        onSelectPlaylist = { viewModel.selectPlaylist(it) },
-                        onCreatePlaylist = { viewModel.openCreatePlaylistDialog() },
-                        onPlaySong = { song, queue -> viewModel.playSong(song, queue) }
-                    )
-                    MainTab.FRIENDS -> FriendActivityView(
-                        activities = friendActivities,
-                        availableSongs = allSongs,
-                        onPlaySong = { song -> viewModel.playSong(song, listOf(song)) },
-                        onShareSong = { song -> viewModel.shareSong(context, song) },
-                        onLikeActivity = { id -> viewModel.likeFriendActivity(id) },
-                        onSendRecommendation = { friendName, song, note -> viewModel.shareRecommendationToFriends(friendName, song, note) }
-                    )
-                    MainTab.EQUALIZER -> EqualizerView(
-                        equalizerState = equalizerState,
-                        isPlaying = isPlaying,
-                        onPresetSelected = { viewModel.setEqualizerPreset(it) },
-                        onBandLevelChanged = { band, level -> viewModel.setBandLevel(band, level) },
-                        onBassBoostChanged = { viewModel.setBassBoost(it) },
-                        onVirtualizerChanged = { viewModel.setVirtualizer(it) },
-                        onToggleEqualizer = { viewModel.toggleEqualizer() }
-                    )
+                    MainTab.HOME -> HomeScreen(songs = allSongs, artists = viewModel.artists, newReleaseAlert = newReleaseAlert, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onSelectArtist = { viewModel.selectArtist(it) }, onCategoryClick = { category -> viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) }, onSimulateNewRelease = { viewModel.simulateNewReleasePush() }, onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() })
+                    MainTab.SEARCH -> SearchScreen(searchQuery = searchQuery, selectedCategory = selectedCategoryFilter, allSongs = allSongs, cachedSongs = cachedSongs, onQueryChange = { viewModel.updateSearchQuery(it) }, onSelectCategory = { viewModel.filterByCategory(it) }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) })
+                    MainTab.LIBRARY -> LibraryScreen(playlists = playlists, downloadedEntities = downloadedEntities, favoriteIds = favoriteIds, allSongs = allSongs, onSelectPlaylist = { viewModel.selectPlaylist(it) }, onCreatePlaylist = { viewModel.openCreatePlaylistDialog() }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) })
+                    MainTab.FRIENDS -> FriendActivityView(activities = friendActivities, availableSongs = allSongs, onPlaySong = { song -> viewModel.playSong(song, listOf(song)) }, onShareSong = { song -> viewModel.shareSong(context, song) }, onLikeActivity = { id -> viewModel.likeFriendActivity(id) }, onSendRecommendation = { friendName, song, note -> viewModel.shareRecommendationToFriends(friendName, song, note) })
+                    MainTab.EQUALIZER -> EqualizerView(equalizerState = equalizerState, isPlaying = isPlaying, onPresetSelected = { viewModel.setEqualizerPreset(it) }, onBandLevelChanged = { band, level -> viewModel.setBandLevel(band, level) }, onBassBoostChanged = { viewModel.setBassBoost(it) }, onVirtualizerChanged = { viewModel.setVirtualizer(it) }, onToggleEqualizer = { viewModel.toggleEqualizer() })
                     MainTab.ACCOUNT -> AccountHistoryScreen(session = session, history = history, allSongs = allSongs, onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) }, onSignOut = { viewModel.signOut() })
                 }
-
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(LanuDarkBg.copy(alpha = 0.5f)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
-                        contentAlignment = Alignment.Center
-                    ) { CircularProgressIndicator(color = LanuGreen, strokeWidth = 4.dp) }
-                }
+                if (isLoading) Box(modifier = Modifier.fillMaxSize().background(LanuDarkBg.copy(alpha = 0.5f)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}, contentAlignment = Alignment.Center) { CircularProgressIndicator(color = LanuGreen, strokeWidth = 4.dp) }
             }
         }
 
         AnimatedVisibility(visible = isNowPlayingExpanded && currentSong != null, enter = slideInVertically(initialOffsetY = { it }), exit = slideOutVertically(targetOffsetY = { it })) {
             currentSong?.let { song ->
                 NowPlayingSheet(
-                    song = song,
-                    isPlaying = isPlaying,
-                    currentPositionMs = currentPositionMs,
-                    durationMs = durationMs,
-                    isShuffle = isShuffle,
-                    repeatMode = repeatMode,
-                    isFavorite = favoriteIds.contains(song.id),
-                    isDownloaded = downloadedSongIds.contains(song.id),
-                    audioQuality = audioQuality,
-                    showLyrics = showLyricsInNowPlaying,
-                    onTogglePlayPause = { viewModel.togglePlayPause() },
-                    onNext = { viewModel.nextSong() },
-                    onPrevious = { viewModel.prevSong() },
-                    onSeekTo = { viewModel.seekTo(it) },
-                    onToggleShuffle = { viewModel.toggleShuffle() },
-                    onToggleRepeat = { viewModel.toggleRepeat() },
-                    onToggleFavorite = { viewModel.toggleFavorite(song.id) },
-                    onToggleDownload = { viewModel.toggleDownload(song) },
-                    onToggleLyrics = { viewModel.toggleLyricsInNowPlaying() },
-                    onSelectAudioQuality = { viewModel.setAudioQuality(it) },
-                    onOpenEqualizer = { viewModel.closeNowPlaying(); viewModel.setTab(MainTab.EQUALIZER) },
-                    onAddToPlaylist = { viewModel.openAddToPlaylist(song) },
-                    onShare = { viewModel.shareSong(context, song) },
-                    onClose = { viewModel.closeNowPlaying() }
+                    song = song, isPlaying = isPlaying, currentPositionMs = currentPositionMs, durationMs = durationMs, isShuffle = isShuffle, repeatMode = repeatMode,
+                    isFavorite = favoriteIds.contains(song.id), isDownloaded = downloadedSongIds.contains(song.id), audioQuality = audioQuality, showLyrics = showLyricsInNowPlaying,
+                    onTogglePlayPause = { viewModel.togglePlayPause() }, onNext = { viewModel.nextSong() }, onPrevious = { viewModel.prevSong() }, onSeekTo = { viewModel.seekTo(it) },
+                    onToggleShuffle = { viewModel.toggleShuffle() }, onToggleRepeat = { viewModel.toggleRepeat() }, onToggleFavorite = { viewModel.toggleFavorite(song.id) }, onToggleDownload = { viewModel.toggleDownload(song) },
+                    onToggleLyrics = { viewModel.toggleLyricsInNowPlaying() }, onSelectAudioQuality = { viewModel.setAudioQuality(it) }, onOpenEqualizer = { viewModel.closeNowPlaying(); viewModel.setTab(MainTab.EQUALIZER) },
+                    onAddToPlaylist = { viewModel.openAddToPlaylist(song) }, onShare = { viewModel.shareSong(context, song) }, onClose = { viewModel.closeNowPlaying() }
                 )
             }
         }
 
-        if (showCreatePlaylistDialog) {
-            CreatePlaylistDialog(onDismiss = { viewModel.closeCreatePlaylistDialog() }, onCreate = { name, desc -> viewModel.createPlaylist(name, desc) })
-        }
+        if (showCreatePlaylistDialog) CreatePlaylistDialog(onDismiss = { viewModel.closeCreatePlaylistDialog() }, onCreate = { name, desc -> viewModel.createPlaylist(name, desc) })
 
-        songToAddToPlaylist?.let { song ->
-            AddToPlaylistDialog(
-                song = song,
-                playlists = playlists,
-                onDismiss = { viewModel.closeAddToPlaylist() },
-                onSelectPlaylist = { plId -> viewModel.addSongToPlaylist(plId, song.id) },
-                onCreateNewPlaylist = { viewModel.closeAddToPlaylist(); viewModel.openCreatePlaylistDialog() }
-            )
-        }
+        songToAddToPlaylist?.let { song -> AddToPlaylistDialog(song = song, playlists = playlists, onDismiss = { viewModel.closeAddToPlaylist() }, onSelectPlaylist = { plId -> viewModel.addSongToPlaylist(plId, song.id) }, onCreateNewPlaylist = { viewModel.closeAddToPlaylist(); viewModel.openCreatePlaylistDialog() }) }
 
-        selectedArtist?.let { artist ->
-            ArtistDetailSheet(
-                artist = artist,
-                songs = viewModel.getSongsForArtist(artist.id),
-                onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
-                onShareArtist = { viewModel.shareArtist(context, artist) },
-                onBack = { viewModel.selectArtist(null) }
-            )
-        }
+        selectedArtist?.let { artist -> ArtistDetailSheet(artist = artist, songs = viewModel.getSongsForArtist(artist.id), onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onShareArtist = { viewModel.shareArtist(context, artist) }, onBack = { viewModel.selectArtist(null) }) }
 
         selectedPlaylist?.let { playlist ->
             val playlistSongsFlow = viewModel.getSongsForPlaylist(playlist.id).collectAsState(initial = emptyList())
-            PlaylistDetailSheet(
-                playlist = playlist,
-                songs = playlistSongsFlow.value,
-                onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
-                onRemoveSong = { songId -> viewModel.removeSongFromPlaylist(playlist.id, songId) },
-                onSharePlaylist = { viewModel.sharePlaylist(context, playlist) },
-                onDeletePlaylist = { viewModel.deletePlaylist(playlist.id) },
-                onBack = { viewModel.selectPlaylist(null) }
-            )
+            PlaylistDetailSheet(playlist = playlist, songs = playlistSongsFlow.value, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onRemoveSong = { songId -> viewModel.removeSongFromPlaylist(playlist.id, songId) }, onSharePlaylist = { viewModel.sharePlaylist(context, playlist) }, onDeletePlaylist = { viewModel.deletePlaylist(playlist.id) }, onBack = { viewModel.selectPlaylist(null) })
         }
     }
 }
