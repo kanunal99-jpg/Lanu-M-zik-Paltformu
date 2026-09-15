@@ -1,0 +1,1 @@
+Professional hardening build scope: playlist controls, player state persistence, history transitions, offline validation, and verified-only sharing.
