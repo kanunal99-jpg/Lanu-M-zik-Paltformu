@@ -1,0 +1,1 @@
+Validation scope: playlist rename/reorder, player repeat/shuffle policy, automatic history transitions, offline file validation, and honest share text.
