@@ -2,29 +2,20 @@ package com.example.service
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionResult
-import com.google.common.util.concurrent.Futures
-import com.google.common.util.concurrent.ListenableFuture
 
 class LanuMediaSessionService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
-    private lateinit var player: ExoPlayer
+    private var player: ExoPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
-        
-        player = ExoPlayer.Builder(this)
+
+        val createdPlayer = ExoPlayer.Builder(this)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -34,28 +25,32 @@ class LanuMediaSessionService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+        player = createdPlayer
 
-        val sessionActivityPendingIntent = packageManager?.getLaunchIntentForPackage(packageName)?.let { sessionIntent ->
+        val launchIntent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
+        val sessionActivity = launchIntent?.let { intent ->
             PendingIntent.getActivity(
-                this, 0, sessionIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
         }
-        
-        mediaSession = MediaSession.Builder(this, player)
-            .setSessionActivity(sessionActivityPendingIntent!!)
-                        .build()
+
+        val builder = MediaSession.Builder(this, createdPlayer)
+        if (sessionActivity != null) {
+            builder.setSessionActivity(sessionActivity)
+        }
+        mediaSession = builder.build()
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        return mediaSession
-    }
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onDestroy() {
-        mediaSession?.run {
-            player.release()
-            release()
-            mediaSession = null
-        }
+        mediaSession?.release()
+        mediaSession = null
+        player?.release()
+        player = null
         super.onDestroy()
     }
 }
