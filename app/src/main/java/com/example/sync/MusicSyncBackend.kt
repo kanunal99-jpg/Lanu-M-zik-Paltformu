@@ -1,7 +1,6 @@
 package com.example.sync
 
 import com.example.data.PlaylistEntity
-import com.example.model.Song
 
 /**
  * Backend-agnostic contract for cross-device LANU library synchronization.
