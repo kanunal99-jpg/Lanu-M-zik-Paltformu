@@ -1,0 +1,1 @@
+Professional hardening scope is now recorded; implementation will be validated by PR CI and post-merge Main CI.
