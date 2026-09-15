@@ -1,17 +1,23 @@
 package com.example
 
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+private val playlistActionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
 fun MainViewModel.renamePlaylist(playlistId: String, name: String) {
-    viewModelScope.launch {
+    playlistActionScope.launch {
         runCatching { repository.renamePlaylist(playlistId, name) }
-            .onFailure { android.util.Log.e("MainViewModel", "Playlist rename failed", it) }
+            .onFailure { Log.e("MainViewModel", "Playlist rename failed", it) }
     }
 }
 
 fun MainViewModel.reorderPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
-    viewModelScope.launch {
+    playlistActionScope.launch {
         runCatching { repository.reorderPlaylist(playlistId, fromIndex, toIndex) }
-            .onFailure { android.util.Log.e("MainViewModel", "Playlist reorder failed", it) }
+            .onFailure { Log.e("MainViewModel", "Playlist reorder failed", it) }
     }
 }
