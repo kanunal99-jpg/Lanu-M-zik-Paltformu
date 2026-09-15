@@ -1,0 +1,1 @@
+LANU Music hardening validation covers playlist management, player state, history transitions, offline file validation, and verified-only sharing.
