@@ -62,6 +62,11 @@ class UserLibraryService(
         }
     }
 
+    suspend fun deletePlaylist(playlistId: String): AuthResult = withSession { userId ->
+        libraryBackend.deletePlaylist(userId, playlistId)
+        refreshSnapshot(userId)
+    }
+
     suspend fun addSongToPlaylist(playlistId: String, songId: String): AuthResult = withSession { userId ->
         libraryBackend.addSongToPlaylist(userId, playlistId, songId)
         refreshSnapshot(userId)
