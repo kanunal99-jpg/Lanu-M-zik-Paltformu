@@ -26,6 +26,7 @@ interface UserLibraryBackend {
     suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long = System.currentTimeMillis())
     suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String)
     suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long = System.currentTimeMillis())
+    suspend fun clearHistory(userId: String)
     suspend fun clearUser(userId: String)
 }
 
@@ -144,6 +145,11 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         require(songId.isNotBlank()) { "songId boş olamaz" }
         val history = listOf(HistoryRecord(songId, playedAtMs)) + readHistory(userId).filterNot { it.songId == songId }
         writeHistory(userId, history.take(MAX_HISTORY_ITEMS))
+    }
+
+    override suspend fun clearHistory(userId: String) {
+        requireValidUserId(userId)
+        preferences.edit().remove(historyKey(userId)).apply()
     }
 
     override suspend fun clearUser(userId: String) {

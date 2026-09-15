@@ -82,6 +82,11 @@ class UserLibraryService(
         refreshSnapshot(userId)
     }
 
+    suspend fun clearHistory(): AuthResult = withSession { userId ->
+        libraryBackend.clearHistory(userId)
+        refreshSnapshot(userId)
+    }
+
     suspend fun clearCurrentUser(): AuthResult = withSession { userId ->
         libraryBackend.clearUser(userId)
         refreshSnapshot(userId)

@@ -59,6 +59,22 @@ class UserLibraryServiceTest {
     }
 
     @Test
+    fun history_can_be_cleared_without_clearing_other_library_data() = runTest {
+        val auth = FakeAuthBackend()
+        val backend = InMemoryLibraryBackend()
+        val service = UserLibraryService(auth, backend)
+        service.signIn("user@example.com", "secret")
+        service.addFavorite("song-1")
+        service.recordPlay("song-1")
+
+        val result = service.clearHistory()
+
+        assertTrue(result is AuthResult.Success)
+        assertTrue(service.snapshot.value?.history.orEmpty().isEmpty())
+        assertEquals(listOf("song-1"), service.snapshot.value?.favorites?.map { it.songId })
+    }
+
+    @Test
     fun sign_out_clears_active_snapshot_and_blocks_writes() = runTest {
         val auth = FakeAuthBackend()
         val backend = InMemoryLibraryBackend()
@@ -83,6 +99,7 @@ class UserLibraryServiceTest {
         override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) = delegate.addSongToPlaylist(userId, playlistId, songId, nowMs)
         override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) = delegate.removeSongFromPlaylist(userId, playlistId, songId)
         override suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long) = delegate.recordPlay(userId, songId, playedAtMs)
+        override suspend fun clearHistory(userId: String) = delegate.clearHistory(userId)
         override suspend fun clearUser(userId: String) = delegate.clearUser(userId)
     }
 
@@ -112,6 +129,7 @@ class UserLibraryServiceTest {
         }
         override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = it.songIds.filterNot { id -> id == songId }) else it }.toMutableList() }
         override suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long) { history.getOrPut(userId) { mutableListOf() }.apply { removeAll { it.songId == songId }; add(0, com.example.data.HistoryRecord(songId, playedAtMs)) } }
+        override suspend fun clearHistory(userId: String) { history.remove(userId) }
         override suspend fun clearUser(userId: String) { data.remove(userId); playlists.remove(userId); history.remove(userId) }
     }
 }
