@@ -55,14 +55,14 @@ private fun LanuQuickWidgetContent(snapshot: PlayerStateStore.Snapshot) {
         Text(artist, style = TextStyle(color = ColorProvider(Color.LTGRAY), fontSize = 11.sp))
         Row(horizontalAlignment = Alignment.Horizontal.CenterHorizontally, modifier = GlanceModifier.padding(top = 10.dp)) {
             androidx.glance.Button(text = "Önceki", onClick = playerAction("previous"))
-            androidx.glance.Spacer(modifier = GlanceModifier.width(6.dp))
+            Spacer(modifier = GlanceModifier.width(6.dp))
             androidx.glance.Button(text = if (snapshot.isPlaying) "Duraklat" else "Oynat", onClick = playerAction("playpause"))
-            androidx.glance.Spacer(modifier = GlanceModifier.width(6.dp))
+            Spacer(modifier = GlanceModifier.width(6.dp))
             androidx.glance.Button(text = "Sonraki", onClick = playerAction("next"))
         }
         Row(horizontalAlignment = Alignment.Horizontal.CenterHorizontally, modifier = GlanceModifier.padding(top = 6.dp)) {
             androidx.glance.Button(text = "Aç", onClick = if (openTrack != null) openTrack else openHome)
-            androidx.glance.Spacer(modifier = GlanceModifier.width(6.dp))
+            Spacer(modifier = GlanceModifier.width(6.dp))
             androidx.glance.Button(text = "Arşivim", onClick = openLibrary)
         }
     }
