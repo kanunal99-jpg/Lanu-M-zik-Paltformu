@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
@@ -40,7 +40,6 @@ import com.example.auth.AuthSession
 import com.example.data.HistoryRecord
 import com.example.model.Song
 import com.example.ui.theme.LanuDarkBg
-import com.example.ui.theme.LanuDarkBorder
 import com.example.ui.theme.LanuDarkSurface
 import com.example.ui.theme.LanuGreen
 import com.example.ui.theme.LanuTextMuted
