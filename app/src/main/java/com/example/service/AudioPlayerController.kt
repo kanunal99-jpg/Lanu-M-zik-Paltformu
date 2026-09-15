@@ -32,6 +32,8 @@ class AudioPlayerController(private val context: Context) {
     private var progressJob: Job? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var audioEffects: AudioEffectsController? = null
+    private var pendingRestore: PlayerStateStore.Snapshot? = null
+    private var hasAttemptedRestore = false
     var mediaController: MediaController? = null
 
     private val _isPlaying = MutableStateFlow(false)
@@ -54,14 +56,37 @@ class AudioPlayerController(private val context: Context) {
     val equalizerState: StateFlow<EqualizerState> = _equalizerState.asStateFlow()
 
     init {
+        pendingRestore = playerStateStore.read().takeIf { !it.songId.isNullOrBlank() }
         val sessionToken = SessionToken(context, ComponentName(context, LanuMediaSessionService::class.java))
         controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
         controllerFuture?.addListener({
             mediaController = runCatching { controllerFuture?.get() }.getOrNull()
             setupControllerListener()
             ensureAudioEffects()
-            persistState()
         }, ContextCompat.getMainExecutor(context))
+    }
+
+    fun restoreStateFromCatalog(catalog: List<Song>) {
+        if (hasAttemptedRestore || catalog.isEmpty()) return
+        val snapshot = pendingRestore ?: run {
+            hasAttemptedRestore = true
+            return
+        }
+        val song = catalog.firstOrNull { it.id == snapshot.songId }
+        if (song == null || song.audioUrl.isBlank() || mediaController == null) {
+            if (song == null) return
+            hasAttemptedRestore = true
+            pendingRestore = null
+            return
+        }
+        hasAttemptedRestore = true
+        pendingRestore = null
+        _isShuffle.value = snapshot.shuffle
+        _repeatMode.value = snapshot.repeatMode
+        _currentPositionMs.value = snapshot.positionMs.coerceAtLeast(0L)
+        setQueue(listOf(song), 0, autoPlay = false)
+        mediaController?.seekTo(snapshot.positionMs.coerceIn(0L, song.durationMs.coerceAtLeast(1L)))
+        _isPlaying.value = false
     }
 
     private fun setupControllerListener() {
@@ -81,7 +106,7 @@ class AudioPlayerController(private val context: Context) {
                     _durationMs.value = mediaController?.duration?.coerceAtLeast(1) ?: 1L
                     ensureAudioEffects()
                     audioEffects?.apply(_equalizerState.value)
-                    persistState()
+                    if (pendingRestore != null) persistState()
                 }
             }
 
