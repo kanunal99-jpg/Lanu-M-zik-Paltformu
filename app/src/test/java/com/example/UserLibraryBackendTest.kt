@@ -87,4 +87,15 @@ class UserLibraryBackendTest {
         assertEquals("song-54", history.first().songId)
         assertEquals("song-5", history.last().songId)
     }
+
+    @Test
+    fun `clearing history only affects selected user`() = runBlocking {
+        backend.recordPlay("user-a", "song-a", playedAtMs = 10L)
+        backend.recordPlay("user-b", "song-b", playedAtMs = 20L)
+
+        backend.clearHistory("user-a")
+
+        assertTrue(backend.snapshot("user-a").history.isEmpty())
+        assertEquals(listOf("song-b"), backend.snapshot("user-b").history.map { it.songId })
+    }
 }
