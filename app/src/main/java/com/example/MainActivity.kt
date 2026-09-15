@@ -54,6 +54,7 @@ import com.example.ui.components.FriendActivityView
 import com.example.ui.components.NowPlayingSheet
 import com.example.ui.components.PlayerBottomAppBar
 import com.example.ui.components.PlaylistDetailSheet
+import com.example.ui.components.RenamePlaylistDialog
 import com.example.ui.screens.AccountHistoryScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
@@ -68,41 +69,27 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            MyApplicationTheme {
-                MainAppScreen()
-            }
-        }
+        setContent { MyApplicationTheme { MainAppScreen() } }
     }
 }
 
 @Composable
-fun MainAppScreen(
-    viewModel: MainViewModel = viewModel()
-) {
+fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
-
-    val permissionsLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        viewModel.scanLocalMusic()
-    }
+    val permissionsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.scanLocalMusic() }
 
     LaunchedEffect(Unit) {
         val permissionsToRequest = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-        } else {
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
+        } else permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         permissionsLauncher.launch(permissionsToRequest.toTypedArray())
     }
 
     val currentTab by viewModel.currentTab.collectAsState()
     val isNowPlayingExpanded by viewModel.isNowPlayingExpanded.collectAsState()
     val showLyricsInNowPlaying by viewModel.showLyricsInNowPlaying.collectAsState()
-
     val currentSong by viewModel.currentSong.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentPositionMs by viewModel.currentPositionMs.collectAsState()
@@ -111,7 +98,6 @@ fun MainAppScreen(
     val repeatMode by viewModel.repeatMode.collectAsState()
     val equalizerState by viewModel.equalizerState.collectAsState()
     val audioQuality by viewModel.audioQuality.collectAsState()
-
     val allSongs by viewModel.allSongs.collectAsState()
     val cachedSongs by viewModel.cachedSongs.collectAsState()
     val favoriteIds by viewModel.favoriteSongIds.collectAsState()
@@ -122,12 +108,12 @@ fun MainAppScreen(
     val newReleaseAlert by viewModel.newReleaseNotification.collectAsState()
     val session by viewModel.session.collectAsState()
     val history by viewModel.history.collectAsState()
-
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
     val selectedArtist by viewModel.selectedArtist.collectAsState()
     val selectedPlaylist by viewModel.selectedPlaylist.collectAsState()
     val showCreatePlaylistDialog by viewModel.showCreatePlaylistDialog.collectAsState()
+    val showRenamePlaylistDialog by viewModel.showRenamePlaylistDialog.collectAsState()
     val songToAddToPlaylist by viewModel.songToAddToPlaylist.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
@@ -154,12 +140,7 @@ fun MainAppScreen(
                             onSeekTo = { viewModel.seekTo(it) }
                         )
                     }
-
-                    NavigationBar(
-                        containerColor = LanuDarkSurface,
-                        tonalElevation = 8.dp,
-                        modifier = Modifier.testTag("bottom_navigation_bar")
-                    ) {
+                    NavigationBar(containerColor = LanuDarkSurface, tonalElevation = 8.dp, modifier = Modifier.testTag("bottom_navigation_bar")) {
                         val tabs = listOf(
                             Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home),
                             Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search),
@@ -168,35 +149,14 @@ fun MainAppScreen(
                             Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer),
                             Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person)
                         )
-
                         tabs.forEach { (tab, label, icon) ->
                             val isSelected = currentTab == tab
                             NavigationBarItem(
                                 selected = isSelected,
-                                onClick = {
-                                    if (currentTab != tab) {
-                                        viewModel.setTab(tab)
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = label,
-                                        tint = if (isSelected) LanuGreen else LanuTextMuted,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = label,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) LanuGreen else LanuTextMuted
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = LanuGreen.copy(alpha = 0.15f)
-                                ),
+                                onClick = { if (currentTab != tab) viewModel.setTab(tab) },
+                                icon = { Icon(icon, contentDescription = label, tint = if (isSelected) LanuGreen else LanuTextMuted, modifier = Modifier.size(24.dp)) },
+                                label = { Text(label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) LanuGreen else LanuTextMuted) },
+                                colors = NavigationBarItemDefaults.colors(indicatorColor = LanuGreen.copy(alpha = 0.15f)),
                                 modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
                             )
                         }
@@ -204,104 +164,67 @@ fun MainAppScreen(
                 }
             }
         ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                 when (currentTab) {
-                    MainTab.HOME -> {
-                        HomeScreen(
-                            songs = allSongs,
-                            artists = viewModel.artists,
-                            newReleaseAlert = newReleaseAlert,
-                            onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
-                            onSelectArtist = { artist -> viewModel.selectArtist(artist) },
-                            onCategoryClick = { category ->
-                                viewModel.filterByCategory(category)
-                                viewModel.setTab(MainTab.SEARCH)
-                            },
-                            onSimulateNewRelease = { viewModel.simulateNewReleasePush() },
-                            onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() }
-                        )
-                    }
-
-                    MainTab.SEARCH -> {
-                        SearchScreen(
-                            searchQuery = searchQuery,
-                            selectedCategory = selectedCategoryFilter,
-                            allSongs = allSongs,
-                            cachedSongs = cachedSongs,
-                            onQueryChange = { viewModel.updateSearchQuery(it) },
-                            onSelectCategory = { viewModel.filterByCategory(it) },
-                            onPlaySong = { song, queue -> viewModel.playSong(song, queue) }
-                        )
-                    }
-
-                    MainTab.LIBRARY -> {
-                        LibraryScreen(
-                            playlists = playlists,
-                            downloadedEntities = downloadedEntities,
-                            favoriteIds = favoriteIds,
-                            allSongs = allSongs,
-                            onSelectPlaylist = { pl -> viewModel.selectPlaylist(pl) },
-                            onCreatePlaylist = { viewModel.openCreatePlaylistDialog() },
-                            onPlaySong = { song, queue -> viewModel.playSong(song, queue) }
-                        )
-                    }
-
-                    MainTab.FRIENDS -> {
-                        FriendActivityView(
-                            activities = friendActivities,
-                            availableSongs = allSongs,
-                            onPlaySong = { song -> viewModel.playSong(song, listOf(song)) },
-                            onShareSong = { song -> viewModel.shareSong(context, song) },
-                            onLikeActivity = { id -> viewModel.likeFriendActivity(id) },
-                            onSendRecommendation = { friendName, song, note ->
-                                viewModel.shareRecommendationToFriends(friendName, song, note)
-                            }
-                        )
-                    }
-
-                    MainTab.EQUALIZER -> {
-                        EqualizerView(
-                            equalizerState = equalizerState,
-                            isPlaying = isPlaying,
-                            onPresetSelected = { preset -> viewModel.setEqualizerPreset(preset) },
-                            onBandLevelChanged = { band, level -> viewModel.setBandLevel(band, level) },
-                            onBassBoostChanged = { viewModel.setBassBoost(it) },
-                            onVirtualizerChanged = { viewModel.setVirtualizer(it) },
-                            onToggleEqualizer = { viewModel.toggleEqualizer() }
-                        )
-                    }
-
-                    MainTab.ACCOUNT -> {
-                        AccountHistoryScreen(
-                            session = session,
-                            history = history,
-                            allSongs = allSongs,
-                            onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) },
-                            onSignOut = { viewModel.signOut() }
-                        )
-                    }
+                    MainTab.HOME -> HomeScreen(
+                        songs = allSongs,
+                        artists = viewModel.artists,
+                        newReleaseAlert = newReleaseAlert,
+                        onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
+                        onSelectArtist = { viewModel.selectArtist(it) },
+                        onCategoryClick = { category -> viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) },
+                        onSimulateNewRelease = { viewModel.simulateNewReleasePush() },
+                        onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() }
+                    )
+                    MainTab.SEARCH -> SearchScreen(
+                        searchQuery = searchQuery,
+                        selectedCategory = selectedCategoryFilter,
+                        allSongs = allSongs,
+                        cachedSongs = cachedSongs,
+                        onQueryChange = { viewModel.updateSearchQuery(it) },
+                        onSelectCategory = { viewModel.filterByCategory(it) },
+                        onPlaySong = { song, queue -> viewModel.playSong(song, queue) }
+                    )
+                    MainTab.LIBRARY -> LibraryScreen(
+                        playlists = playlists,
+                        downloadedEntities = downloadedEntities,
+                        favoriteIds = favoriteIds,
+                        allSongs = allSongs,
+                        onSelectPlaylist = { viewModel.selectPlaylist(it) },
+                        onCreatePlaylist = { viewModel.openCreatePlaylistDialog() },
+                        onPlaySong = { song, queue -> viewModel.playSong(song, queue) }
+                    )
+                    MainTab.FRIENDS -> FriendActivityView(
+                        activities = friendActivities,
+                        availableSongs = allSongs,
+                        onPlaySong = { viewModel.playSong(it, listOf(it)) },
+                        onShareSong = { viewModel.shareSong(context, it) },
+                        onLikeActivity = { viewModel.likeFriendActivity(it) },
+                        onSendRecommendation = { friendName, song, note -> viewModel.shareRecommendationToFriends(friendName, song, note) }
+                    )
+                    MainTab.EQUALIZER -> EqualizerView(
+                        equalizerState = equalizerState,
+                        isPlaying = isPlaying,
+                        onPresetSelected = { viewModel.setEqualizerPreset(it) },
+                        onBandLevelChanged = { band, level -> viewModel.setBandLevel(band, level) },
+                        onBassBoostChanged = { viewModel.setBassBoost(it) },
+                        onVirtualizerChanged = { viewModel.setVirtualizer(it) },
+                        onToggleEqualizer = { viewModel.toggleEqualizer() }
+                    )
+                    MainTab.ACCOUNT -> AccountHistoryScreen(
+                        session = session,
+                        history = history,
+                        allSongs = allSongs,
+                        onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) },
+                        onSignOut = { viewModel.signOut() }
+                    )
                 }
 
                 if (isLoading) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(LanuDarkBg.copy(alpha = 0.5f))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                            ) {},
+                        modifier = Modifier.fillMaxSize().background(LanuDarkBg.copy(alpha = 0.5f)).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {},
                         contentAlignment = Alignment.Center
-                    ) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            color = LanuGreen,
-                            strokeWidth = 4.dp
-                        )
-                    }
+                    ) { androidx.compose.material3.CircularProgressIndicator(color = LanuGreen, strokeWidth = 4.dp) }
                 }
             }
         }
@@ -333,10 +256,7 @@ fun MainAppScreen(
                     onToggleDownload = { viewModel.toggleDownload(song) },
                     onToggleLyrics = { viewModel.toggleLyricsInNowPlaying() },
                     onSelectAudioQuality = { viewModel.setAudioQuality(it) },
-                    onOpenEqualizer = {
-                        viewModel.closeNowPlaying()
-                        viewModel.setTab(MainTab.EQUALIZER)
-                    },
+                    onOpenEqualizer = { viewModel.closeNowPlaying(); viewModel.setTab(MainTab.EQUALIZER) },
                     onAddToPlaylist = { viewModel.openAddToPlaylist(song) },
                     onShare = { viewModel.shareSong(context, song) },
                     onClose = { viewModel.closeNowPlaying() }
@@ -345,10 +265,7 @@ fun MainAppScreen(
         }
 
         if (showCreatePlaylistDialog) {
-            CreatePlaylistDialog(
-                onDismiss = { viewModel.closeCreatePlaylistDialog() },
-                onCreate = { name, desc -> viewModel.createPlaylist(name, desc) }
-            )
+            CreatePlaylistDialog(onDismiss = { viewModel.closeCreatePlaylistDialog() }, onCreate = { name, desc -> viewModel.createPlaylist(name, desc) })
         }
 
         songToAddToPlaylist?.let { song ->
@@ -357,10 +274,7 @@ fun MainAppScreen(
                 playlists = playlists,
                 onDismiss = { viewModel.closeAddToPlaylist() },
                 onSelectPlaylist = { plId -> viewModel.addSongToPlaylist(plId, song.id) },
-                onCreateNewPlaylist = {
-                    viewModel.closeAddToPlaylist()
-                    viewModel.openCreatePlaylistDialog()
-                }
+                onCreateNewPlaylist = { viewModel.closeAddToPlaylist(); viewModel.openCreatePlaylistDialog() }
             )
         }
 
@@ -382,10 +296,22 @@ fun MainAppScreen(
                 songs = playlistSongsFlow.value,
                 onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
                 onRemoveSong = { songId -> viewModel.removeSongFromPlaylist(playlist.id, songId) },
+                onMoveSong = { songId, targetIndex -> viewModel.moveSongInSelectedPlaylist(songId, targetIndex) },
                 onSharePlaylist = { viewModel.sharePlaylist(context, playlist) },
+                onRenamePlaylist = { viewModel.openRenamePlaylistDialog() },
                 onDeletePlaylist = { viewModel.deletePlaylist(playlist.id) },
                 onBack = { viewModel.selectPlaylist(null) }
             )
+        }
+
+        if (showRenamePlaylistDialog) {
+            selectedPlaylist?.let { playlist ->
+                RenamePlaylistDialog(
+                    playlist = playlist,
+                    onDismiss = { viewModel.closeRenamePlaylistDialog() },
+                    onRename = { name, description -> viewModel.renameSelectedPlaylist(name, description) }
+                )
+            }
         }
     }
 }
