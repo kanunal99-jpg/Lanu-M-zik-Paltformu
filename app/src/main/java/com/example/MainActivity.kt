@@ -280,7 +280,7 @@ fun MainAppScreen(
                             session = session,
                             history = history,
                             allSongs = allSongs,
-                            onPlaySong = { song -> viewModel.playSong(song, listOf(song)) },
+                            onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) },
                             onSignOut = { viewModel.signOut() }
                         )
                     }
