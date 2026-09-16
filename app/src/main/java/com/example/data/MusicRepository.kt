@@ -2,8 +2,15 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import com.aistudio.lanumusic.kpxzqa.BuildConfig
 import com.example.auth.AuthResult
 import com.example.auth.LocalAuthBackend
+import com.example.data.catalog.AlternativeCatalogProvider
+import com.example.data.catalog.CachedCatalogProvider
+import com.example.data.catalog.CatalogProvider
+import com.example.data.catalog.LocalCatalogProvider
+import com.example.data.catalog.PrimaryCatalogProvider
+import com.example.auth.AuthSession
 import com.example.model.Artist
 import com.example.model.AudioQuality
 import com.example.model.FriendActivity
@@ -38,6 +45,17 @@ class MusicRepository(context: Context) {
         libraryBackend = LocalUserLibraryBackend(context)
     )
 
+    private val primaryCatalogProvider: CatalogProvider = PrimaryCatalogProvider(BuildConfig.JAMENDO_CLIENT_ID)
+    private val catalogProvider: CatalogProvider = AlternativeCatalogProvider(
+        listOf(
+            primaryCatalogProvider,
+            CachedCatalogProvider(dao),
+            LocalCatalogProvider(dao)
+        )
+    )
+    private val catalogPreferences = context.getSharedPreferences("catalog_sync", Context.MODE_PRIVATE)
+    private val catalogRefreshIntervalMs = 6L * 60L * 60L * 1000L
+
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
@@ -65,9 +83,43 @@ class MusicRepository(context: Context) {
                 _songs.value = (local + cached).distinctBy { it.id }
                 migrateLegacyLibraryIfNeeded()
                 syncOfflineStorage()
+                refreshRemoteCatalogIfStale()
             }.onFailure { Log.e("MusicRepository", "Stored music initialization failed", it) }
         }
     }
+
+    private suspend fun refreshRemoteCatalogIfStale() {
+        if (BuildConfig.JAMENDO_CLIENT_ID.isBlank()) {
+            Log.w("MusicRepository", "Verified remote catalog is disabled: JAMENDO_CLIENT_ID is not configured")
+            return
+        }
+        val now = System.currentTimeMillis()
+        val lastSync = catalogPreferences.getLong("last_sync_ms", 0L)
+        if (now - lastSync < catalogRefreshIntervalMs) return
+
+        val queries = listOf(
+            "turkish pop", "turkish rap", "turkish rock", "anatolian rock", "turkish classical",
+            "global pop", "hip hop", "rock", "electronic dance", "acoustic chill"
+        )
+        val fetched = LinkedHashMap<String, Song>()
+        queries.forEach { query ->
+            primaryCatalogProvider.searchSongs(query)
+                .onSuccess { songs -> songs.forEach { fetched[it.id] = it } }
+                .onFailure { error -> Log.w("MusicRepository", "Catalog query failed: $query", error) }
+        }
+        primaryCatalogProvider.getLatestReleases(null)
+            .onSuccess { songs -> songs.forEach { fetched[it.id] = it } }
+            .onFailure { error -> Log.w("MusicRepository", "Latest catalog refresh failed", error) }
+
+        if (fetched.isNotEmpty()) {
+            cacheSongs(fetched.values.toList())
+            _songs.value = ( _songs.value + fetched.values ).distinctBy { it.id }
+            catalogPreferences.edit().putLong("last_sync_ms", now).apply()
+            Log.i("MusicRepository", "Verified catalog refresh added ${fetched.size} songs")
+        }
+    }
+
+    suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query)
 
     private suspend fun migrateLegacyLibraryIfNeeded() {
         val session = userLibraryService.session.value ?: return
