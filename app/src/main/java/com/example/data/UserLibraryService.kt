@@ -62,6 +62,16 @@ class UserLibraryService(
         }
     }
 
+    suspend fun renamePlaylist(playlistId: String, name: String): AuthResult = withSession { userId ->
+        libraryBackend.renamePlaylist(userId, playlistId, name)
+        refreshSnapshot(userId)
+    }
+
+    suspend fun reorderPlaylist(playlistId: String, fromIndex: Int, toIndex: Int): AuthResult = withSession { userId ->
+        libraryBackend.reorderPlaylist(userId, playlistId, fromIndex, toIndex)
+        refreshSnapshot(userId)
+    }
+
     suspend fun deletePlaylist(playlistId: String): AuthResult = withSession { userId ->
         libraryBackend.deletePlaylist(userId, playlistId)
         refreshSnapshot(userId)

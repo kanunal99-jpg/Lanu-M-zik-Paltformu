@@ -36,34 +36,22 @@ class DownloadManager(private val context: Context) {
 
     fun getDownloadProgress(songId: String): DownloadProgress? = _downloadStates.value[songId]
 
-    fun startDownload(
-        song: Song,
-        quality: AudioQuality,
-        onFinished: (DownloadProgress) -> Unit = {}
-    ) {
+    fun startDownload(song: Song, quality: AudioQuality, onFinished: (DownloadProgress) -> Unit = {}) {
         if (activeJobs.containsKey(song.id)) return
-
         val job = scope.launch {
             var target: File? = null
             try {
                 updateState(song.id, DownloadStatus.QUEUED, 0f, 0L, 0L)
-
                 val uri = Uri.parse(song.audioUrl)
-                val scheme = uri.scheme?.lowercase()
-                if (scheme != "content" && scheme != "file") {
-                    throw IllegalStateException("REMOTE_DOWNLOAD_NOT_AUTHORIZED")
-                }
-
+                if (!OfflineSourcePolicy.isAuthorized(uri)) throw IllegalStateException("REMOTE_DOWNLOAD_NOT_AUTHORIZED")
                 val offlineDir = File(context.filesDir, "offline_audio")
                 check(offlineDir.exists() || offlineDir.mkdirs()) { "OFFLINE_STORAGE_UNAVAILABLE" }
                 val temp = File(offlineDir, "${song.id}.part")
                 target = File(offlineDir, "${song.id}.bin")
                 temp.delete()
-
                 val resolver = context.contentResolver
                 val total = resolveSourceLength(resolver, uri)
-                val input = openInputStream(resolver, uri)
-                    ?: throw IllegalStateException("SOURCE_NOT_READABLE")
+                val input = openInputStream(resolver, uri) ?: throw IllegalStateException("SOURCE_NOT_READABLE")
                 input.use { stream ->
                     var copied = 0L
                     updateState(song.id, DownloadStatus.DOWNLOADING, 0f, 0L, total)
@@ -83,15 +71,7 @@ class DownloadManager(private val context: Context) {
                     if (target.exists()) target.delete()
                     check(temp.renameTo(target)) { "ATOMIC_MOVE_FAILED" }
                     val checksum = calculateSHA256(target)
-                    val completed = DownloadProgress(
-                        songId = song.id,
-                        status = DownloadStatus.COMPLETED,
-                        progress = 1f,
-                        bytesDownloaded = copied,
-                        totalBytes = copied,
-                        localFilePath = target.absolutePath,
-                        checksum = checksum
-                    )
+                    val completed = DownloadProgress(song.id, DownloadStatus.COMPLETED, 1f, copied, copied, target.absolutePath, checksum, null)
                     updateState(completed)
                     onFinished(completed)
                 }
@@ -106,16 +86,12 @@ class DownloadManager(private val context: Context) {
                 Log.e("DownloadManager", "Download failed for ${song.id}", e)
                 updateState(state)
                 onFinished(state)
-            } finally {
-                activeJobs.remove(song.id)
-            }
+            } finally { activeJobs.remove(song.id) }
         }
         activeJobs[song.id] = job
     }
 
-    fun cancelDownload(songId: String) {
-        activeJobs[songId]?.cancel()
-    }
+    fun cancelDownload(songId: String) { activeJobs[songId]?.cancel() }
 
     fun close() {
         activeJobs.values.forEach { it.cancel() }
@@ -127,10 +103,7 @@ class DownloadManager(private val context: Context) {
     fun deleteDownloadedFile(songId: String): Boolean {
         cancelDownload(songId)
         val dir = File(context.filesDir, "offline_audio")
-        val deleted = listOf(File(dir, "$songId.bin"), File(dir, "$songId.part"))
-            .filter { it.exists() }
-            .map { it.delete() }
-            .any { it }
+        val deleted = listOf(File(dir, "$songId.bin"), File(dir, "$songId.part")).filter { it.exists() }.map { it.delete() }.any { it }
         _downloadStates.value = _downloadStates.value.toMutableMap().also { it.remove(songId) }
         return deleted
     }
@@ -143,39 +116,25 @@ class DownloadManager(private val context: Context) {
 
     private fun resolveSourceLength(resolver: ContentResolver, uri: Uri): Long {
         return when (uri.scheme?.lowercase()) {
-            "file" -> File(uri.path ?: return -1L).length()
+            "file" -> {
+                val path = uri.path ?: return -1L
+                File(path).length()
+            }
             "content" -> runCatching {
-                resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor -> descriptor.length }
-                    ?: -1L
+                resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor -> descriptor.length } ?: -1L
             }.getOrDefault(-1L)
             else -> -1L
         }
     }
 
-    private fun updateState(state: DownloadProgress) {
-        _downloadStates.value = _downloadStates.value.toMutableMap().also { it[state.songId] = state }
-    }
-
-    private fun updateState(
-        songId: String,
-        status: DownloadStatus,
-        progress: Float,
-        bytesDownloaded: Long,
-        totalBytes: Long,
-        localFilePath: String? = null,
-        checksum: String? = null,
-        error: String? = null
-    ) = updateState(DownloadProgress(songId, status, progress, bytesDownloaded, totalBytes, localFilePath, checksum, error))
+    private fun updateState(state: DownloadProgress) { _downloadStates.value = _downloadStates.value.toMutableMap().also { it[state.songId] = state } }
+    private fun updateState(songId: String, status: DownloadStatus, progress: Float, bytesDownloaded: Long, totalBytes: Long, localFilePath: String? = null, checksum: String? = null, error: String? = null) = updateState(DownloadProgress(songId, status, progress, bytesDownloaded, totalBytes, localFilePath, checksum, error))
 
     private fun calculateSHA256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input ->
             val buffer = ByteArray(8192)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
+            while (true) { val read = input.read(buffer); if (read < 0) break; digest.update(buffer, 0, read) }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }

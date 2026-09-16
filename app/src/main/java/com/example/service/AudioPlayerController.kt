@@ -28,9 +28,12 @@ import kotlinx.coroutines.launch
 
 class AudioPlayerController(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main)
+    private val playerStateStore = PlayerStateStore(context)
     private var progressJob: Job? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var audioEffects: AudioEffectsController? = null
+    private var pendingRestore: PlayerStateStore.Snapshot? = null
+    private var hasAttemptedRestore = false
     var mediaController: MediaController? = null
 
     private val _isPlaying = MutableStateFlow(false)
@@ -53,6 +56,7 @@ class AudioPlayerController(private val context: Context) {
     val equalizerState: StateFlow<EqualizerState> = _equalizerState.asStateFlow()
 
     init {
+        pendingRestore = playerStateStore.read().takeIf { !it.songId.isNullOrBlank() }
         val sessionToken = SessionToken(context, ComponentName(context, LanuMediaSessionService::class.java))
         controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
         controllerFuture?.addListener({
@@ -62,12 +66,39 @@ class AudioPlayerController(private val context: Context) {
         }, ContextCompat.getMainExecutor(context))
     }
 
+    fun restoreStateFromCatalog(catalog: List<Song>) {
+        if (hasAttemptedRestore || catalog.isEmpty()) return
+        val snapshot = pendingRestore ?: run {
+            hasAttemptedRestore = true
+            return
+        }
+        val song = catalog.firstOrNull { it.id == snapshot.songId }
+        if (song == null || song.audioUrl.isBlank() || mediaController == null) {
+            if (song == null) return
+            hasAttemptedRestore = true
+            pendingRestore = null
+            return
+        }
+        hasAttemptedRestore = true
+        pendingRestore = null
+        _isShuffle.value = snapshot.shuffle
+        _repeatMode.value = snapshot.repeatMode
+        _currentPositionMs.value = snapshot.positionMs.coerceAtLeast(0L)
+        setQueue(listOf(song), 0, autoPlay = false)
+        mediaController?.seekTo(snapshot.positionMs.coerceIn(0L, song.durationMs.coerceAtLeast(1L)))
+        _isPlaying.value = false
+    }
+
     private fun setupControllerListener() {
         mediaController?.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
-                if (isPlaying) startProgressTracker() else stopProgressTracker()
+                if (isPlaying) startProgressTracker() else {
+                    stopProgressTracker()
+                    persistState()
+                }
                 ensureAudioEffects()
+                persistState()
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -75,6 +106,7 @@ class AudioPlayerController(private val context: Context) {
                     _durationMs.value = mediaController?.duration?.coerceAtLeast(1) ?: 1L
                     ensureAudioEffects()
                     audioEffects?.apply(_equalizerState.value)
+                    if (pendingRestore != null) persistState()
                 }
             }
 
@@ -93,6 +125,7 @@ class AudioPlayerController(private val context: Context) {
                     _durationMs.value = foundSong.durationMs
                 }
                 _currentPositionMs.value = 0L
+                persistState()
             }
         })
     }
@@ -144,8 +177,11 @@ class AudioPlayerController(private val context: Context) {
                 ).build()
         }
         mediaController?.setMediaItems(mediaItems, validIndex, 0L)
+        mediaController?.shuffleModeEnabled = _isShuffle.value
+        mediaController?.repeatMode = _repeatMode.value.toMedia3RepeatMode()
         mediaController?.prepare()
         if (autoPlay) mediaController?.play()
+        persistState()
     }
 
     private fun showUnavailablePlayback() {
@@ -160,26 +196,34 @@ class AudioPlayerController(private val context: Context) {
             _queueIndex.value = existingIndex
             mediaController?.seekTo(existingIndex, 0L)
             if (autoPlay) mediaController?.play()
+            persistState()
         } else setQueue(listOf(song), 0, autoPlay)
     }
 
-    fun togglePlayPause() { mediaController?.let { if (it.isPlaying) it.pause() else it.play() } }
+    fun togglePlayPause() {
+        mediaController?.let { if (it.isPlaying) it.pause() else it.play() }
+        persistState()
+    }
 
     fun next() {
         mediaController?.let { controller ->
-            if (controller.hasNextMediaItem()) controller.seekToNextMediaItem()
-            else if (_queue.value.isNotEmpty()) controller.seekTo(0, 0L)
+            when (val action = PlaybackQueuePolicy.nextAction(controller.currentMediaItemIndex, _queue.value.size, _repeatMode.value)) {
+                is PlaybackQueuePolicy.NextAction.MoveTo -> controller.seekTo(action.index, 0L)
+                PlaybackQueuePolicy.NextAction.Stop -> controller.pause()
+            }
         }
+        persistState()
     }
 
     fun previous() {
         mediaController?.let { controller ->
-            when {
-                controller.currentPosition > 3000 -> controller.seekTo(0L)
-                controller.hasPreviousMediaItem() -> controller.seekToPreviousMediaItem()
-                _queue.value.isNotEmpty() -> controller.seekTo(_queue.value.size - 1, 0L)
+            when (val action = PlaybackQueuePolicy.previousAction(controller.currentMediaItemIndex, controller.currentPosition, _queue.value.size, _repeatMode.value)) {
+                PlaybackQueuePolicy.PreviousAction.RestartCurrent -> controller.seekTo(0L)
+                is PlaybackQueuePolicy.PreviousAction.MoveTo -> controller.seekTo(action.index, 0L)
+                PlaybackQueuePolicy.PreviousAction.Stop -> controller.pause()
             }
         }
+        persistState()
     }
 
     fun seekTo(positionMs: Long) {
@@ -188,11 +232,13 @@ class AudioPlayerController(private val context: Context) {
             controller.seekTo(target)
             _currentPositionMs.value = target
         }
+        persistState()
     }
 
     fun toggleShuffle() {
         _isShuffle.value = !_isShuffle.value
         mediaController?.shuffleModeEnabled = _isShuffle.value
+        persistState()
     }
 
     fun toggleRepeat() {
@@ -201,11 +247,8 @@ class AudioPlayerController(private val context: Context) {
             RepeatMode.ALL -> RepeatMode.ONE
             RepeatMode.ONE -> RepeatMode.OFF
         }
-        mediaController?.repeatMode = when (_repeatMode.value) {
-            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-        }
+        mediaController?.repeatMode = _repeatMode.value.toMedia3RepeatMode()
+        persistState()
     }
 
     fun toggleEqualizerEnabled() {
@@ -243,10 +286,13 @@ class AudioPlayerController(private val context: Context) {
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
+            var persistTick = 0
             while (isActive) {
                 if (mediaController?.isPlaying == true) {
                     _currentPositionMs.value = mediaController?.currentPosition ?: 0L
                     mediaController?.duration?.takeIf { it > 0 }?.let { _durationMs.value = it }
+                    persistTick++
+                    if (persistTick % 4 == 0) persistState()
                 }
                 delay(500)
             }
@@ -255,7 +301,28 @@ class AudioPlayerController(private val context: Context) {
 
     private fun stopProgressTracker() { progressJob?.cancel(); progressJob = null }
 
+    private fun RepeatMode.toMedia3RepeatMode(): Int = when (this) {
+        RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+        RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+        RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+    }
+
+    private fun persistState() {
+        playerStateStore.save(
+            PlayerStateStore.Snapshot(
+                songId = _currentSong.value?.id,
+                title = _currentSong.value?.title,
+                artist = _currentSong.value?.artist,
+                positionMs = _currentPositionMs.value,
+                isPlaying = _isPlaying.value,
+                shuffle = _isShuffle.value,
+                repeatMode = _repeatMode.value
+            )
+        )
+    }
+
     fun release() {
+        persistState()
         stopProgressTracker()
         audioEffects?.release()
         audioEffects = null

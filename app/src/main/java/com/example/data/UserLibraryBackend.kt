@@ -22,6 +22,8 @@ interface UserLibraryBackend {
         description: String = "",
         nowMs: Long = System.currentTimeMillis()
     ): PlaylistRecord
+    suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long = System.currentTimeMillis())
+    suspend fun reorderPlaylist(userId: String, playlistId: String, fromIndex: Int, toIndex: Int, nowMs: Long = System.currentTimeMillis())
     suspend fun deletePlaylist(userId: String, playlistId: String)
     suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long = System.currentTimeMillis())
     suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String)
@@ -106,6 +108,36 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         )
         writePlaylists(userId, readPlaylists(userId) + playlist)
         return playlist
+    }
+
+    override suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long) {
+        requireValidUserId(userId)
+        require(name.isNotBlank()) { "Playlist adı boş olamaz" }
+        val playlists = readPlaylists(userId)
+        val target = playlists.firstOrNull { it.id == playlistId }
+            ?: error("Playlist bulunamadı: $playlistId")
+        writePlaylists(
+            userId,
+            playlists.map {
+                if (it.id == target.id) it.copy(name = name.trim(), updatedAtMs = nowMs) else it
+            }
+        )
+    }
+
+    override suspend fun reorderPlaylist(userId: String, playlistId: String, fromIndex: Int, toIndex: Int, nowMs: Long) {
+        requireValidUserId(userId)
+        val playlists = readPlaylists(userId)
+        val target = playlists.firstOrNull { it.id == playlistId }
+            ?: error("Playlist bulunamadı: $playlistId")
+        if (target.songIds.isEmpty()) return
+        require(fromIndex in target.songIds.indices) { "fromIndex geçersiz" }
+        require(toIndex in target.songIds.indices) { "toIndex geçersiz" }
+        if (fromIndex == toIndex) return
+        val reorderedSongs = target.songIds.toMutableList().apply {
+            add(toIndex, removeAt(fromIndex))
+        }
+        val updated = target.copy(songIds = reorderedSongs, updatedAtMs = nowMs)
+        writePlaylists(userId, playlists.map { if (it.id == playlistId) updated else it })
     }
 
     override suspend fun deletePlaylist(userId: String, playlistId: String) {

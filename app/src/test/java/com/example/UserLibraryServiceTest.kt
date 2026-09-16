@@ -14,17 +14,12 @@ import org.junit.Test
 class UserLibraryServiceTest {
     private class FakeAuthBackend : AuthBackend {
         private var session: AuthSession? = null
-
         override suspend fun currentSession(): AuthSession? = session
-
         override suspend fun signIn(identifier: String, secret: String): AuthResult {
-            if (identifier.isBlank() || secret.isBlank()) {
-                return AuthResult.Failure(AuthFailure.INVALID_INPUT, "invalid")
-            }
+            if (identifier.isBlank() || secret.isBlank()) return AuthResult.Failure(AuthFailure.INVALID_INPUT, "invalid")
             session = AuthSession("user-1", identifier, null, AuthProvider.LOCAL, 1L)
             return AuthResult.Success(session!!)
         }
-
         override suspend fun signOut(): AuthResult {
             val old = session ?: return AuthResult.Failure(AuthFailure.UNKNOWN, "none")
             session = null
@@ -45,14 +40,11 @@ class UserLibraryServiceTest {
         val auth = FakeAuthBackend()
         val backend = InMemoryLibraryBackend()
         val service = UserLibraryService(auth, backend)
-
-        val login = service.signIn("user@example.com", "secret")
-        assertTrue(login is AuthResult.Success)
+        assertTrue(service.signIn("user@example.com", "secret") is AuthResult.Success)
         service.addFavorite("song-1")
         service.recordPlay("song-1")
         val playlist = service.createPlaylist("Benim Listem").getOrThrow()
         service.addSongToPlaylist(playlist.id, "song-1")
-
         assertEquals(listOf("song-1"), service.snapshot.value?.favorites?.map { it.songId })
         assertEquals(listOf("song-1"), service.snapshot.value?.history?.map { it.songId })
         assertEquals(listOf("song-1"), service.snapshot.value?.playlists?.single()?.songIds)
@@ -66,9 +58,7 @@ class UserLibraryServiceTest {
         service.signIn("user@example.com", "secret")
         service.addFavorite("song-1")
         service.recordPlay("song-1")
-
         val result = service.clearHistory()
-
         assertTrue(result is AuthResult.Success)
         assertTrue(service.snapshot.value?.history.orEmpty().isEmpty())
         assertEquals(listOf("song-1"), service.snapshot.value?.favorites?.map { it.songId })
@@ -81,9 +71,7 @@ class UserLibraryServiceTest {
         val service = UserLibraryService(auth, backend)
         service.signIn("user@example.com", "secret")
         service.addFavorite("song-1")
-
         service.signOut()
-
         assertEquals(null, service.session.value)
         assertEquals(null, service.snapshot.value)
         assertTrue(service.addFavorite("song-2") is AuthResult.Failure)
@@ -95,6 +83,8 @@ class UserLibraryServiceTest {
         override suspend fun addFavorite(userId: String, songId: String, nowMs: Long) = delegate.addFavorite(userId, songId, nowMs)
         override suspend fun removeFavorite(userId: String, songId: String) = delegate.removeFavorite(userId, songId)
         override suspend fun createPlaylist(userId: String, name: String, description: String, nowMs: Long) = delegate.createPlaylist(userId, name, description, nowMs)
+        override suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long) = delegate.renamePlaylist(userId, playlistId, name, nowMs)
+        override suspend fun reorderPlaylist(userId: String, playlistId: String, fromIndex: Int, toIndex: Int, nowMs: Long) = delegate.reorderPlaylist(userId, playlistId, fromIndex, toIndex, nowMs)
         override suspend fun deletePlaylist(userId: String, playlistId: String) = delegate.deletePlaylist(userId, playlistId)
         override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) = delegate.addSongToPlaylist(userId, playlistId, songId, nowMs)
         override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) = delegate.removeSongFromPlaylist(userId, playlistId, songId)
@@ -107,13 +97,7 @@ class UserLibraryServiceTest {
         private val data = mutableMapOf<String, MutableList<String>>()
         private val playlists = mutableMapOf<String, MutableList<com.example.data.PlaylistRecord>>()
         private val history = mutableMapOf<String, MutableList<com.example.data.HistoryRecord>>()
-
-        override suspend fun snapshot(userId: String) = com.example.data.UserLibrarySnapshot(
-            userId,
-            data[userId].orEmpty().mapIndexed { i, id -> com.example.data.FavoriteRecord(id, i.toLong()) },
-            playlists[userId].orEmpty(),
-            history[userId].orEmpty()
-        )
+        override suspend fun snapshot(userId: String) = com.example.data.UserLibrarySnapshot(userId, data[userId].orEmpty().mapIndexed { i, id -> com.example.data.FavoriteRecord(id, i.toLong()) }, playlists[userId].orEmpty(), history[userId].orEmpty())
         override suspend fun addFavorite(userId: String, songId: String, nowMs: Long) { data.getOrPut(userId) { mutableListOf() }.apply { remove(songId); add(songId) } }
         override suspend fun removeFavorite(userId: String, songId: String) { data[userId]?.remove(songId) }
         override suspend fun createPlaylist(userId: String, name: String, description: String, nowMs: Long): com.example.data.PlaylistRecord {
@@ -121,13 +105,19 @@ class UserLibraryServiceTest {
             playlists.getOrPut(userId) { mutableListOf() }.add(item)
             return item
         }
-        override suspend fun deletePlaylist(userId: String, playlistId: String) {
-            playlists[userId]?.removeAll { it.id == playlistId }
+        override suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(name = name, updatedAtMs = nowMs) else it }.toMutableList() }
+        override suspend fun reorderPlaylist(userId: String, playlistId: String, fromIndex: Int, toIndex: Int, nowMs: Long) {
+            playlists[userId] = playlists[userId].orEmpty().map { playlist ->
+                if (playlist.id != playlistId) playlist else {
+                    val ids = playlist.songIds.toMutableList()
+                    if (fromIndex in ids.indices && toIndex in ids.indices) ids.add(toIndex, ids.removeAt(fromIndex))
+                    playlist.copy(songIds = ids, updatedAtMs = nowMs)
+                }
+            }.toMutableList()
         }
-        override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) {
-            playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = (it.songIds + songId).distinct()) else it }.toMutableList()
-        }
-        override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = it.songIds.filterNot { id -> id == songId }) else it }.toMutableList() }
+        override suspend fun deletePlaylist(userId: String, playlistId: String) { playlists[userId]?.removeAll { it.id == playlistId } }
+        override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = (it.songIds + songId).distinct(), updatedAtMs = nowMs) else it }.toMutableList() }
+        override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = it.songIds.filterNot { id -> id == songId }, updatedAtMs = System.currentTimeMillis()) else it }.toMutableList() }
         override suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long) { history.getOrPut(userId) { mutableListOf() }.apply { removeAll { it.songId == songId }; add(0, com.example.data.HistoryRecord(songId, playedAtMs)) } }
         override suspend fun clearHistory(userId: String) { history.remove(userId) }
         override suspend fun clearUser(userId: String) { data.remove(userId); playlists.remove(userId); history.remove(userId) }

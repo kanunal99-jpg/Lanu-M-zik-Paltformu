@@ -1,7 +1,6 @@
 package com.example.data
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -32,10 +31,6 @@ data class DownloadedSongEntity(
     val downloadedAt: Long = System.currentTimeMillis()
 )
 
-/**
- * Entity representing playlist information stored locally,
- * with flags and attributes to support offline playback and syncing.
- */
 @Entity(
     tableName = "playlists",
     indices = [
@@ -55,9 +50,6 @@ data class PlaylistEntity(
     val totalDurationMs: Long = 0L
 )
 
-/**
- * Join table linking playlists to songs with order index and foreign key cascade deletion.
- */
 @Entity(
     tableName = "playlist_songs",
     primaryKeys = ["playlistId", "songId"],
@@ -88,9 +80,6 @@ data class HistoryEntity(
     val playedAt: Long = System.currentTimeMillis()
 )
 
-/**
- * Local cache entity for song search and quick catalog lookups.
- */
 @Entity(tableName = "cached_songs")
 data class CachedSongEntity(
     @PrimaryKey val id: String,
@@ -109,10 +98,6 @@ data class CachedSongEntity(
     val cachedAt: Long = System.currentTimeMillis()
 )
 
-/**
- * Comprehensive Entity for storing full local song metadata to support offline listening.
- * Includes local audio file paths, cover paths, technical format specs, and lyrics.
- */
 @Entity(
     tableName = "local_songs",
     indices = [
@@ -135,17 +120,14 @@ data class LocalSongEntity(
     val categoryName: String = "TURKCE_POP",
     val releaseYear: Int = 2024,
     val language: String = "tr",
-    // Local storage paths for offline listening
     val localAudioPath: String = "",
     val localCoverPath: String = "",
     val remoteAudioUrl: String = "",
     val remoteCoverUrl: String = "",
-    // Technical metadata
     val mimeType: String = "audio/mpeg",
     val bitrate: String = "320 kbps",
     val fileSizeBytes: Long = 0L,
     val audioQuality: String = "Yüksek",
-    // Offline status & lyrics
     val isAvailableOffline: Boolean = true,
     val lyricsText: String = "",
     val downloadedAt: Long = System.currentTimeMillis(),
@@ -161,9 +143,6 @@ data class ReleaseSyncStateEntity(
     val status: String
 )
 
-/**
- * Relation linking a Playlist with its offline songs via playlist_songs junction table.
- */
 data class PlaylistWithOfflineSongs(
     @Embedded val playlist: PlaylistEntity,
     @Relation(
@@ -178,9 +157,6 @@ data class PlaylistWithOfflineSongs(
     val offlineSongs: List<LocalSongEntity> = emptyList()
 )
 
-/**
- * Relation linking a Playlist with its cached songs.
- */
 data class PlaylistWithSongs(
     @Embedded val playlist: PlaylistEntity,
     @Relation(
@@ -197,10 +173,6 @@ data class PlaylistWithSongs(
 
 @Dao
 interface MusicDao {
-    // =====================================================================
-    // LOCAL SONG METADATA (OFFLINE LISTENING)
-    // =====================================================================
-
     @Query("SELECT * FROM local_songs ORDER BY title ASC")
     fun getAllLocalSongs(): Flow<List<LocalSongEntity>>
 
@@ -213,20 +185,13 @@ interface MusicDao {
     @Query("SELECT * FROM local_songs WHERE id = :songId")
     suspend fun getLocalSongByIdSync(songId: String): LocalSongEntity?
 
-    @Query("""
-        SELECT * FROM local_songs 
-        WHERE isAvailableOffline = 1 
-        AND (LOWER(title) LIKE '%' || LOWER(:query) || '%' 
-             OR LOWER(artist) LIKE '%' || LOWER(:query) || '%'
-             OR LOWER(album) LIKE '%' || LOWER(:query) || '%')
-        ORDER BY title ASC
-    """)
+    @Query("SELECT * FROM local_songs WHERE isAvailableOffline = 1 AND (LOWER(title) LIKE '%' || LOWER(:query) || '%' OR LOWER(artist) LIKE '%' || LOWER(:query) || '%' OR LOWER(album) LIKE '%' || LOWER(:query) || '%') ORDER BY title ASC")
     fun searchOfflineSongs(query: String): Flow<List<LocalSongEntity>>
 
     @Query("SELECT * FROM local_songs WHERE LOWER(artist) = LOWER(:artist) AND isAvailableOffline = 1 ORDER BY title ASC")
     fun getOfflineSongsByArtist(artist: String): Flow<List<LocalSongEntity>>
 
-    @Query("SELECT * FROM local_songs WHERE LOWER(album) = LOWER(:album) AND isAvailableOffline = 1 ORDER BY trackNumber ASC, title ASC")
+    @Query("SELECT * FROM local_songs WHERE isAvailableOffline = 1 AND LOWER(album) = LOWER(:album) ORDER BY title ASC")
     fun getOfflineSongsByAlbum(album: String): Flow<List<LocalSongEntity>>
 
     @Query("SELECT COUNT(*) FROM local_songs WHERE isAvailableOffline = 1")
@@ -255,10 +220,6 @@ interface MusicDao {
 
     @Query("DELETE FROM local_songs")
     suspend fun clearAllLocalSongs()
-
-    // =====================================================================
-    // PLAYLIST INFORMATION (OFFLINE LISTENING SUPPORT)
-    // =====================================================================
 
     @Query("SELECT * FROM playlists ORDER BY createdAt DESC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
@@ -290,10 +251,6 @@ interface MusicDao {
     @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId")
     suspend fun deletePlaylistSongs(playlistId: String)
 
-    // =====================================================================
-    // PLAYLIST SONG RELATIONSHIPS & DIRECT JOINS
-    // =====================================================================
-
     @Query("SELECT * FROM playlist_songs WHERE playlistId = :playlistId ORDER BY orderIndex ASC")
     fun getSongsForPlaylist(playlistId: String): Flow<List<PlaylistSongEntity>>
 
@@ -309,9 +266,6 @@ interface MusicDao {
     @Query("UPDATE playlist_songs SET orderIndex = :newIndex WHERE playlistId = :playlistId AND songId = :songId")
     suspend fun updateSongOrderInPlaylist(playlistId: String, songId: String, newIndex: Int)
 
-    /**
-     * Direct JOIN query fetching local song metadata in a playlist sorted by orderIndex.
-     */
     @Query("""
         SELECT ls.* FROM local_songs ls
         INNER JOIN playlist_songs ps ON ls.id = ps.songId
@@ -320,9 +274,6 @@ interface MusicDao {
     """)
     fun getLocalSongsForPlaylist(playlistId: String): Flow<List<LocalSongEntity>>
 
-    /**
-     * Direct JOIN query fetching cached songs in a playlist sorted by orderIndex.
-     */
     @Query("""
         SELECT cs.* FROM cached_songs cs
         INNER JOIN playlist_songs ps ON cs.id = ps.songId
@@ -331,7 +282,6 @@ interface MusicDao {
     """)
     fun getCachedSongsForPlaylist(playlistId: String): Flow<List<CachedSongEntity>>
 
-    // Transaction-based relation queries
     @Transaction
     @Query("SELECT * FROM playlists WHERE id = :playlistId")
     fun getPlaylistWithOfflineSongs(playlistId: String): Flow<PlaylistWithOfflineSongs?>
@@ -343,10 +293,6 @@ interface MusicDao {
     @Transaction
     @Query("SELECT * FROM playlists ORDER BY createdAt DESC")
     fun getAllPlaylistsWithSongs(): Flow<List<PlaylistWithSongs>>
-
-    // =====================================================================
-    // FAVORITES & DOWNLOADS & HISTORY & CACHE
-    // =====================================================================
 
     @Query("SELECT * FROM favorite_songs ORDER BY addedAt DESC")
     fun getFavoriteSongs(): Flow<List<FavoriteSongEntity>>
@@ -377,6 +323,9 @@ interface MusicDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addToHistory(entity: HistoryEntity)
+
+    @Query("DELETE FROM history")
+    suspend fun clearHistory()
 
     @Query("SELECT * FROM cached_songs ORDER BY title ASC")
     fun getAllCachedSongs(): Flow<List<CachedSongEntity>>
@@ -454,13 +403,13 @@ fun Song.toLocalEntity(
         durationMs = durationMs,
         categoryName = category.name,
         language = language,
-        localAudioPath = localAudioPath.ifEmpty { "file:///android_asset/audio/${id}.mp3" },
+        localAudioPath = localAudioPath,
         localCoverPath = localCoverPath,
         remoteAudioUrl = audioUrl,
         remoteCoverUrl = coverUrl,
         mimeType = "audio/mpeg",
         bitrate = "320 kbps",
-        fileSizeBytes = if (fileSizeBytes > 0) fileSizeBytes else (durationMs * 40),
+        fileSizeBytes = fileSizeBytes,
         audioQuality = audioQuality,
         isAvailableOffline = isOffline,
         releaseYear = releaseYear,
@@ -491,5 +440,3 @@ fun LocalSongEntity.toSong(): Song {
         isNewRelease = false
     )
 }
-
-
