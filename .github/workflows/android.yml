@@ -10,6 +10,8 @@ jobs:
   build:
     name: Build, Test & Package Android App
     runs-on: ubuntu-latest
+    env:
+      JAMENDO_CLIENT_ID: ${{ secrets.JAMENDO_CLIENT_ID }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
