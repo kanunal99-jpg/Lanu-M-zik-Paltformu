@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -46,7 +47,9 @@ private fun LanuQuickWidgetContent(snapshot: PlayerStateStore.Snapshot) {
     val openLibrary = actionStartActivity(Intent(Intent.ACTION_VIEW).apply { data = android.net.Uri.parse("lanumusic://library") })
 
     Column(
-        modifier = GlanceModifier.fillMaxSize().background(Color.rgb(18, 18, 22)).padding(14.dp),
+        modifier = GlanceModifier.fillMaxSize()
+            .background(ComposeColor(0xFF121216), ComposeColor(0xFF121216))
+            .padding(14.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
         Text("LANU Müzik", style = TextStyle(color = ColorProvider(Color.WHITE), fontSize = 16.sp))
