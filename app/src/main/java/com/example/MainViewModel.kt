@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -120,6 +122,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             allSongs.collect { songs ->
                 playerController.restoreStateFromCatalog(songs)
             }
+        }
+        viewModelScope.launch {
+            _searchQuery
+                .map(::normalizeSearch)
+                .distinctUntilChanged()
+                .debounce(350)
+                .collect { query ->
+                    if (query.length < 2) return@collect
+                    repository.searchRemoteCatalog(query)
+                        .onSuccess { remoteSongs ->
+                            if (remoteSongs.isNotEmpty()) {
+                                repository.cacheSongs(remoteSongs)
+                            }
+                        }
+                        .onFailure { error ->
+                            Log.w("MainViewModel", "Verified remote search failed; local/cache results remain active", error)
+                        }
+                }
         }
     }
 
