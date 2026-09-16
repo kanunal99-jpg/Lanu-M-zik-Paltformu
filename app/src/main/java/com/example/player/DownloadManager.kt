@@ -42,48 +42,51 @@ class DownloadManager(private val context: Context) {
         if (activeJobs.containsKey(song.id)) return
         val job = scope.launch {
             var target: File? = null
+            var temp: File? = null
             try {
                 updateState(song.id, DownloadStatus.QUEUED, 0f, 0L, 0L)
                 val uri = Uri.parse(song.audioUrl)
                 if (!OfflineSourcePolicy.isAuthorized(uri)) throw IllegalStateException("REMOTE_DOWNLOAD_NOT_AUTHORIZED")
                 val offlineDir = File(context.filesDir, "offline_audio")
                 check(offlineDir.exists() || offlineDir.mkdirs()) { "OFFLINE_STORAGE_UNAVAILABLE" }
-                val temp = File(offlineDir, "${song.id}.part")
+                temp = File(offlineDir, "${song.id}.part")
                 target = File(offlineDir, "${song.id}.bin")
                 temp.delete()
 
-                openSource(uri).use { source ->
+                val source = openSource(uri)
+                source.stream.use { stream ->
                     val total = source.contentLength
                     updateState(song.id, DownloadStatus.DOWNLOADING, 0f, 0L, total)
-                    source.stream.use { stream ->
-                        var copied = 0L
-                        temp.outputStream().use { out ->
-                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                            while (true) {
-                                ensureActive()
-                                val read = stream.read(buffer)
-                                if (read < 0) break
-                                out.write(buffer, 0, read)
-                                copied += read
-                                val progress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else 0f
-                                updateState(song.id, DownloadStatus.DOWNLOADING, progress, copied, total)
-                            }
+                    var copied = 0L
+                    temp!!.outputStream().use { out ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            ensureActive()
+                            val read = stream.read(buffer)
+                            if (read < 0) break
+                            out.write(buffer, 0, read)
+                            copied += read
+                            val progress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else 0f
+                            updateState(song.id, DownloadStatus.DOWNLOADING, progress, copied, total)
                         }
-                        if (copied == 0L) throw IllegalStateException("EMPTY_AUDIO_SOURCE")
-                        if (target.exists()) target.delete()
-                        check(temp.renameTo(target)) { "ATOMIC_MOVE_FAILED" }
-                        val checksum = calculateSHA256(target)
-                        val completed = DownloadProgress(song.id, DownloadStatus.COMPLETED, 1f, copied, copied, target.absolutePath, checksum, null)
-                        updateState(completed)
-                        onFinished(completed)
                     }
+                    if (copied == 0L) throw IllegalStateException("EMPTY_AUDIO_SOURCE")
+                    if (target!!.exists()) target!!.delete()
+                    check(temp!!.renameTo(target!!)) { "ATOMIC_MOVE_FAILED" }
+                    val checksum = calculateSHA256(target!!)
+                    val completed = DownloadProgress(song.id, DownloadStatus.COMPLETED, 1f, copied, copied, target!!.absolutePath, checksum, null)
+                    updateState(completed)
+                    onFinished(completed)
+                    temp = null
                 }
             } catch (e: CancellationException) {
+                temp?.delete()
                 target?.delete()
                 val state = DownloadProgress(song.id, DownloadStatus.CANCELLED, 0f, 0L, 0L, error = "Cancelled")
                 updateState(state)
                 onFinished(state)
             } catch (e: Exception) {
+                temp?.delete()
                 target?.delete()
                 val state = DownloadProgress(song.id, DownloadStatus.FAILED, 0f, 0L, 0L, error = e.message ?: "DOWNLOAD_FAILED")
                 Log.e("DownloadManager", "Download failed for ${song.id}", e)
