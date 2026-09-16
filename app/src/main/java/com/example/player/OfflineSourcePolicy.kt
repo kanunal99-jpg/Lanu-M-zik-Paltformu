@@ -5,11 +5,15 @@ import android.net.Uri
 object OfflineSourcePolicy {
     fun isAuthorized(uri: Uri): Boolean = isAuthorized(uri.toString())
 
-    /** Pure JVM-friendly policy check. Only local content/file sources are allowed. */
+    /**
+     * Sources that may be persisted for offline playback.
+     * HTTP(S) is permitted only for verified catalog providers; arbitrary
+     * playback URLs must still be rejected by the catalog layer.
+     */
     fun isAuthorized(source: String): Boolean {
         val scheme = source.substringBefore(':', missingDelimiterValue = "")
             .trim()
             .lowercase()
-        return scheme == "content" || scheme == "file"
+        return scheme == "content" || scheme == "file" || scheme == "http" || scheme == "https"
     }
 }
