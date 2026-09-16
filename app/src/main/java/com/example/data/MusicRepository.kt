@@ -2,7 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
-import com.aistudio.lanumusic.kpxzqa.BuildConfig
+import com.example.BuildConfig
 import com.example.auth.AuthResult
 import com.example.auth.LocalAuthBackend
 import com.example.data.catalog.AlternativeCatalogProvider
@@ -10,7 +10,6 @@ import com.example.data.catalog.CachedCatalogProvider
 import com.example.data.catalog.CatalogProvider
 import com.example.data.catalog.LocalCatalogProvider
 import com.example.data.catalog.PrimaryCatalogProvider
-import com.example.auth.AuthSession
 import com.example.model.Artist
 import com.example.model.AudioQuality
 import com.example.model.FriendActivity
@@ -113,7 +112,7 @@ class MusicRepository(context: Context) {
 
         if (fetched.isNotEmpty()) {
             cacheSongs(fetched.values.toList())
-            _songs.value = ( _songs.value + fetched.values ).distinctBy { it.id }
+            _songs.value = (_songs.value + fetched.values).distinctBy { it.id }
             catalogPreferences.edit().putLong("last_sync_ms", now).apply()
             Log.i("MusicRepository", "Verified catalog refresh added ${fetched.size} songs")
         }
