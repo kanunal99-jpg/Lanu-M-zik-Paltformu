@@ -102,19 +102,21 @@ class MusicRepository(context: Context) {
         )
         val fetched = LinkedHashMap<String, Song>()
         queries.forEach { query ->
-            primaryCatalogProvider.searchSongs(query)
+            catalogProvider.searchSongs(query)
                 .onSuccess { songs -> songs.forEach { fetched[it.id] = it } }
-                .onFailure { error -> Log.w("MusicRepository", "Catalog query failed: $query", error) }
+                .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain failed: $query", error) }
         }
-        primaryCatalogProvider.getLatestReleases(null)
+        catalogProvider.getLatestReleases(null)
             .onSuccess { songs -> songs.forEach { fetched[it.id] = it } }
-            .onFailure { error -> Log.w("MusicRepository", "Latest catalog refresh failed", error) }
+            .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain latest refresh failed", error) }
 
         if (fetched.isNotEmpty()) {
             cacheSongs(fetched.values.toList())
             _songs.value = (_songs.value + fetched.values).distinctBy { it.id }
             catalogPreferences.edit().putLong("last_sync_ms", now).apply()
             Log.i("MusicRepository", "Verified catalog refresh added ${fetched.size} songs")
+        } else {
+            Log.w("MusicRepository", "Catalog refresh returned no verified songs; keeping existing catalog")
         }
     }
 
