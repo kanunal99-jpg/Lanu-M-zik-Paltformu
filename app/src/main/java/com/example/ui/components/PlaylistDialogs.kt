@@ -285,7 +285,7 @@ fun PlaylistDetailSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, songs) }.padding(10.dp)
                     ) {
-                        AsyncImage(song.coverUrl, song.title, ContentScale.Crop, Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)))
+                        AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(song.title, color = LanuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
