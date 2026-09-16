@@ -114,10 +114,17 @@ class DownloadManager(private val context: Context) {
         else -> null
     }
 
-    private fun resolveSourceLength(resolver: ContentResolver, uri: Uri): Long = when (uri.scheme?.lowercase()) {
-        "file" -> File(uri.path ?: return -1L).length()
-        "content" -> runCatching { resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor -> descriptor.length } ?: -1L }.getOrDefault(-1L)
-        else -> -1L
+    private fun resolveSourceLength(resolver: ContentResolver, uri: Uri): Long {
+        return when (uri.scheme?.lowercase()) {
+            "file" -> {
+                val path = uri.path ?: return -1L
+                File(path).length()
+            }
+            "content" -> runCatching {
+                resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor -> descriptor.length } ?: -1L
+            }.getOrDefault(-1L)
+            else -> -1L
+        }
     }
 
     private fun updateState(state: DownloadProgress) { _downloadStates.value = _downloadStates.value.toMutableMap().also { it[state.songId] = state } }
