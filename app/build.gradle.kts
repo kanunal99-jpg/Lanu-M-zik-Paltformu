@@ -17,6 +17,9 @@ android {
     versionCode = 1
     versionName = "1.0"
 
+    val jamendoClientId = System.getenv("JAMENDO_CLIENT_ID") ?: ""
+    buildConfigField("String", "JAMENDO_CLIENT_ID", "\"$jamendoClientId\"")
+
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
@@ -53,14 +56,10 @@ android {
   }
 }
 
-// Firebase configuration is required for production and is intentionally not fabricated in CI.
-// When a real app/google-services.json exists, apply the Google Services plugin normally.
 if (file("google-services.json").isFile) {
   apply(plugin = "com.google.gms.google-services")
 }
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
 secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
