@@ -23,6 +23,7 @@ class JamendoCatalogProviderTest {
             .put("duration", 180)
             .put("releasedate", "2026-01-02")
             .put("album_image", "https://usercontent.jamendo.com/cover.jpg")
+            .put("image", "https://usercontent.jamendo.com/cover-track.jpg")
             .put("audio", "https://prod-1.storage.jamendo.com/?trackid=123&format=mp32")
             .put(
                 "musicinfo",
@@ -54,5 +55,29 @@ class JamendoCatalogProviderTest {
 
         val songs = JamendoSongMapper.mapSongs(JSONArray().put(item))
         assertTrue(songs.isEmpty())
+    }
+
+    @Test
+    fun maps_verified_artist_response_without_inventing_metadata() {
+        val artist = JSONObject()
+            .put("id", "55")
+            .put("name", "Gerçek Sanatçı")
+            .put("image", "https://usercontent.jamendo.com/artist.jpg")
+            .put("website", "https://example.test")
+
+        val artists = JamendoArtistMapper.mapArtists(JSONArray().put(artist))
+        assertEquals(1, artists.size)
+        assertEquals("jamendo:55", artists.single().id)
+        assertEquals("Gerçek Sanatçı", artists.single().name)
+        assertEquals("https://usercontent.jamendo.com/artist.jpg", artists.single().imageUrl)
+        assertEquals("", artists.single().bio)
+    }
+
+    @Test
+    fun drops_artist_entries_without_id_or_name() {
+        val missingId = JSONObject().put("name", "Artist")
+        val missingName = JSONObject().put("id", "99")
+        val artists = JamendoArtistMapper.mapArtists(JSONArray().put(missingId).put(missingName))
+        assertTrue(artists.isEmpty())
     }
 }
