@@ -7,13 +7,17 @@ object OfflineSourcePolicy {
 
     /**
      * Sources that may be persisted for offline playback.
-     * HTTP(S) is permitted only for verified catalog providers; arbitrary
-     * playback URLs must still be rejected by the catalog layer.
+     *
+     * Offline persistence is restricted to media already available to the
+     * device (MediaStore/content URIs or local files). Remote HTTP(S) URLs
+     * are intentionally rejected here; a verified catalog may use remote
+     * playback through its playback/source-validation layer, but arbitrary
+     * remote URLs must never become offline files through this policy.
      */
     fun isAuthorized(source: String): Boolean {
         val scheme = source.substringBefore(':', missingDelimiterValue = "")
             .trim()
             .lowercase()
-        return scheme == "content" || scheme == "file" || scheme == "http" || scheme == "https"
+        return scheme == "content" || scheme == "file"
     }
 }
