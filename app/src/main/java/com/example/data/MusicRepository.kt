@@ -120,7 +120,12 @@ class MusicRepository(context: Context) {
         }
     }
 
-    suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query)
+    suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).onSuccess { remoteSongs ->
+        if (remoteSongs.isNotEmpty()) {
+            cacheSongs(remoteSongs)
+            _songs.value = (_songs.value + remoteSongs).distinctBy { it.id }
+        }
+    }
 
     private suspend fun migrateLegacyLibraryIfNeeded() {
         val session = userLibraryService.session.value ?: return
