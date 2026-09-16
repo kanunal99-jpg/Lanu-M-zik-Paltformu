@@ -53,11 +53,11 @@ class JamendoCatalogProvider(
     }
 
     override suspend fun searchSongs(query: String): Result<List<Song>> =
-        request(mapOf("search" to query, "type" to "single albumtrack"))
+        request(mapOf("search" to query, "track_type" to "single albumtrack"))
             .map { JamendoSongMapper.mapSongs(it) }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> =
-        request(mapOf("search" to query, "type" to "single albumtrack", "groupby" to "artist_id"))
+        request(mapOf("search" to query, "track_type" to "single albumtrack", "groupby" to "artist_id"))
             .map { JamendoSongMapper.mapSongs(it).map(::toArtist) }
 
     override suspend fun getSong(id: String): Result<Song?> =
@@ -69,7 +69,7 @@ class JamendoCatalogProvider(
             .map { JamendoSongMapper.mapSongs(it).firstOrNull()?.let(::toArtist) }
 
     override suspend fun getAlbum(id: String): Result<Album?> =
-        request(mapOf("album_id" to id.removePrefix("jamendo:"), "type" to "single albumtrack"))
+        request(mapOf("album_id" to id.removePrefix("jamendo:"), "track_type" to "single albumtrack"))
             .map { results ->
                 val songs = JamendoSongMapper.mapSongs(results)
                 songs.firstOrNull()?.let { first ->
@@ -87,7 +87,7 @@ class JamendoCatalogProvider(
             }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
-        request(mapOf("order" to "releasedate_desc", "type" to "single albumtrack"))
+        request(mapOf("order" to "releasedate_desc", "track_type" to "single albumtrack"))
             .map { results ->
                 JamendoSongMapper.mapSongs(results).filter { song ->
                     since == null || song.releaseYear >= since.atZone(ZoneOffset.UTC).year
