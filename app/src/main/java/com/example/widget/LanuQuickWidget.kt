@@ -46,7 +46,7 @@ private fun LanuQuickWidgetContent(snapshot: PlayerStateStore.Snapshot) {
     val openLibrary = actionStartActivity(Intent(Intent.ACTION_VIEW).apply { data = android.net.Uri.parse("lanumusic://library") })
 
     Column(
-        modifier = GlanceModifier.fillMaxSize().background(ColorProvider(Color.rgb(18, 18, 22))).padding(14.dp),
+        modifier = GlanceModifier.fillMaxSize().background(Color.rgb(18, 18, 22)).padding(14.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
         Text("LANU Müzik", style = TextStyle(color = ColorProvider(Color.WHITE), fontSize = 16.sp))
