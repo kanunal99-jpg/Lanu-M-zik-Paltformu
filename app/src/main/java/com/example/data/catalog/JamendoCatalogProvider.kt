@@ -26,11 +26,12 @@ class JamendoCatalogProvider(
 ) : CatalogProvider {
 
     companion object {
-        private const val BASE_URL = "https://api.jamendo.com/v3.0/tracks/"
+        private const val TRACKS_URL = "https://api.jamendo.com/v3.0/tracks/"
+        private const val ARTISTS_URL = "https://api.jamendo.com/v3.0/artists/"
         private const val DEFAULT_LIMIT = 40
     }
 
-    private suspend fun request(params: Map<String, String>): Result<JSONArray> = withContext(Dispatchers.IO) {
+    private suspend fun requestJson(baseUrl: String, params: Map<String, String>): Result<JSONObject> = withContext(Dispatchers.IO) {
         if (clientId.isBlank()) {
             return@withContext Result.failure(IllegalStateException("JAMENDO_CLIENT_ID_NOT_CONFIGURED"))
         }
@@ -38,7 +39,8 @@ class JamendoCatalogProvider(
             val encoded = params.entries.joinToString("&") { (key, value) ->
                 "${encode(key)}=${encode(value)}"
             }
-            val url = "$BASE_URL?client_id=${encode(clientId)}&format=json&audioformat=mp32&imagesize=300&include=musicinfo&limit=$DEFAULT_LIMIT&$encoded"
+            val separator = if (baseUrl.contains('?')) '&' else '?'
+            val url = "$baseUrl${separator}client_id=${encode(clientId)}&format=json&limit=$DEFAULT_LIMIT&$encoded"
             val request = Request.Builder().url(url).get().build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) error("JAMENDO_HTTP_${response.code}")
@@ -47,29 +49,35 @@ class JamendoCatalogProvider(
                 if (headers?.optInt("code", -1) != 0) {
                     error(headers?.optString("error_message").orEmpty().ifBlank { "JAMENDO_API_ERROR" })
                 }
-                json.optJSONArray("results") ?: JSONArray()
+                json
             }
         }
     }
 
+    private suspend fun requestTracks(params: Map<String, String>): Result<JSONArray> =
+        requestJson(TRACKS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
+
+    private suspend fun requestArtists(params: Map<String, String>): Result<JSONArray> =
+        requestJson(ARTISTS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
+
     override suspend fun searchSongs(query: String): Result<List<Song>> =
-        request(mapOf("search" to query, "type" to "single albumtrack"))
+        requestTracks(mapOf("search" to query, "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo"))
             .map { JamendoSongMapper.mapSongs(it) }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> =
-        request(mapOf("search" to query, "type" to "single albumtrack", "groupby" to "artist_id"))
-            .map { JamendoSongMapper.mapSongs(it).map(::toArtist) }
+        requestArtists(mapOf("namesearch" to query, "hasimage" to "true", "imagesize" to "300"))
+            .map { JamendoArtistMapper.mapArtists(it) }
 
     override suspend fun getSong(id: String): Result<Song?> =
-        request(mapOf("id" to id.removePrefix("jamendo:")))
+        requestTracks(mapOf("id" to id.removePrefix("jamendo:"), "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo"))
             .map { JamendoSongMapper.mapSongs(it).firstOrNull() }
 
     override suspend fun getArtist(id: String): Result<Artist?> =
-        request(mapOf("artist_id" to id.removePrefix("jamendo:"), "groupby" to "artist_id"))
-            .map { JamendoSongMapper.mapSongs(it).firstOrNull()?.let(::toArtist) }
+        requestArtists(mapOf("id" to id.removePrefix("jamendo:"), "hasimage" to "true", "imagesize" to "300"))
+            .map { JamendoArtistMapper.mapArtists(it).firstOrNull() }
 
     override suspend fun getAlbum(id: String): Result<Album?> =
-        request(mapOf("album_id" to id.removePrefix("jamendo:"), "type" to "single albumtrack"))
+        requestTracks(mapOf("album_id" to id.removePrefix("jamendo:"), "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo"))
             .map { results ->
                 val songs = JamendoSongMapper.mapSongs(results)
                 songs.firstOrNull()?.let { first ->
@@ -87,23 +95,35 @@ class JamendoCatalogProvider(
             }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
-        request(mapOf("order" to "releasedate_desc", "type" to "single albumtrack"))
+        requestTracks(mapOf("order" to "releasedate_desc", "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo"))
             .map { results ->
                 JamendoSongMapper.mapSongs(results).filter { song ->
                     since == null || song.releaseYear >= since.atZone(ZoneOffset.UTC).year
                 }
             }
 
-    private fun toArtist(song: Song): Artist = Artist(
-        id = song.artistId,
-        name = song.artist,
-        genre = song.category.titleTr,
-        bio = "",
-        imageUrl = song.coverUrl,
-        monthlyListeners = ""
-    )
-
     private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
+}
+
+internal object JamendoArtistMapper {
+    fun mapArtists(results: JSONArray): List<Artist> = buildList {
+        for (index in 0 until results.length()) {
+            val item = results.optJSONObject(index) ?: continue
+            val id = item.optString("id").trim()
+            val name = item.optString("name").trim()
+            if (id.isBlank() || name.isBlank()) continue
+            add(
+                Artist(
+                    id = "jamendo:$id",
+                    name = name,
+                    genre = "",
+                    bio = "",
+                    imageUrl = item.optString("image").trim(),
+                    monthlyListeners = ""
+                )
+            )
+        }
+    }
 }
 
 internal object JamendoSongMapper {
