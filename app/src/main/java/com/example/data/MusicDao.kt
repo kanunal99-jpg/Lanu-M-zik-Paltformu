@@ -1,7 +1,6 @@
 package com.example.data
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -188,6 +187,9 @@ interface MusicDao {
 
     @Query("SELECT * FROM local_songs WHERE isAvailableOffline = 1 AND (LOWER(title) LIKE '%' || LOWER(:query) || '%' OR LOWER(artist) LIKE '%' || LOWER(:query) || '%' OR LOWER(album) LIKE '%' || LOWER(:query) || '%') ORDER BY title ASC")
     fun searchOfflineSongs(query: String): Flow<List<LocalSongEntity>>
+
+    @Query("SELECT * FROM local_songs WHERE LOWER(artist) = LOWER(:artist) AND isAvailableOffline = 1 ORDER BY title ASC")
+    fun getOfflineSongsByArtist(artist: String): Flow<List<LocalSongEntity>>
 
     @Query("SELECT * FROM local_songs WHERE isAvailableOffline = 1 AND LOWER(album) = LOWER(:album) ORDER BY title ASC")
     fun getOfflineSongsByAlbum(album: String): Flow<List<LocalSongEntity>>
