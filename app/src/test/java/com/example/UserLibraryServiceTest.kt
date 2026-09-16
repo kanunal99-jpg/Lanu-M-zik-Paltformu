@@ -105,19 +105,19 @@ class UserLibraryServiceTest {
             playlists.getOrPut(userId) { mutableListOf() }.add(item)
             return item
         }
-        override suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(name = name, updatedAt = nowMs) else it }.toMutableList() }
+        override suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(name = name, updatedAtMs = nowMs) else it }.toMutableList() }
         override suspend fun reorderPlaylist(userId: String, playlistId: String, fromIndex: Int, toIndex: Int, nowMs: Long) {
             playlists[userId] = playlists[userId].orEmpty().map { playlist ->
                 if (playlist.id != playlistId) playlist else {
                     val ids = playlist.songIds.toMutableList()
                     if (fromIndex in ids.indices && toIndex in ids.indices) ids.add(toIndex, ids.removeAt(fromIndex))
-                    playlist.copy(songIds = ids, updatedAt = nowMs)
+                    playlist.copy(songIds = ids, updatedAtMs = nowMs)
                 }
             }.toMutableList()
         }
         override suspend fun deletePlaylist(userId: String, playlistId: String) { playlists[userId]?.removeAll { it.id == playlistId } }
-        override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = (it.songIds + songId).distinct()) else it }.toMutableList() }
-        override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = it.songIds.filterNot { id -> id == songId }) else it }.toMutableList() }
+        override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = (it.songIds + songId).distinct(), updatedAtMs = nowMs) else it }.toMutableList() }
+        override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) { playlists[userId] = playlists[userId].orEmpty().map { if (it.id == playlistId) it.copy(songIds = it.songIds.filterNot { id -> id == songId }, updatedAtMs = System.currentTimeMillis()) else it }.toMutableList() }
         override suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long) { history.getOrPut(userId) { mutableListOf() }.apply { removeAll { it.songId == songId }; add(0, com.example.data.HistoryRecord(songId, playedAtMs)) } }
         override suspend fun clearHistory(userId: String) { history.remove(userId) }
         override suspend fun clearUser(userId: String) { data.remove(userId); playlists.remove(userId); history.remove(userId) }
