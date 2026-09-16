@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.io.FileInputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
@@ -49,31 +51,32 @@ class DownloadManager(private val context: Context) {
                 val temp = File(offlineDir, "${song.id}.part")
                 target = File(offlineDir, "${song.id}.bin")
                 temp.delete()
-                val resolver = context.contentResolver
-                val total = resolveSourceLength(resolver, uri)
-                val input = openInputStream(resolver, uri) ?: throw IllegalStateException("SOURCE_NOT_READABLE")
-                input.use { stream ->
-                    var copied = 0L
+
+                openSource(uri).use { source ->
+                    val total = source.contentLength
                     updateState(song.id, DownloadStatus.DOWNLOADING, 0f, 0L, total)
-                    temp.outputStream().use { out ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        while (true) {
-                            ensureActive()
-                            val read = stream.read(buffer)
-                            if (read < 0) break
-                            out.write(buffer, 0, read)
-                            copied += read
-                            val progress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else 0f
-                            updateState(song.id, DownloadStatus.DOWNLOADING, progress, copied, total)
+                    source.stream.use { stream ->
+                        var copied = 0L
+                        temp.outputStream().use { out ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            while (true) {
+                                ensureActive()
+                                val read = stream.read(buffer)
+                                if (read < 0) break
+                                out.write(buffer, 0, read)
+                                copied += read
+                                val progress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else 0f
+                                updateState(song.id, DownloadStatus.DOWNLOADING, progress, copied, total)
+                            }
                         }
+                        if (copied == 0L) throw IllegalStateException("EMPTY_AUDIO_SOURCE")
+                        if (target.exists()) target.delete()
+                        check(temp.renameTo(target)) { "ATOMIC_MOVE_FAILED" }
+                        val checksum = calculateSHA256(target)
+                        val completed = DownloadProgress(song.id, DownloadStatus.COMPLETED, 1f, copied, copied, target.absolutePath, checksum, null)
+                        updateState(completed)
+                        onFinished(completed)
                     }
-                    if (copied == 0L) throw IllegalStateException("EMPTY_AUDIO_SOURCE")
-                    if (target.exists()) target.delete()
-                    check(temp.renameTo(target)) { "ATOMIC_MOVE_FAILED" }
-                    val checksum = calculateSHA256(target)
-                    val completed = DownloadProgress(song.id, DownloadStatus.COMPLETED, 1f, copied, copied, target.absolutePath, checksum, null)
-                    updateState(completed)
-                    onFinished(completed)
                 }
             } catch (e: CancellationException) {
                 target?.delete()
@@ -108,24 +111,45 @@ class DownloadManager(private val context: Context) {
         return deleted
     }
 
-    private fun openInputStream(resolver: ContentResolver, uri: Uri) = when (uri.scheme?.lowercase()) {
-        "content" -> resolver.openInputStream(uri)
-        "file" -> FileInputStream(File(uri.path ?: throw IllegalArgumentException("INVALID_FILE_URI")))
-        else -> null
-    }
+    private data class OpenedSource(val stream: java.io.InputStream, val contentLength: Long)
 
-    private fun resolveSourceLength(resolver: ContentResolver, uri: Uri): Long {
+    private fun openSource(uri: Uri): OpenedSource {
         return when (uri.scheme?.lowercase()) {
+            "content" -> OpenedSource(
+                context.contentResolver.openInputStream(uri) ?: throw IllegalStateException("SOURCE_NOT_READABLE"),
+                resolveSourceLength(context.contentResolver, uri)
+            )
             "file" -> {
-                val path = uri.path ?: return -1L
-                File(path).length()
+                val file = File(uri.path ?: throw IllegalArgumentException("INVALID_FILE_URI"))
+                OpenedSource(FileInputStream(file), file.length())
             }
-            "content" -> runCatching {
-                resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor -> descriptor.length } ?: -1L
-            }.getOrDefault(-1L)
-            else -> -1L
+            "http", "https" -> openHttpSource(uri)
+            else -> throw IllegalStateException("UNSUPPORTED_SOURCE_SCHEME")
         }
     }
+
+    private fun openHttpSource(uri: Uri): OpenedSource {
+        val connection = (URL(uri.toString()).openConnection() as HttpURLConnection).apply {
+            connectTimeout = HTTP_TIMEOUT_MS
+            readTimeout = HTTP_TIMEOUT_MS
+            instanceFollowRedirects = true
+            requestMethod = "GET"
+            setRequestProperty("Accept", "audio/*")
+            setRequestProperty("User-Agent", "LANU-Music/1.0")
+        }
+        val code = connection.responseCode
+        if (code !in 200..299) {
+            connection.disconnect()
+            throw IllegalStateException("HTTP_AUDIO_SOURCE_$code")
+        }
+        val stream = connection.inputStream
+        val length = connection.contentLengthLong
+        return OpenedSource(stream, length)
+    }
+
+    private fun resolveSourceLength(resolver: ContentResolver, uri: Uri): Long = runCatching {
+        resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor -> descriptor.length } ?: -1L
+    }.getOrDefault(-1L)
 
     private fun updateState(state: DownloadProgress) { _downloadStates.value = _downloadStates.value.toMutableMap().also { it[state.songId] = state } }
     private fun updateState(songId: String, status: DownloadStatus, progress: Float, bytesDownloaded: Long, totalBytes: Long, localFilePath: String? = null, checksum: String? = null, error: String? = null) = updateState(DownloadProgress(songId, status, progress, bytesDownloaded, totalBytes, localFilePath, checksum, error))
@@ -137,5 +161,9 @@ class DownloadManager(private val context: Context) {
             while (true) { val read = input.read(buffer); if (read < 0) break; digest.update(buffer, 0, read) }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    companion object {
+        private const val HTTP_TIMEOUT_MS = 20_000
     }
 }
