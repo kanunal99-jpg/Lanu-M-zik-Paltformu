@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 
 class AudioPlayerController(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -73,7 +74,7 @@ class AudioPlayerController(private val context: Context) {
             return
         }
         val song = catalog.firstOrNull { it.id == snapshot.songId }
-        if (song == null || song.audioUrl.isBlank() || mediaController == null) {
+        if (song == null || playableUri(song) == null || mediaController == null) {
             if (song == null) return
             hasAttemptedRestore = true
             pendingRestore = null
@@ -147,11 +148,11 @@ class AudioPlayerController(private val context: Context) {
     fun setQueue(songs: List<Song>, startIndex: Int = 0, autoPlay: Boolean = true) {
         if (songs.isEmpty()) return
         val requestedSong = songs.getOrNull(startIndex)
-        if (requestedSong == null || requestedSong.audioUrl.isBlank()) {
+        if (requestedSong == null || playableUri(requestedSong) == null) {
             showUnavailablePlayback()
             return
         }
-        val playableSongs = songs.filter { it.audioUrl.isNotBlank() }
+        val playableSongs = songs.filter { playableUri(it) != null }
         if (playableSongs.isEmpty()) {
             showUnavailablePlayback()
             return
@@ -166,7 +167,7 @@ class AudioPlayerController(private val context: Context) {
         val mediaItems = playableSongs.map { song ->
             MediaItem.Builder()
                 .setMediaId(song.id)
-                .setUri(Uri.parse(song.audioUrl))
+                .setUri(playableUri(song)!!)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(song.title)
@@ -182,6 +183,13 @@ class AudioPlayerController(private val context: Context) {
         mediaController?.prepare()
         if (autoPlay) mediaController?.play()
         persistState()
+    }
+
+    /** Local offline copy is authoritative when present; otherwise use the verified catalog URI. */
+    private fun playableUri(song: Song): Uri? {
+        val offline = File(context.filesDir, "offline_audio/${song.id}.bin")
+        if (offline.isFile && offline.length() > 0L) return Uri.fromFile(offline)
+        return song.audioUrl.takeIf { it.isNotBlank() }?.let(Uri::parse)
     }
 
     private fun showUnavailablePlayback() {
