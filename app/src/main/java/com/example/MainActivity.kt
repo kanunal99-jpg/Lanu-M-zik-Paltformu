@@ -50,7 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.model.Album
 import com.example.ui.components.AddToPlaylistDialog
+import com.example.ui.components.AlbumDetailSheet
 import com.example.ui.components.ArtistDetailSheet
 import com.example.ui.components.CreatePlaylistDialog
 import com.example.ui.components.EqualizerView
@@ -79,6 +81,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val incomingUri = remember(context) { (context as? Activity)?.intent?.data }
     val deepLink = remember(incomingUri) { LanuDeepLink.parse(incomingUri) }
     var handledResourceRoute by remember(incomingUri) { mutableStateOf<LanuDeepLink?>(null) }
+    var selectedAlbum by remember { mutableStateOf<Album?>(null) }
 
     val permissionsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.scanLocalMusic() }
     LaunchedEffect(Unit) {
@@ -176,7 +179,23 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
 
         if (showCreatePlaylistDialog) CreatePlaylistDialog(onDismiss = { viewModel.closeCreatePlaylistDialog() }, onCreate = { name, desc -> viewModel.createPlaylist(name, desc) })
         songToAddToPlaylist?.let { song -> AddToPlaylistDialog(song = song, playlists = playlists, onDismiss = { viewModel.closeAddToPlaylist() }, onSelectPlaylist = { plId -> viewModel.addSongToPlaylist(plId, song.id) }, onCreateNewPlaylist = { viewModel.closeAddToPlaylist(); viewModel.openCreatePlaylistDialog() }) }
-        selectedArtist?.let { artist -> ArtistDetailSheet(artist = artist, songs = viewModel.getSongsForArtist(artist.id), onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onShareArtist = { viewModel.shareArtist(context, artist) }, onBack = { viewModel.selectArtist(null) }) }
+        selectedArtist?.let { artist ->
+            ArtistDetailSheet(
+                artist = artist,
+                songs = viewModel.getSongsForArtist(artist.id),
+                onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
+                onSelectAlbum = { selectedAlbum = it },
+                onShareArtist = { viewModel.shareArtist(context, artist) },
+                onBack = { viewModel.selectArtist(null) }
+            )
+        }
+        selectedAlbum?.let { album ->
+            AlbumDetailSheet(
+                album = album,
+                onPlaySong = { song, queue -> viewModel.playSong(song, queue) },
+                onBack = { selectedAlbum = null }
+            )
+        }
         selectedPlaylist?.let { playlist ->
             val playlistSongsFlow = viewModel.getSongsForPlaylist(playlist.id).collectAsState(initial = emptyList())
             PlaylistDetailSheet(playlist = playlist, songs = playlistSongsFlow.value, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onRemoveSong = { songId -> viewModel.removeSongFromPlaylist(playlist.id, songId) }, onSharePlaylist = { viewModel.sharePlaylist(context, playlist) }, onDeletePlaylist = { viewModel.deletePlaylist(playlist.id) }, onBack = { viewModel.selectPlaylist(null) })
