@@ -6,6 +6,7 @@ import com.example.BuildConfig
 import com.example.auth.AuthResult
 import com.example.auth.LocalAuthBackend
 import com.example.data.catalog.AlternativeCatalogProvider
+import com.example.data.catalog.AudiusCatalogProvider
 import com.example.data.catalog.CachedCatalogProvider
 import com.example.data.catalog.CatalogProvider
 import com.example.data.catalog.LocalCatalogProvider
@@ -44,10 +45,12 @@ class MusicRepository(context: Context) {
         libraryBackend = LocalUserLibraryBackend(context)
     )
 
-    private val primaryCatalogProvider: CatalogProvider = PrimaryCatalogProvider(BuildConfig.JAMENDO_CLIENT_ID)
+    private val audiusCatalogProvider: CatalogProvider = AudiusCatalogProvider()
+    private val jamendoCatalogProvider: CatalogProvider = PrimaryCatalogProvider(BuildConfig.JAMENDO_CLIENT_ID)
     private val catalogProvider: CatalogProvider = AlternativeCatalogProvider(
         listOf(
-            primaryCatalogProvider,
+            audiusCatalogProvider,
+            jamendoCatalogProvider,
             CachedCatalogProvider(dao),
             LocalCatalogProvider(dao)
         )
@@ -88,10 +91,6 @@ class MusicRepository(context: Context) {
     }
 
     private suspend fun refreshRemoteCatalogIfStale() {
-        if (BuildConfig.JAMENDO_CLIENT_ID.isBlank()) {
-            Log.w("MusicRepository", "Verified remote catalog is disabled: JAMENDO_CLIENT_ID is not configured")
-            return
-        }
         val now = System.currentTimeMillis()
         val lastSync = catalogPreferences.getLong("last_sync_ms", 0L)
         if (now - lastSync < catalogRefreshIntervalMs) return
@@ -126,6 +125,8 @@ class MusicRepository(context: Context) {
             _songs.value = (_songs.value + remoteSongs).distinctBy { it.id }
         }
     }
+
+    suspend fun searchRemoteArtists(query: String): Result<List<Artist>> = catalogProvider.searchArtists(query)
 
     private suspend fun migrateLegacyLibraryIfNeeded() {
         val session = userLibraryService.session.value ?: return
