@@ -17,8 +17,10 @@ import java.time.ZoneOffset
 
 /**
  * Audius public read-only catalog adapter.
- * Audius documents most read endpoints as credential-free; stream URLs are
- * resolved through the official /tracks/{id}/stream endpoint.
+ * Audius documents read access and an official /tracks/{id}/stream endpoint.
+ * The REST payload currently uses snake_case in several fields, while SDK
+ * documentation exposes some equivalent camelCase names; the mapper accepts
+ * both representations and never fabricates missing track identity.
  */
 class AudiusCatalogProvider(
     private val httpClient: OkHttpClient = OkHttpClient()
@@ -57,26 +59,32 @@ class AudiusCatalogProvider(
 
     override suspend fun getSong(id: String): Result<Song?> =
         requestJson("/tracks/${id.removePrefix("audius:")}")
-            .map { AudiusSongMapper.mapSongs(JSONArray().put(it.optJSONObject("data"))).firstOrNull() }
+            .map { json ->
+                val data = json.optJSONObject("data") ?: return@map null
+                AudiusSongMapper.mapSongs(JSONArray().put(data)).firstOrNull()
+            }
 
     override suspend fun getArtist(id: String): Result<Artist?> =
         requestJson("/users/${id.removePrefix("audius:")}")
-            .map { AudiusArtistMapper.mapArtists(JSONArray().put(it.optJSONObject("data"))).firstOrNull() }
+            .map { json ->
+                val data = json.optJSONObject("data") ?: return@map null
+                AudiusArtistMapper.mapArtists(JSONArray().put(data)).firstOrNull()
+            }
 
     override suspend fun getAlbum(id: String): Result<Album?> =
         requestJson("/playlists/${id.removePrefix("audius_album:")}")
             .map { json ->
                 val data = json.optJSONObject("data") ?: return@map null
-                if (!data.optBoolean("isAlbum", false)) return@map null
+                if (!data.optBooleanAny("isAlbum", "is_album")) return@map null
                 val tracks = AudiusSongMapper.mapSongs(data.optJSONArray("tracks") ?: JSONArray())
                 if (tracks.isEmpty()) null else {
                     val first = tracks.first()
                     Album(
                         id = id,
-                        title = data.optString("playlist_name").ifBlank { data.optString("playlist_name", "Album") },
+                        title = data.optStringAny("playlist_name", "playlistName").ifBlank { "Album" },
                         artist = first.artist,
                         artistId = first.artistId,
-                        coverUrl = data.optString("playlist_image").ifBlank { first.coverUrl },
+                        coverUrl = data.optStringAny("playlist_image", "playlistImage").ifBlank { first.coverUrl },
                         releaseYear = first.releaseYear,
                         genre = first.category.titleTr,
                         songs = tracks
@@ -99,8 +107,8 @@ internal object AudiusArtistMapper {
     fun mapArtists(results: JSONArray): List<Artist> = buildList {
         for (index in 0 until results.length()) {
             val item = results.optJSONObject(index) ?: continue
-            val id = item.optString("id").trim().ifBlank { item.optString("user_id").trim() }
-            val name = item.optString("name").trim().ifBlank { item.optString("handle").trim() }
+            val id = item.optStringAny("id", "user_id").trim()
+            val name = item.optStringAny("name", "handle").trim()
             if (id.isBlank() || name.isBlank()) continue
             val image = item.optJSONObject("profile_picture")
             add(
@@ -108,8 +116,8 @@ internal object AudiusArtistMapper {
                     id = "audius:$id",
                     name = name,
                     genre = "",
-                    bio = item.optString("bio").trim(),
-                    imageUrl = image?.optString("_480x480").orEmpty().ifBlank { image?.optString("_150x150").orEmpty() },
+                    bio = item.optStringAny("bio").trim(),
+                    imageUrl = image?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty(),
                     monthlyListeners = ""
                 )
             )
@@ -123,26 +131,25 @@ internal object AudiusSongMapper {
     fun mapSongs(results: JSONArray): List<Song> = buildList {
         for (index in 0 until results.length()) {
             val item = results.optJSONObject(index) ?: continue
-            val id = item.optString("id").trim()
-            val title = item.optString("title").trim()
-            val streamable = item.opt("isStreamable")?.toString()?.lowercase() == "true"
-            val streamGated = item.optBoolean("isStreamGated", false)
-            val unlisted = item.optBoolean("isUnlisted", false)
-            if (id.isBlank() || title.isBlank() || !streamable || streamGated || unlisted) continue
+            val id = item.optStringAny("id").trim()
+            val title = item.optStringAny("title", "name").trim()
+            val streamableValue = item.optAny("isStreamable", "is_streamable")
+            val streamable = streamableValue?.toString()?.lowercase()?.let { it == "true" || it == "1" }
+            val streamGated = item.optBooleanAny("isStreamGated", "is_stream_gated")
+            val unlisted = item.optBooleanAny("isUnlisted", "is_unlisted")
+            if (id.isBlank() || title.isBlank() || streamable == false || streamGated || unlisted) continue
 
             val user = item.optJSONObject("user")
-            val artist = user?.optString("name").orEmpty().trim().ifBlank { user?.optString("handle").orEmpty().trim() }
-            val artistId = user?.optString("id").orEmpty().trim().ifBlank { user?.optString("user_id").orEmpty().trim() }
+            val artist = user?.optStringAny("name", "handle").orEmpty().trim().ifBlank { item.optStringAny("artist_name").trim() }
+            val artistId = user?.optStringAny("id", "user_id").orEmpty().trim().ifBlank { item.optStringAny("artist_id").trim() }
             if (artist.isBlank() || artistId.isBlank()) continue
 
-            val genre = item.optString("genre").trim().lowercase()
-            val tags = item.optJSONArray("tags").strings().map(String::lowercase)
+            val genre = item.optStringAny("genre").trim().lowercase()
+            val tags = item.optJSONArrayAny("tags").strings().map(String::lowercase)
             val category = inferCategory(genre, tags)
-            val releaseYear = item.optString("releaseDate").take(4).toIntOrNull() ?: 0
+            val releaseYear = item.optStringAny("releaseDate", "release_date", "releasedate").take(4).toIntOrNull() ?: 0
             val artwork = item.optJSONObject("artwork")
-            val coverUrl = artwork?.optString("_480x480").orEmpty().ifBlank {
-                artwork?.optString("_150x150").orEmpty()
-            }
+            val coverUrl = artwork?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty()
             val audioUrl = "$STREAM_BASE/$id/stream"
 
             add(
@@ -151,15 +158,15 @@ internal object AudiusSongMapper {
                     title = title,
                     artist = artist,
                     artistId = "audius:$artistId",
-                    album = item.optString("album_name").trim().ifBlank { "Single" },
-                    durationMs = item.optLong("duration", 0L) * 1000L,
+                    album = item.optStringAny("album_name", "albumName").trim().ifBlank { "Single" },
+                    durationMs = item.optLongAny("duration") * 1000L,
                     category = category,
                     language = inferLanguage(tags),
                     coverUrl = coverUrl,
                     audioUrl = audioUrl,
                     releaseYear = releaseYear,
                     isNewRelease = releaseYear >= LocalDate.now(ZoneOffset.UTC).year,
-                    playCount = item.optLong("playCount", 0L)
+                    playCount = item.optLongAny("playCount", "play_count", "plays")
                 )
             )
         }
@@ -186,4 +193,35 @@ internal object AudiusSongMapper {
         if (this == null) return emptyList()
         return (0 until length()).mapNotNull { optString(it).takeIf(String::isNotBlank) }
     }
+}
+
+private fun JSONObject.optAny(vararg keys: String): Any? = keys.firstNotNullOfOrNull { key ->
+    if (has(key) && !isNull(key)) opt(key) else null
+}
+
+private fun JSONObject.optStringAny(vararg keys: String): String = keys.firstNotNullOfOrNull { key ->
+    if (has(key) && !isNull(key)) optString(key).takeIf { it.isNotBlank() } else null
+}.orEmpty()
+
+private fun JSONObject.optBooleanAny(vararg keys: String): Boolean = keys.firstNotNullOfOrNull { key ->
+    if (has(key) && !isNull(key)) {
+        when (val value = opt(key)) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            else -> value.toString().equals("true", ignoreCase = true) || value.toString() == "1"
+        }
+    } else null
+} ?: false
+
+private fun JSONObject.optLongAny(vararg keys: String): Long = keys.firstNotNullOfOrNull { key ->
+    if (has(key) && !isNull(key)) {
+        when (val value = opt(key)) {
+            is Number -> value.toLong()
+            else -> value.toString().toLongOrNull()
+        }
+    } else null
+} ?: 0L
+
+private fun JSONObject.optJSONArrayAny(vararg keys: String): JSONArray? = keys.firstNotNullOfOrNull { key ->
+    if (has(key) && !isNull(key)) optJSONArray(key) else null
 }
