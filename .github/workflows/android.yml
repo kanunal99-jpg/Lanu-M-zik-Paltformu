@@ -15,32 +15,39 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'gradle'
-
       - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.3.1'
-
       - name: Verify Gradle
         run: gradle --version
-
       - name: Verify production catalog credential
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${JAMENDO_CLIENT_ID:-}" ]]; then
-            echo "ERROR: JAMENDO_CLIENT_ID secret is missing. A catalog-less APK must not be published."
-            exit 1
+            echo "ERROR: JAMENDO_CLIENT_ID secret is missing. Jamendo is optional until configured; Audius is the default live catalog."
           fi
-
-      - name: Verify production Jamendo catalog response
+      - name: Verify live Audius catalog response
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS --get 'https://discoveryprovider.audius.co/v1/tracks/search' \
+            --data-urlencode 'query=rock' \
+            --data-urlencode 'limit=5')"
+          count="$(jq '.data | length' <<<"${response}")"
+          streamable="$(jq '[.data[] | select(.isStreamable == true or .isStreamable == "true") | select((.id // "") != "")] | length' <<<"${response}")"
+          echo "Audius live smoke: results=${count}, streamable=${streamable}"
+          (( count > 0 ))
+          (( streamable > 0 ))
+      - name: Verify Jamendo only when credential is configured
+        if: env.JAMENDO_CLIENT_ID != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -54,21 +61,17 @@ jobs:
           code="$(jq -r '.headers.code // -1' <<<"${response}")"
           count="$(jq -r '.headers.results_count // 0' <<<"${response}")"
           playable="$(jq '[.results[] | select((.audio // "") != "" and (.name // "") != "" and (.artist_name // "") != "")] | length' <<<"${response}")"
-          echo "Jamendo production: headers.code=${code}, results_count=${count}, playable=${playable}"
+          echo "Jamendo: headers.code=${code}, results_count=${count}, playable=${playable}"
           [[ "${code}" == "0" ]]
           (( count > 0 ))
           (( playable > 0 ))
-
       - name: Run Unit & Robolectric Tests
         run: gradle testDebugUnitTest --stacktrace
-
       - name: Assemble Debug APK
         run: gradle assembleDebug --stacktrace
-
       - name: Generate APK SHA-256
         shell: bash
         run: sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
-
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -76,7 +79,6 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/app-debug.apk.sha256
-
   release:
     name: Publish GitHub Release
     needs: build
@@ -91,7 +93,6 @@ jobs:
           pattern: lanu-music-debug-${{ github.sha }}
           path: release
           merge-multiple: true
-
       - name: Publish release with APK and SHA-256
         uses: softprops/action-gh-release@v2
         with:
