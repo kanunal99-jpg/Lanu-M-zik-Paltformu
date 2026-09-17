@@ -9,6 +9,7 @@ import com.example.data.catalog.AlternativeCatalogProvider
 import com.example.data.catalog.AudiusCatalogProvider
 import com.example.data.catalog.CachedCatalogProvider
 import com.example.data.catalog.CatalogProvider
+import com.example.data.catalog.DeezerCatalogProvider
 import com.example.data.catalog.LocalCatalogProvider
 import com.example.data.catalog.PrimaryCatalogProvider
 import com.example.model.Artist
@@ -46,10 +47,12 @@ class MusicRepository(context: Context) {
     )
 
     private val audiusCatalogProvider: CatalogProvider = AudiusCatalogProvider()
+    private val deezerCatalogProvider: CatalogProvider = DeezerCatalogProvider()
     private val jamendoCatalogProvider: CatalogProvider = PrimaryCatalogProvider(BuildConfig.JAMENDO_CLIENT_ID)
     private val catalogProvider: CatalogProvider = AlternativeCatalogProvider(
         listOf(
             audiusCatalogProvider,
+            deezerCatalogProvider,
             jamendoCatalogProvider,
             CachedCatalogProvider(dao),
             LocalCatalogProvider(dao)
@@ -185,27 +188,12 @@ class MusicRepository(context: Context) {
     }
 
     private fun toVerifiedLocalEntity(song: Song): LocalSongEntity = LocalSongEntity(
-        id = song.id,
-        title = song.title,
-        artist = song.artist,
-        artistId = song.artistId,
-        album = song.album,
-        durationMs = song.durationMs,
-        categoryName = song.category.name,
-        language = song.language,
-        localAudioPath = song.audioUrl,
-        localCoverPath = song.coverUrl,
-        remoteAudioUrl = song.audioUrl,
-        remoteCoverUrl = song.coverUrl,
-        mimeType = "audio/*",
-        bitrate = "",
-        fileSizeBytes = 0L,
-        audioQuality = "Yerel",
-        isAvailableOffline = true,
-        lyricsText = song.lyrics.joinToString("\n") { it.text },
-        downloadedAt = System.currentTimeMillis(),
-        lastPlayedAt = null,
-        playCount = song.playCount
+        id = song.id, title = song.title, artist = song.artist, artistId = song.artistId, album = song.album,
+        durationMs = song.durationMs, categoryName = song.category.name, language = song.language,
+        localAudioPath = song.audioUrl, localCoverPath = song.coverUrl, remoteAudioUrl = song.audioUrl,
+        remoteCoverUrl = song.coverUrl, mimeType = "audio/*", bitrate = "", fileSizeBytes = 0L,
+        audioQuality = "Yerel", isAvailableOffline = true, lyricsText = song.lyrics.joinToString("\n") { it.text },
+        downloadedAt = System.currentTimeMillis(), lastPlayedAt = null, playCount = song.playCount
     )
 
     suspend fun toggleFavorite(songId: String) {
@@ -247,16 +235,7 @@ class MusicRepository(context: Context) {
     suspend fun setPlaylistOfflineStatus(playlistId: String, isOffline: Boolean) = dao.setPlaylistOfflineStatus(playlistId, isOffline)
 
     val playlists: Flow<List<PlaylistEntity>> = userLibrarySnapshot.map { snapshot ->
-        snapshot?.playlists.orEmpty().map { playlist ->
-            PlaylistEntity(
-                id = playlist.id,
-                name = playlist.name,
-                description = playlist.description,
-                createdAt = playlist.createdAtMs,
-                updatedAt = playlist.updatedAtMs,
-                totalSongsCount = playlist.songIds.size
-            )
-        }
+        snapshot?.playlists.orEmpty().map { playlist -> PlaylistEntity(id = playlist.id, name = playlist.name, description = playlist.description, createdAt = playlist.createdAtMs, updatedAt = playlist.updatedAtMs, totalSongsCount = playlist.songIds.size) }
     }
 
     fun getSongsForPlaylist(playlistId: String): Flow<List<Song>> = userLibrarySnapshot.combine(songs) { snapshot, allSongs ->
@@ -270,86 +249,24 @@ class MusicRepository(context: Context) {
         return result.getOrElse { error("Çalma listesi oluşturulamadı: ${it.message}") }.id
     }
 
-    suspend fun renamePlaylist(playlistId: String, name: String) {
-        val result = userLibraryService.renamePlaylist(playlistId, name)
-        if (result is AuthResult.Failure) error(result.message)
-    }
-
-    suspend fun reorderPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
-        val result = userLibraryService.reorderPlaylist(playlistId, fromIndex, toIndex)
-        if (result is AuthResult.Failure) error(result.message)
-    }
-
-    suspend fun deletePlaylist(playlistId: String) {
-        val result = userLibraryService.deletePlaylist(playlistId)
-        if (result is AuthResult.Failure) error(result.message)
-        dao.deletePlaylistSongs(playlistId)
-        dao.deletePlaylist(playlistId)
-    }
-
-    suspend fun addSongToPlaylist(playlistId: String, songId: String) {
-        val result = userLibraryService.addSongToPlaylist(playlistId, songId)
-        if (result is AuthResult.Failure) error(result.message)
-    }
-
-    suspend fun removeSongFromPlaylist(playlistId: String, songId: String) {
-        val result = userLibraryService.removeSongFromPlaylist(playlistId, songId)
-        if (result is AuthResult.Failure) error(result.message)
-    }
-
-    suspend fun recordPlayedSong(songId: String) {
-        val result = userLibraryService.recordPlay(songId)
-        if (result is AuthResult.Failure) Log.e("MusicRepository", "History operation failed: ${result.message}")
-    }
-
+    suspend fun renamePlaylist(playlistId: String, name: String) { val result = userLibraryService.renamePlaylist(playlistId, name); if (result is AuthResult.Failure) error(result.message) }
+    suspend fun reorderPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) { val result = userLibraryService.reorderPlaylist(playlistId, fromIndex, toIndex); if (result is AuthResult.Failure) error(result.message) }
+    suspend fun deletePlaylist(playlistId: String) { val result = userLibraryService.deletePlaylist(playlistId); if (result is AuthResult.Failure) error(result.message); dao.deletePlaylistSongs(playlistId); dao.deletePlaylist(playlistId) }
+    suspend fun addSongToPlaylist(playlistId: String, songId: String) { val result = userLibraryService.addSongToPlaylist(playlistId, songId); if (result is AuthResult.Failure) error(result.message) }
+    suspend fun removeSongFromPlaylist(playlistId: String, songId: String) { val result = userLibraryService.removeSongFromPlaylist(playlistId, songId); if (result is AuthResult.Failure) error(result.message) }
+    suspend fun recordPlayedSong(songId: String) { val result = userLibraryService.recordPlay(songId); if (result is AuthResult.Failure) Log.e("MusicRepository", "History operation failed: ${result.message}") }
     suspend fun clearHistory(): AuthResult = userLibraryService.clearHistory()
     val history: Flow<List<HistoryRecord>> = userLibrarySnapshot.map { it?.history.orEmpty() }
     suspend fun signOut(): AuthResult = userLibraryService.signOut()
-
     val cachedSongs: Flow<List<Song>> = dao.getAllCachedSongs().map { it.map { item -> item.toSong() } }
-
-    fun searchCachedSongs(query: String): Flow<List<Song>> {
-        val q = normalizeSearch(query)
-        return dao.getAllCachedSongs().map { items ->
-            val songs = items.map { it.toSong() }
-            if (q.isEmpty()) songs else songs.filter { matchesQuery(it, q) }
-        }
-    }
-
+    fun searchCachedSongs(query: String): Flow<List<Song>> { val q = normalizeSearch(query); return dao.getAllCachedSongs().map { items -> val songs = items.map { it.toSong() }; if (q.isEmpty()) songs else songs.filter { matchesQuery(it, q) } } }
     suspend fun cacheSongs(songsToCache: List<Song>) = dao.insertCachedSongs(songsToCache.map { it.toCachedEntity() })
-
-    fun searchSongs(query: String, categoryFilter: MusicCategory? = null, languageFilter: String? = null): List<Song> {
-        val q = normalizeSearch(query)
-        return _songs.value.filter { song ->
-            val matches = q.isEmpty() || matchesQuery(song, q)
-            matches && (categoryFilter == null || song.category == categoryFilter) && (languageFilter == null || song.language == languageFilter)
-        }
-    }
-
-    private fun matchesQuery(song: Song, normalizedQuery: String): Boolean =
-        listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } ||
-            song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
-
-    private fun normalizeSearch(value: String): String = value.trim().lowercase()
-        .replace('ı', 'i').replace('İ', 'i').replace('ş', 's').replace('Ş', 's')
-        .replace('ğ', 'g').replace('Ğ', 'g').replace('ü', 'u').replace('Ü', 'u')
-        .replace('ö', 'o').replace('Ö', 'o').replace('ç', 'c').replace('Ç', 'c')
-
-    fun likeFriendActivity(activityId: String) {
-        _friendActivities.value = _friendActivities.value.map { if (it.id == activityId) it.copy(recommendationLikes = it.recommendationLikes + 1) else it }
-    }
-
-    fun shareRecommendationToFriends(friendName: String, song: Song, note: String) {
-        val newActivity = FriendActivity("act_${UUID.randomUUID().toString().take(6)}", friendName, "", song, "Şimdi paylaştı", false, note, 1)
-        _friendActivities.value = listOf(newActivity) + _friendActivities.value
-    }
-
+    fun searchSongs(query: String, categoryFilter: MusicCategory? = null, languageFilter: String? = null): List<Song> { val q = normalizeSearch(query); return _songs.value.filter { song -> val matches = q.isEmpty() || matchesQuery(song, q); matches && (categoryFilter == null || song.category == categoryFilter) && (languageFilter == null || song.language == languageFilter) } }
+    private fun matchesQuery(song: Song, normalizedQuery: String): Boolean = listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } || song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
+    private fun normalizeSearch(value: String): String = value.trim().lowercase().replace('ı','i').replace('İ','i').replace('ş','s').replace('Ş','s').replace('ğ','g').replace('Ğ','g').replace('ü','u').replace('Ü','u').replace('ö','o').replace('Ö','o').replace('ç','c').replace('Ç','c')
+    fun likeFriendActivity(activityId: String) { _friendActivities.value = _friendActivities.value.map { if (it.id == activityId) it.copy(recommendationLikes = it.recommendationLikes + 1) else it } }
+    fun shareRecommendationToFriends(friendName: String, song: Song, note: String) { val newActivity = FriendActivity("act_${UUID.randomUUID().toString().take(6)}", friendName, "", song, "Şimdi paylaştı", false, note, 1); _friendActivities.value = listOf(newActivity) + _friendActivities.value }
     fun pushSimulatedNewRelease() {}
     fun dismissNewReleaseNotification() { _newReleaseNotification.value = null }
-
-    fun close() {
-        if (RepositoryRegistry.repository === this) RepositoryRegistry.repository = null
-        scope.cancel()
-        downloadManager.close()
-    }
+    fun shutdown() { scope.cancel() }
 }
