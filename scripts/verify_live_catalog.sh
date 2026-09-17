@@ -14,11 +14,11 @@ request_json() {
   local attempt=1
   local http_code=""
 
-  while (( attempt <= 6 )); do
-    http_code="$(curl -sS -L --connect-timeout 10 --max-time 30 \
+  while (( attempt <= 4 )); do
+    http_code="$(curl -sS -L --connect-timeout 8 --max-time 20 \
       -w '%{http_code}' -o "${output}" "${url}" || true)"
     if [[ "${http_code}" == "200" ]] && jq -e . "${output}" >/dev/null 2>&1; then
-      sleep 0.20
+      sleep 0.15
       return 0
     fi
     if [[ "${http_code}" == "429" || "${http_code}" =~ ^5[0-9][0-9]$ ]]; then
@@ -37,9 +37,9 @@ request_json() {
 request_stream_bytes() {
   local url="$1"
   local output="$2"
-  curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
-    --connect-timeout 10 --max-time 45 --range 0-4095 -o "${output}" "${url}"
-  sleep 0.20
+  curl -fsSL --retry 3 --retry-delay 1 --retry-all-errors \
+    --connect-timeout 8 --max-time 20 --range 0-4095 -o "${output}" "${url}"
+  sleep 0.15
 }
 
 encode() {
@@ -53,8 +53,9 @@ tracks_file="${WORK_DIR}/candidates.tsv"
 for query in "${queries[@]}"; do
   echo "[catalog] searching Audius tracks: ${query}"
   safe_query="${query// /_}"
-  search_url="${BASE_URL}/tracks/search?query=$(encode "${query}")&limit=50"
-  request_json "${search_url}" "${WORK_DIR}/search-${safe_query}.json"
+  request_json \
+    "${BASE_URL}/tracks/search?query=$(encode "${query}")&limit=50" \
+    "${WORK_DIR}/search-${safe_query}.json"
   jq -r '
     .data[]
     | select((.id // "") != "")
@@ -73,6 +74,7 @@ sort -u -t $'\t' -k1,1 "${tracks_file}" > "${WORK_DIR}/candidates-dedup.tsv"
 selected_file="${WORK_DIR}/selected.tsv"
 : > "${selected_file}"
 
+# Phase 1: verify ten independent artist chains: profile -> live artist catalog search -> exact artist id.
 mapfile -t artist_ids < <(cut -f3 "${WORK_DIR}/candidates-dedup.tsv" | awk 'NF && !seen[$0]++')
 validated_artists=0
 
@@ -106,26 +108,10 @@ echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}
 
 printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
 
+# Phase 2: for each selected track, verify exact catalog detail and actual audio bytes.
 while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
   echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
 
-  # Re-fetch the artist profile so every selected row independently proves artist identity.
-  artist_json="${WORK_DIR}/verify-artist-${artist_id}.json"
-  request_json "${BASE_URL}/users/${artist_id}" "${artist_json}"
-  jq -e --arg id "${artist_id}" --arg name "${expected_artist}" '
-    (.data.id // .data.user_id | tostring) == $id
-    and ((.data.name // .data.handle // "") | tostring | length) > 0
-  ' "${artist_json}" >/dev/null
-
-  # Re-fetch the artist-name catalog search and require this exact track to belong to this exact artist.
-  verify_discography="${WORK_DIR}/verify-discography-${artist_id}-${track_id}.json"
-  request_json "${BASE_URL}/tracks/search?query=$(encode "${expected_artist}")&limit=50" "${verify_discography}"
-  jq -e --arg id "${artist_id}" --arg tid "${track_id}" '
-    [.data[]? | select((.user.id // .user.user_id // .artist_id | tostring) == $id)]
-    | any(.[]; (.id | tostring) == $tid)
-  ' "${verify_discography}" >/dev/null
-
-  # Exact track detail: title, artist id and playability must still agree.
   track_json="${WORK_DIR}/track-${track_id}.json"
   request_json "${BASE_URL}/tracks/${track_id}" "${track_json}"
   jq -e \
@@ -138,8 +124,8 @@ while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
      and (((.user.id // .user.user_id // .artist_id) | tostring) == $artist_id)
      and (((.is_streamable // .isStreamable // false) | tostring | ascii_downcase) == "true")
      and (((.is_stream_gated // .isStreamGated // false) | tostring | ascii_downcase) != "true")
-     and (((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")
-  ' "${track_json}" >/dev/null
+     and (((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")' \
+    "${track_json}" >/dev/null
 
   license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
   stream_file="${WORK_DIR}/${track_id}.audio"
