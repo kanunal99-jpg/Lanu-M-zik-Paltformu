@@ -39,6 +39,13 @@ enum class AudioQuality(val title: String, val bitRate: String, val description:
     val bitrate: String get() = bitRate
 }
 
+/** Provenance of a playable song. UNKNOWN is deliberately not playable. */
+enum class SongSourceType {
+    UNKNOWN,
+    LOCAL,
+    VERIFIED_REMOTE
+}
+
 data class Song(
     val id: String,
     val title: String,
@@ -47,7 +54,7 @@ data class Song(
     val album: String,
     val durationMs: Long,
     val category: MusicCategory,
-    val language: String = "tr", // "tr" or "en"
+    val language: String = "tr", // "tr", "en" or "und"
     val coverUrl: String,
     val audioUrl: String,
     val releaseYear: Int,
@@ -55,5 +62,7 @@ data class Song(
     val isNewRelease: Boolean = false,
     // 0 means the count is unknown/not supplied by a verified catalog provider.
     // Never present a fabricated popularity number as real data.
-    val playCount: Long = 0L
+    val playCount: Long = 0L,
+    // Legacy/static songs remain UNKNOWN until a verified source explicitly maps them.
+    val sourceType: SongSourceType = SongSourceType.UNKNOWN
 )
