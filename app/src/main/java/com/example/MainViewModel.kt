@@ -42,7 +42,6 @@ enum class MainTab(val titleTr: String) { HOME("Ana Sayfa"), SEARCH("Keşfet"), 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = MusicRepository(application)
     val playerController = AudioPlayerController(application)
-
     private val _currentTab = MutableStateFlow(MainTab.HOME)
     val currentTab: StateFlow<MainTab> = _currentTab.asStateFlow()
     private val _isNowPlayingExpanded = MutableStateFlow(false)
@@ -82,7 +81,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedCategoryFilter = MutableStateFlow<MusicCategory?>(null)
     val selectedCategoryFilter: StateFlow<MusicCategory?> = _selectedCategoryFilter.asStateFlow()
     val selectedCategory: StateFlow<MusicCategory?> get() = selectedCategoryFilter
-
     val allSongs: StateFlow<List<Song>> = repository.songs
     val artists: List<Artist> get() = repository.artists
     val friendActivities: StateFlow<List<FriendActivity>> = repository.friendActivities
@@ -124,7 +122,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _searchQuery.map(::normalizeSearch).distinctUntilChanged().debounce(350).collect { query ->
                 if (query.length < 2) { _remoteArtistResults.value = emptyList(); return@collect }
-                launch {
+                viewModelScope.launch {
                     repository.searchRemoteArtists(query).onSuccess { _remoteArtistResults.value = it.distinctBy { artist -> artist.id } }.onFailure { Log.w("MainViewModel", "Verified remote artist search failed", it) }
                 }
                 repository.searchRemoteCatalog(query).onSuccess { remoteSongs -> if (remoteSongs.isNotEmpty()) repository.cacheSongs(remoteSongs) }.onFailure { error -> Log.w("MainViewModel", "Verified remote search failed; local/cache results remain active", error) }
@@ -174,12 +172,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 val existing = allSongs.value.filter { it.artistId == artist.id }
                 if (existing.isEmpty()) {
-                    repository.searchRemoteCatalog(artist.name)
-                        .onSuccess { songs ->
-                            val verifiedArtistSongs = songs.filter { it.artistId == artist.id }
-                            if (verifiedArtistSongs.isNotEmpty()) repository.cacheSongs(verifiedArtistSongs)
-                        }
-                        .onFailure { error -> Log.w("MainViewModel", "Artist discography fallback search failed", error) }
+                    repository.searchRemoteCatalog(artist.name).onSuccess { songs ->
+                        val verifiedArtistSongs = songs.filter { it.artistId == artist.id }
+                        if (verifiedArtistSongs.isNotEmpty()) repository.cacheSongs(verifiedArtistSongs)
+                    }.onFailure { error -> Log.w("MainViewModel", "Artist discography fallback search failed", error) }
                 }
             }
         }
