@@ -186,12 +186,23 @@ class AudioPlayerController(private val context: Context) {
         persistState()
     }
 
-    /** Local offline copy is authoritative; remote playback requires explicit verified provenance. */
+    /**
+     * Playback provenance gate:
+     * - app-managed offline files are always local and authoritative;
+     * - MediaStore content:// and file:// URIs are local sources;
+     * - remote playback is allowed only when a provider explicitly marked the song verified.
+     * Static/legacy catalog entries therefore cannot accidentally become playable.
+     */
     private fun playableUri(song: Song): Uri? {
         val offline = File(context.filesDir, "offline_audio/${song.id}.bin")
         if (offline.isFile && offline.length() > 0L) return Uri.fromFile(offline)
+
+        val raw = song.audioUrl.trim()
+        if (raw.startsWith("content://") || raw.startsWith("file://")) {
+            return Uri.parse(raw)
+        }
         if (song.sourceType != SongSourceType.VERIFIED_REMOTE) return null
-        return song.audioUrl.takeIf { it.startsWith("https://") || it.startsWith("http://") }?.let(Uri::parse)
+        return raw.takeIf { it.startsWith("https://") || it.startsWith("http://") }?.let(Uri::parse)
     }
 
     private fun showUnavailablePlayback() {
