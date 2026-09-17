@@ -80,4 +80,47 @@ class JamendoCatalogProviderTest {
         val artists = JamendoArtistMapper.mapArtists(JSONArray().put(missingId).put(missingName))
         assertTrue(artists.isEmpty())
     }
+
+    @Test
+    fun maps_streamable_audius_track_to_verified_stream_endpoint() {
+        val user = JSONObject()
+            .put("id", "user-1")
+            .put("name", "Gerçek Audius Sanatçısı")
+        val artwork = JSONObject().put("_480x480", "https://cdn.audius.co/art.jpg")
+        val item = JSONObject()
+            .put("id", "track-1")
+            .put("title", "Gerçek Audius Şarkısı")
+            .put("duration", 200)
+            .put("genre", "Pop")
+            .put("releaseDate", "2026-03-01")
+            .put("isStreamable", true)
+            .put("isStreamGated", false)
+            .put("isUnlisted", false)
+            .put("user", user)
+            .put("artwork", artwork)
+        val songs = AudiusSongMapper.mapSongs(JSONArray().put(item))
+        assertEquals(1, songs.size)
+        assertEquals("audius:track-1", songs.single().id)
+        assertEquals("Gerçek Audius Sanatçısı", songs.single().artist)
+        assertEquals("https://discoveryprovider.audius.co/v1/tracks/track-1/stream", songs.single().audioUrl)
+        assertTrue(songs.single().durationMs == 200_000L)
+    }
+
+    @Test
+    fun rejects_audius_gated_unlisted_or_non_streamable_tracks() {
+        val base = JSONObject()
+            .put("id", "track")
+            .put("title", "Track")
+            .put("duration", 100)
+            .put("genre", "Pop")
+            .put("isStreamable", true)
+            .put("isStreamGated", false)
+            .put("isUnlisted", false)
+            .put("user", JSONObject().put("id", "u").put("name", "Artist"))
+        val gated = JSONObject(base.toString()).put("id", "gated").put("isStreamGated", true)
+        val unlisted = JSONObject(base.toString()).put("id", "unlisted").put("isUnlisted", true)
+        val nonStreamable = JSONObject(base.toString()).put("id", "nonstream").put("isStreamable", false)
+        val songs = AudiusSongMapper.mapSongs(JSONArray().put(gated).put(unlisted).put(nonStreamable))
+        assertTrue(songs.isEmpty())
+    }
 }
