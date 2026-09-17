@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import android.util.Log
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.model.SongSourceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -67,7 +68,8 @@ class LocalMusicScanner(private val context: Context) {
                         audioUrl = contentUri.toString(),
                         releaseYear = year,
                         playCount = 0L,
-                        lyrics = emptyList()
+                        lyrics = emptyList(),
+                        sourceType = SongSourceType.LOCAL
                     )
                 }
             }
