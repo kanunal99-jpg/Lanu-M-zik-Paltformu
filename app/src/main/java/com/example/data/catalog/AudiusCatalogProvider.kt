@@ -22,7 +22,7 @@ class AudiusCatalogProvider(
     companion object {
         private const val BASE_URL = "https://discoveryprovider.audius.co/v1"
         private const val DEFAULT_LIMIT = 40
-        private const val DISCOGRAPHY_LIMIT = 100
+        private const val DISCOGRAPHY_PAGE_SIZE = 100
     }
 
     private suspend fun requestJson(path: String, params: Map<String, String> = emptyMap()): Result<JSONObject> = withContext(Dispatchers.IO) {
@@ -88,9 +88,31 @@ class AudiusCatalogProvider(
         }
     }
 
-    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> =
-        requestArray("/users/${artistId.removePrefix("audius:")}/tracks", mapOf("limit" to DISCOGRAPHY_LIMIT.toString(), "sort" to "date_created"))
-            .map { results -> AudiusSongMapper.mapSongs(results).filter { it.artistId == "audius:${artistId.removePrefix("audius:")}" }.distinctBy { it.id } }
+    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
+        val providerArtistId = artistId.removePrefix("audius:")
+        val allSongs = buildList {
+            var offset = 0
+            while (true) {
+                val page = requestArray(
+                    "/users/$providerArtistId/tracks",
+                    mapOf(
+                        "limit" to DISCOGRAPHY_PAGE_SIZE.toString(),
+                        "offset" to offset.toString(),
+                        "sort" to "date_created"
+                    )
+                ).getOrThrow()
+
+                addAll(
+                    AudiusSongMapper.mapSongs(page)
+                        .filter { it.artistId == "audius:$providerArtistId" }
+                )
+
+                if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
+                offset += DISCOGRAPHY_PAGE_SIZE
+            }
+        }
+        allSongs.distinctBy { it.id }
+    }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
         requestArray("/tracks/latest", mapOf("limit" to DEFAULT_LIMIT.toString())).map { results ->
