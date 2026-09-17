@@ -62,6 +62,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val showLyricsInNowPlaying: StateFlow<Boolean> = _showLyricsInNowPlaying.asStateFlow()
     private val _selectedArtist = MutableStateFlow<Artist?>(null)
     val selectedArtist: StateFlow<Artist?> = _selectedArtist.asStateFlow()
+    private val _remoteArtistResults = MutableStateFlow<List<Artist>>(emptyList())
+    val remoteArtistResults: StateFlow<List<Artist>> = _remoteArtistResults.asStateFlow()
     private val _selectedPlaylist = MutableStateFlow<PlaylistEntity?>(null)
     val selectedPlaylist: StateFlow<PlaylistEntity?> = _selectedPlaylist.asStateFlow()
     private val _showCreatePlaylistDialog = MutableStateFlow(false)
@@ -118,28 +120,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val equalizerSettings: StateFlow<EqualizerSettings> = equalizerState.map { it.toSettings() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EqualizerSettings())
 
     init {
+        viewModelScope.launch { allSongs.collect { songs -> playerController.restoreStateFromCatalog(songs) } }
         viewModelScope.launch {
-            allSongs.collect { songs ->
-                playerController.restoreStateFromCatalog(songs)
-            }
-        }
-        viewModelScope.launch {
-            _searchQuery
-                .map(::normalizeSearch)
-                .distinctUntilChanged()
-                .debounce(350)
-                .collect { query ->
-                    if (query.length < 2) return@collect
-                    repository.searchRemoteCatalog(query)
-                        .onSuccess { remoteSongs ->
-                            if (remoteSongs.isNotEmpty()) {
-                                repository.cacheSongs(remoteSongs)
-                            }
-                        }
-                        .onFailure { error ->
-                            Log.w("MainViewModel", "Verified remote search failed; local/cache results remain active", error)
-                        }
+            _searchQuery.map(::normalizeSearch).distinctUntilChanged().debounce(350).collect { query ->
+                if (query.length < 2) { _remoteArtistResults.value = emptyList(); return@collect }
+                launch {
+                    repository.searchRemoteArtists(query).onSuccess { _remoteArtistResults.value = it.distinctBy { artist -> artist.id } }.onFailure { Log.w("MainViewModel", "Verified remote artist search failed", it) }
                 }
+                repository.searchRemoteCatalog(query).onSuccess { remoteSongs -> if (remoteSongs.isNotEmpty()) repository.cacheSongs(remoteSongs) }.onFailure { error -> Log.w("MainViewModel", "Verified remote search failed; local/cache results remain active", error) }
+            }
         }
     }
 
@@ -179,8 +168,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addSongToPlaylist(playlistId: String, songId: String) { viewModelScope.launch { repository.addSongToPlaylist(playlistId, songId); _songToAddToPlaylist.value = null } }
     fun removeSongFromPlaylist(playlistId: String, songId: String) { viewModelScope.launch { repository.removeSongFromPlaylist(playlistId, songId) } }
     fun getSongsForPlaylist(playlistId: String) = repository.getSongsForPlaylist(playlistId)
-    fun selectArtist(artist: Artist?) { _selectedArtist.value = artist }
-    fun getSongsForArtist(artistId: String): List<Song> = allSongs.value.filter { it.artistId == artistId }
+    fun selectArtist(artist: Artist?) {
+        _selectedArtist.value = artist
+        if (artist != null) {
+            viewModelScope.launch {
+                val existing = allSongs.value.filter { it.artistId == artist.id }
+                if (existing.isEmpty()) {
+                    repository.searchRemoteCatalog(artist.name)
+                        .onSuccess { songs ->
+                            val verifiedArtistSongs = songs.filter { it.artistId == artist.id }
+                            if (verifiedArtistSongs.isNotEmpty()) repository.cacheSongs(verifiedArtistSongs)
+                        }
+                        .onFailure { error -> Log.w("MainViewModel", "Artist discography fallback search failed", error) }
+                }
+            }
+        }
+    }
+    fun getSongsForArtist(artistId: String): List<Song> = allSongs.value.filter { it.artistId == artistId }.distinctBy { it.id }
     fun shareSong(context: Context, song: Song) { val shareText = "🎵 ${song.title} - ${song.artist}\n\nLANU Müzik'te şimdi dinle:\nlanumusic://track/${song.id}"; context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, shareText); type = "text/plain" }, "Parçayı Paylaş").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }) }
     fun sharePlaylist(context: Context, playlist: PlaylistEntity) { val shareText = "🎶 '${playlist.name}' Çalma Listesi\n\nLANU Müzik'te aç:\nlanumusic://playlist/${playlist.id}"; context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, shareText); type = "text/plain" }, "Çalma Listesini Paylaş").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }) }
     fun shareArtist(context: Context, artist: Artist) { val shareText = "🌟 ${artist.name}\n\nLANU Müzik'te aç:\nlanumusic://artist/${artist.id}"; context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, shareText); type = "text/plain" }, "Sanatçıyı Paylaş").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }) }
