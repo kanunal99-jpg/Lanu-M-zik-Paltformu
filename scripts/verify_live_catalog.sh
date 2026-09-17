@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="https://discoveryprovider.audius.co/v1"
+BASE_URL="https://api.audius.co/v1"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/lanu-live-catalog"
 REPORT_PATH="${GITHUB_WORKSPACE:-.}/build/live-catalog-verification.tsv"
 mkdir -p "${WORK_DIR}" "$(dirname "${REPORT_PATH}")"
