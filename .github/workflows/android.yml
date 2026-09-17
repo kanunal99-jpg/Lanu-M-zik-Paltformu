@@ -50,6 +50,12 @@ jobs:
           (( streamable > 0 ))
           [[ -n "${track_id}" ]]
           curl -fsSL -r 0-1 -o /dev/null "https://discoveryprovider.audius.co/v1/tracks/${track_id}/stream"
+      - name: Verify 10 live artists and 20 live tracks end-to-end
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/verify_live_catalog.sh
+          scripts/verify_live_catalog.sh
       - name: Verify Jamendo only when credential is configured
         if: env.JAMENDO_CLIENT_ID != ''
         shell: bash
@@ -83,6 +89,7 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/app-debug.apk.sha256
+            build/live-catalog-verification.tsv
   release:
     name: Publish GitHub Release
     needs: build

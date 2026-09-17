@@ -43,7 +43,10 @@ enum class AudioQuality(val title: String, val bitRate: String, val description:
 enum class SongSourceType {
     UNKNOWN,
     LOCAL,
-    VERIFIED_REMOTE
+    /** Full/continuous remote stream exposed by the verified provider endpoint. */
+    VERIFIED_REMOTE,
+    /** Official sample/preview URL exposed by a verified provider. */
+    VERIFIED_PREVIEW
 }
 
 data class Song(
