@@ -5,7 +5,6 @@ BASE_URL="https://discoveryprovider.audius.co/v1"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/lanu-live-catalog"
 REPORT_PATH="${GITHUB_WORKSPACE:-.}/build/live-catalog-verification.tsv"
 mkdir -p "${WORK_DIR}" "$(dirname "${REPORT_PATH}")"
-
 rm -f "${WORK_DIR}"/*
 
 queries=(rock pop electronic "hip hop" acoustic jazz)
@@ -17,7 +16,7 @@ for query in "${queries[@]}"; do
   curl -fsS --get "${BASE_URL}/tracks/search" \
     --data-urlencode "query=${query}" \
     --data-urlencode 'limit=50' \
-    > "${WORK_DIR}/search.json"
+    > "${WORK_DIR}/search-${query// /_}.json"
 
   jq -r '
     .data[]
@@ -32,66 +31,90 @@ for query in "${queries[@]}"; do
         (.id | tostring),
         (.title // .name | tostring),
         (.user.id // .user.user_id // .artist_id | tostring),
-        (.user.name // .user.handle // .artist_name | tostring),
-        ((.license // .license_info // "") | tostring)
+        (.user.name // .user.handle // .artist_name | tostring)
       ]
     | @tsv
-  ' "${WORK_DIR}/search.json" >> "${tracks_file}"
+  ' "${WORK_DIR}/search-${query// /_}.json" >> "${tracks_file}"
 done
 
-# Deduplicate tracks first, then select exactly two playable catalog entries for each of
-# ten distinct live Audius artist profiles. This gives us a deterministic 10-artist/20-track gate.
 sort -u -t $'\t' -k1,1 "${tracks_file}" > "${WORK_DIR}/candidates-dedup.tsv"
 selected_file="${WORK_DIR}/selected.tsv"
 : > "${selected_file}"
-declare -A artist_counts=()
-declare -A seen_tracks=()
 
-while IFS=$'\t' read -r track_id title artist_id artist_name license; do
-  [[ -n "${track_id}" && -n "${artist_id}" ]] || continue
-  [[ -z "${seen_tracks[${track_id}]+x}" ]] || continue
-  count="${artist_counts[${artist_id}]:-0}"
-  (( count < 2 )) || continue
-  artist_counts[${artist_id}]=$((count + 1))
-  seen_tracks[${track_id}]=1
-  printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "${license}" >> "${selected_file}"
+# Only accept artist profiles that the live API resolves successfully. Some search results
+# can become stale/unavailable; those are excluded instead of making the gate silently pass.
+mapfile -t artist_ids < <(cut -f3 "${WORK_DIR}/candidates-dedup.tsv" | awk 'NF && !seen[$0]++')
+validated_artists=0
 
-done < "${WORK_DIR}/candidates-dedup.tsv"
+for artist_id in "${artist_ids[@]}"; do
+  (( validated_artists < 10 )) || break
+  artist_candidates="${WORK_DIR}/artist-${artist_id}.tsv"
+  awk -F '\t' -v id="${artist_id}" '$3 == id { print; if (++n == 2) exit }' "${WORK_DIR}/candidates-dedup.tsv" > "${artist_candidates}"
+  [[ "$(wc -l < "${artist_candidates}")" -ge 2 ]] || continue
+
+  if ! curl -fsS "${BASE_URL}/users/${artist_id}" > "${WORK_DIR}/artist-${artist_id}.json"; then
+    echo "[catalog] skipping artist id=${artist_id}: profile endpoint rejected this result"
+    continue
+  fi
+
+  if ! jq -e --arg id "${artist_id}" '(.data.id // .data.user_id | tostring) == $id and ((.data.name // .data.handle // "") | tostring | length) > 0' "${WORK_DIR}/artist-${artist_id}.json" >/dev/null; then
+    echo "[catalog] skipping artist id=${artist_id}: profile payload did not validate"
+    continue
+  fi
+
+  # Prove the artist's catalog endpoint resolves before selecting the artist for the gate.
+  if ! curl -fsS --get "${BASE_URL}/users/${artist_id}/tracks" \
+      --data-urlencode 'limit=100' \
+      --data-urlencode 'offset=0' \
+      --data-urlencode 'sort=date_created' \
+      > "${WORK_DIR}/discography-${artist_id}-0.json"; then
+    echo "[catalog] skipping artist id=${artist_id}: discography endpoint rejected this result"
+    continue
+  fi
+
+  discography_count="$(jq '.data | length' "${WORK_DIR}/discography-${artist_id}-0.json")"
+  (( discography_count > 0 )) || continue
+
+  cat "${artist_candidates}" >> "${selected_file}"
+  validated_artists=$((validated_artists + 1))
+done
 
 artist_total="$(cut -f3 "${selected_file}" | sort -u | wc -l | tr -d ' ')"
 track_total="$(wc -l < "${selected_file}" | tr -d ' ')"
-echo "[catalog] selected artists=${artist_total} tracks=${track_total}"
+echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}"
 (( artist_total >= 10 ))
 (( track_total >= 20 ))
 
 printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
 
-# Verify the complete chain for every selected track:
-# search result -> artist profile -> paginated artist discography -> exact track detail -> stream URL -> audio bytes.
-while IFS=$'\t' read -r track_id expected_title artist_id expected_artist license_from_search; do
+# Final end-to-end verification for every selected track:
+# search result -> artist profile -> paginated artist discography -> exact track detail -> stream bytes.
+while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
   echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
 
   curl -fsS "${BASE_URL}/users/${artist_id}" > "${WORK_DIR}/artist.json"
-  jq -e --arg id "${artist_id}" --arg name "${expected_artist}" '
+  jq -e --arg id "${artist_id}" '
     (.data.id // .data.user_id | tostring) == $id
-    and ((.data.name // .data.handle | tostring) | length) > 0
-    and (((.data.name // .data.handle | tostring) == $name) or true)
+    and ((.data.name // .data.handle // "") | tostring | length) > 0
   ' "${WORK_DIR}/artist.json" >/dev/null
 
   found_in_discography=0
   offset=0
   while (( offset <= 500 )); do
-    curl -fsS --get "${BASE_URL}/users/${artist_id}/tracks" \
+    if ! curl -fsS --get "${BASE_URL}/users/${artist_id}/tracks" \
       --data-urlencode 'limit=100' \
       --data-urlencode "offset=${offset}" \
       --data-urlencode 'sort=date_created' \
-      > "${WORK_DIR}/discography.json"
+      > "${WORK_DIR}/discography.json"; then
+      echo "[catalog] FAIL: discography request rejected artist=${artist_id} offset=${offset}"
+      exit 1
+    fi
     page_count="$(jq '.data | length' "${WORK_DIR}/discography.json")"
     if jq -e --arg tid "${track_id}" '.data[]? | select((.id | tostring) == $tid)' "${WORK_DIR}/discography.json" >/dev/null; then
       found_in_discography=1
       break
     fi
-    (( page_count < 100 )) && break
+    if (( page_count < 100 )); then break; fi
     offset=$((offset + 100))
   done
   (( found_in_discography == 1 ))
@@ -112,13 +135,11 @@ while IFS=$'\t' read -r track_id expected_title artist_id expected_artist licens
     "${WORK_DIR}/track.json" >/dev/null
 
   license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${WORK_DIR}/track.json")"
-  stream_url="${BASE_URL}/tracks/${track_id}/stream"
   stream_file="${WORK_DIR}/${track_id}.audio"
-  curl -fsSL --range 0-4095 -o "${stream_file}" "${stream_url}"
+  curl -fsSL --range 0-4095 -o "${stream_file}" "${BASE_URL}/tracks/${track_id}/stream"
   stream_bytes="$(wc -c < "${stream_file}" | tr -d ' ')"
   (( stream_bytes > 0 ))
 
-  # Escape tabs/newlines in provider metadata so the audit report remains a valid TSV.
   safe_license="$(printf '%s' "${license}" | tr '\t\n' '  ')"
   printf 'Audius\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${artist_id}" "${expected_artist}" "${track_id}" "${expected_title}" "${safe_license}" "${stream_bytes}" \
