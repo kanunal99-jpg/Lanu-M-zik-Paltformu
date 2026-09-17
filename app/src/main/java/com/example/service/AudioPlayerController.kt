@@ -186,11 +186,7 @@ class AudioPlayerController(private val context: Context) {
         persistState()
     }
 
-    /**
-     * Playback gate: an offline file is always authoritative; otherwise only a
-     * URI explicitly mapped by a verified remote catalog provider may reach Media3.
-     * Legacy/static/uncertain catalog entries therefore cannot silently become playable.
-     */
+    /** Local offline copy is authoritative; remote playback requires explicit verified provenance. */
     private fun playableUri(song: Song): Uri? {
         val offline = File(context.filesDir, "offline_audio/${song.id}.bin")
         if (offline.isFile && offline.length() > 0L) return Uri.fromFile(offline)
@@ -255,7 +251,7 @@ class AudioPlayerController(private val context: Context) {
         persistState()
     }
 
-    fun cycleRepeatMode() {
+    fun toggleRepeat() {
         _repeatMode.value = when (_repeatMode.value) {
             RepeatMode.OFF -> RepeatMode.ALL
             RepeatMode.ALL -> RepeatMode.ONE
@@ -265,67 +261,85 @@ class AudioPlayerController(private val context: Context) {
         persistState()
     }
 
-    fun addToQueue(song: Song) {
-        if (playableUri(song) == null) {
-            showUnavailablePlayback()
-            return
-        }
-        _queue.value = _queue.value + song
-        mediaController?.addMediaItem(
-            MediaItem.Builder()
-                .setMediaId(song.id)
-                .setUri(playableUri(song)!!)
-                .setMediaMetadata(
-                    MediaMetadata.Builder().setTitle(song.title).setArtist(song.artist).setAlbumTitle(song.album).build()
-                ).build()
-        )
-        persistState()
-    }
-
-    fun removeFromQueue(index: Int) {
-        if (index !in _queue.value.indices) return
-        val updated = _queue.value.toMutableList().apply { removeAt(index) }
-        _queue.value = updated
-        mediaController?.removeMediaItem(index)
-        _queueIndex.value = _queueIndex.value.coerceAtMost((updated.size - 1).coerceAtLeast(0))
-        persistState()
+    fun toggleEqualizerEnabled() {
+        _equalizerState.value = _equalizerState.value.copy(isEnabled = !_equalizerState.value.isEnabled)
+        ensureAudioEffects()
+        audioEffects?.apply(_equalizerState.value)
     }
 
     fun setEqualizerPreset(preset: EqualizerPreset) {
-        _equalizerState.value = _equalizerState.value.copy(preset = preset)
-        audioEffects?.apply(_equalizerState.value)
-        persistState()
+        ensureAudioEffects()
+        _equalizerState.value = audioEffects?.applyPreset(preset, _equalizerState.value)
+            ?: _equalizerState.value.copy(activePreset = preset, bands = EqualizerState.getPresetBands(preset))
     }
 
-    fun setEqualizerEnabled(enabled: Boolean) {
-        _equalizerState.value = _equalizerState.value.copy(enabled = enabled)
+    fun setBandLevel(bandIndex: Int, levelDb: Float) {
+        val bands = _equalizerState.value.bands.toMutableList()
+        if (bandIndex in bands.indices) bands[bandIndex] = bands[bandIndex].copy(levelDb = levelDb.coerceIn(-12f, 12f))
+        _equalizerState.value = _equalizerState.value.copy(bands = bands, activePreset = EqualizerPreset.CUSTOM)
+        ensureAudioEffects()
         audioEffects?.apply(_equalizerState.value)
-        persistState()
+    }
+
+    fun setBassBoost(percent: Float) {
+        _equalizerState.value = _equalizerState.value.copy(bassBoostPercent = percent.coerceIn(0f, 1f))
+        ensureAudioEffects()
+        audioEffects?.apply(_equalizerState.value)
+    }
+
+    fun setVirtualizer(percent: Float) {
+        _equalizerState.value = _equalizerState.value.copy(virtualizerPercent = percent.coerceIn(0f, 1f))
+        ensureAudioEffects()
+        audioEffects?.apply(_equalizerState.value)
     }
 
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
+            var persistTick = 0
             while (isActive) {
-                mediaController?.let { _currentPositionMs.value = it.currentPosition.coerceAtLeast(0L) }
+                if (mediaController?.isPlaying == true) {
+                    _currentPositionMs.value = mediaController?.currentPosition ?: 0L
+                    mediaController?.duration?.takeIf { it > 0 }?.let { _durationMs.value = it }
+                    persistTick++
+                    if (persistTick % 4 == 0) persistState()
+                }
                 delay(500)
             }
         }
     }
 
-    private fun stopProgressTracker() {
-        progressJob?.cancel()
-        progressJob = null
+    private fun stopProgressTracker() { progressJob?.cancel(); progressJob = null }
+
+    private fun RepeatMode.toMedia3RepeatMode(): Int = when (this) {
+        RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+        RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+        RepeatMode.ONE -> Player.REPEAT_MODE_ONE
     }
 
     private fun persistState() {
-        playerStateStore.write(
+        playerStateStore.save(
             PlayerStateStore.Snapshot(
-                songId = _currentSong.value?.id ?: _queue.value.getOrNull(_queueIndex.value)?.id,
+                songId = _currentSong.value?.id,
+                title = _currentSong.value?.title,
+                artist = _currentSong.value?.artist,
                 positionMs = _currentPositionMs.value,
+                isPlaying = _isPlaying.value,
                 shuffle = _isShuffle.value,
                 repeatMode = _repeatMode.value
             )
         )
     }
+
+    fun release() {
+        persistState()
+        stopProgressTracker()
+        audioEffects?.release()
+        audioEffects = null
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
+        mediaController = null
+    }
 }
+
+enum class RepeatMode { OFF, ALL, ONE }
