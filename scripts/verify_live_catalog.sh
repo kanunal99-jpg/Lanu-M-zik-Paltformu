@@ -37,8 +37,22 @@ request_json() {
 request_stream_bytes() {
   local url="$1"
   local output="$2"
-  curl -fsSL --retry 3 --retry-delay 1 --retry-all-errors \
-    --connect-timeout 8 --max-time 20 --range 0-4095 -o "${output}" "${url}"
+  : > "${output}"
+
+  # Some Audius gateways ignore HTTP Range and begin sending the full audio object.
+  # Pipe into head so we capture only the first 4096 real audio bytes and intentionally
+  # close the connection. curl may report a broken pipe after head exits; that is okay.
+  set +e
+  curl -fsSL --connect-timeout 8 --max-time 15 --retry 1 --retry-delay 1 \
+    "${url}" | head -c 4096 > "${output}"
+  local curl_status=${PIPESTATUS[0]}
+  local head_status=${PIPESTATUS[1]}
+  set -e
+
+  local stream_bytes
+  stream_bytes="$(wc -c < "${output}" | tr -d ' ')"
+  echo "[catalog] stream probe: bytes=${stream_bytes}, curl_status=${curl_status}, head_status=${head_status}"
+  (( stream_bytes > 0 ))
   sleep 0.15
 }
 
