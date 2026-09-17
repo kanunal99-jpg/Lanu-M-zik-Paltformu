@@ -114,6 +114,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          apk_path="$(find release -type f -name 'app-debug.apk' -print -quit)"
+          sha_path="$(find release -type f -name 'app-debug.apk.sha256' -print -quit)"
+          [[ -n "${apk_path}" && -f "${apk_path}" ]]
+          [[ -n "${sha_path}" && -f "${sha_path}" ]]
+          echo "Resolved APK artifact: ${apk_path}"
+          echo "Resolved SHA-256 artifact: ${sha_path}"
+
           if ! gh release view --repo "${GH_REPO}" "${TAG_NAME}" >/dev/null 2>&1; then
             gh release create --repo "${GH_REPO}" "${TAG_NAME}" \
               --target "${GITHUB_SHA}" \
@@ -124,8 +131,8 @@ jobs:
           for attempt in 1 2 3 4; do
             echo "Release asset upload attempt ${attempt}/4"
             if gh release upload --repo "${GH_REPO}" "${TAG_NAME}" \
-              release/app-debug.apk \
-              release/app-debug.apk.sha256 \
+              "${apk_path}" \
+              "${sha_path}" \
               --clobber; then
               echo "Release assets uploaded successfully."
               break
