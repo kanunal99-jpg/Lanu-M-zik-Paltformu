@@ -43,14 +43,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.model.Album
 import com.example.model.Artist
 import com.example.model.Song
 import com.example.ui.theme.LanuCyan
 import com.example.ui.theme.LanuDarkBg
-import com.example.ui.theme.LanuDarkBorder
 import com.example.ui.theme.LanuDarkSurface
 import com.example.ui.theme.LanuGreen
-import com.example.ui.theme.LanuTextMuted
 import com.example.ui.theme.LanuTextPrimary
 import com.example.ui.theme.LanuTextSecondary
 
@@ -59,10 +58,29 @@ fun ArtistDetailSheet(
     artist: Artist,
     songs: List<Song>,
     onPlaySong: (Song, List<Song>) -> Unit,
+    onSelectAlbum: (Album) -> Unit,
     onShareArtist: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val verifiedSongs = songs.filter { it.artistId == artist.id }.distinctBy { it.id }
+    val albums = verifiedSongs
+        .groupBy { it.album.trim().ifBlank { "Single" } }
+        .map { (title, tracks) ->
+            val first = tracks.first()
+            Album(
+                id = "derived_album:${artist.id}:$title",
+                title = title,
+                artist = artist.name,
+                artistId = artist.id,
+                coverUrl = first.coverUrl,
+                releaseYear = tracks.map { it.releaseYear }.firstOrNull { it > 0 } ?: 0,
+                genre = first.category.titleTr,
+                songs = tracks
+            )
+        }
+        .sortedWith(compareByDescending<Album> { it.releaseYear }.thenBy { it.title.lowercase() })
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -70,200 +88,95 @@ fun ArtistDetailSheet(
             .statusBarsPadding()
             .testTag("artist_detail_screen")
     ) {
-        // Hero Image with Gradient & Overlay
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(260.dp)
-        ) {
-            AsyncImage(
-                model = artist.imageUrl,
-                contentDescription = artist.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.3f),
-                                Color.Transparent,
-                                LanuDarkBg
-                            )
-                        )
-                    )
-            )
-
-            // Top Buttons
+        Box(modifier = Modifier.fillMaxWidth().height(260.dp)) {
+            AsyncImage(model = artist.imageUrl, contentDescription = artist.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent, LanuDarkBg))))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .align(Alignment.TopCenter)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).align(Alignment.TopCenter)
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Geri",
-                        tint = Color.White
-                    )
-                }
-
-                IconButton(onClick = onShareArtist) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Sanatçıyı Paylaş",
-                        tint = Color.White
-                    )
-                }
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Geri", tint = Color.White) }
+                IconButton(onClick = onShareArtist) { Icon(Icons.Default.Share, contentDescription = "Sanatçıyı Paylaş", tint = Color.White) }
             }
-
-            // Artist Info Bottom Overlay
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-            ) {
+            Column(modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Doğrulanmış",
-                        tint = LanuCyan,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Doğrulanmış Sanatçı",
-                        color = LanuCyan,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Doğrulanmış", tint = LanuCyan, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Doğrulanmış Sanatçı", color = LanuCyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
-
-                Text(
-                    text = artist.name,
-                    color = Color.White,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-
-                Text(
-                    text = "${artist.monthlyListeners} aylık dinleyici • ${artist.genre}",
-                    color = LanuTextSecondary,
-                    fontSize = 13.sp
-                )
+                Text(artist.name, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+                Text("${artist.monthlyListeners} aylık dinleyici • ${artist.genre}", color = LanuTextSecondary, fontSize = 13.sp)
             }
         }
 
-        // Action Buttons: Play All
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-        ) {
-            if (songs.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            if (verifiedSongs.isNotEmpty()) {
                 Button(
-                    onClick = { onPlaySong(songs[0], songs) },
+                    onClick = { onPlaySong(verifiedSongs.first(), verifiedSongs) },
                     colors = ButtonDefaults.buttonColors(containerColor = LanuGreen),
                     shape = RoundedCornerShape(24.dp),
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text("Tümünü Çal", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        // Bio
         if (artist.bio.isNotBlank()) {
-            Text(
-                text = artist.bio,
-                color = LanuTextSecondary,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            Text(artist.bio, color = LanuTextSecondary, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            Spacer(Modifier.height(8.dp))
         }
 
-        Text(
-            text = "Popüler Parçalar",
-            color = LanuTextPrimary,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
-        )
-
-        // Songs List
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 90.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize().padding(bottom = 90.dp)
         ) {
-            items(songs, key = { it.id }) { song ->
+            if (albums.isNotEmpty()) {
+                item {
+                    Text("Albümler / Yayınlar", color = LanuTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 6.dp))
+                }
+                items(albums, key = { it.id }) { album ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(LanuDarkSurface)
+                            .clickable { onSelectAlbum(album) }
+                            .padding(10.dp)
+                    ) {
+                        AsyncImage(model = album.coverUrl, contentDescription = album.title, contentScale = ContentScale.Crop, modifier = Modifier.size(58.dp).clip(RoundedCornerShape(8.dp)))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(album.title, color = LanuTextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            val meta = listOf(album.releaseYear.takeIf { it > 0 }?.toString(), "${album.songs.size} parça").filterNotNull().joinToString(" • ")
+                            Text(meta, color = LanuTextSecondary, fontSize = 12.sp)
+                        }
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Albümü aç", tint = LanuGreen)
+                    }
+                }
+            }
+
+            item {
+                Text("Parçalar", color = LanuTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
+            }
+            items(verifiedSongs, key = { it.id }) { song ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(LanuDarkSurface)
-                        .clickable { onPlaySong(song, songs) }
-                        .padding(10.dp)
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, verifiedSongs) }.padding(10.dp)
                 ) {
-                    AsyncImage(
-                        model = song.coverUrl,
-                        contentDescription = song.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
+                    AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)))
+                    Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = song.title,
-                            color = LanuTextPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = "${song.album} (${song.releaseYear})",
-                            color = LanuTextSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1
-                        )
+                        Text(song.title, color = LanuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("${song.album}${song.releaseYear.takeIf { it > 0 }?.let { " ($it)" } ?: ""}", color = LanuTextSecondary, fontSize = 12.sp, maxLines = 1)
                     }
-
-                    Surface(
-                        shape = CircleShape,
-                        color = LanuGreen.copy(alpha = 0.15f),
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Çal",
-                                tint = LanuGreen,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                    Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.15f), modifier = Modifier.size(32.dp)) {
+                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) }
                     }
                 }
             }
