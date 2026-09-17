@@ -22,6 +22,7 @@ class AudiusCatalogProvider(
     companion object {
         private const val BASE_URL = "https://discoveryprovider.audius.co/v1"
         private const val DEFAULT_LIMIT = 40
+        private const val DISCOGRAPHY_LIMIT = 100
     }
 
     private suspend fun requestJson(path: String, params: Map<String, String> = emptyMap()): Result<JSONObject> = withContext(Dispatchers.IO) {
@@ -39,8 +40,28 @@ class AudiusCatalogProvider(
     private suspend fun requestArray(path: String, params: Map<String, String> = emptyMap()): Result<JSONArray> =
         requestJson(path, params).map { it.optJSONArray("data") ?: JSONArray() }
 
-    override suspend fun searchSongs(query: String): Result<List<Song>> =
-        requestArray("/tracks/search", mapOf("query" to query, "limit" to DEFAULT_LIMIT.toString())).map { AudiusSongMapper.mapSongs(it) }
+    override suspend fun searchSongs(query: String): Result<List<Song>> {
+        val directResult = requestArray("/tracks/search", mapOf("query" to query, "limit" to DEFAULT_LIMIT.toString()))
+            .map { AudiusSongMapper.mapSongs(it) }
+        if (query.isBlank()) return directResult
+
+        val directSongs = directResult.getOrElse { return directResult }
+        val artistSearch = requestArray("/users/search", mapOf("query" to query, "limit" to 10.toString()))
+            .getOrElse { return Result.success(directSongs) }
+        val normalizedQuery = query.trim().lowercase()
+        val exactArtists = AudiusArtistMapper.mapArtists(artistSearch)
+            .filter { it.name.trim().lowercase() == normalizedQuery }
+            .take(3)
+
+        if (exactArtists.isEmpty()) return Result.success(directSongs)
+
+        val artistTracks = buildList {
+            exactArtists.forEach { artist ->
+                getArtistDiscography(artist.id).onSuccess { addAll(it) }
+            }
+        }
+        return Result.success((directSongs + artistTracks).distinctBy { it.id })
+    }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> =
         requestArray("/users/search", mapOf("query" to query, "limit" to DEFAULT_LIMIT.toString())).map { AudiusArtistMapper.mapArtists(it) }
@@ -68,8 +89,8 @@ class AudiusCatalogProvider(
     }
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> =
-        requestArray("/users/${artistId.removePrefix("audius:")}/tracks", mapOf("limit" to DEFAULT_LIMIT.toString(), "sort" to "date_created"))
-            .map { results -> AudiusSongMapper.mapSongs(results).filter { it.artistId == "audius:${artistId.removePrefix("audius:")}" } }
+        requestArray("/users/${artistId.removePrefix("audius:")}/tracks", mapOf("limit" to DISCOGRAPHY_LIMIT.toString(), "sort" to "date_created"))
+            .map { results -> AudiusSongMapper.mapSongs(results).filter { it.artistId == "audius:${artistId.removePrefix("audius:")}" }.distinctBy { it.id } }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
         requestArray("/tracks/latest", mapOf("limit" to DEFAULT_LIMIT.toString())).map { results ->
