@@ -22,6 +22,7 @@ class AudiusCatalogProvider(
     companion object {
         private const val BASE_URL = "https://api.audius.co/v1"
         private const val FALLBACK_BASE_URL = "https://discoveryprovider.audius.co/v1"
+        private const val DISCOVERY_STREAM_BASE = "https://discoveryprovider.audius.co/v1/tracks"
         private const val DEFAULT_LIMIT = 40
         private const val DISCOGRAPHY_PAGE_SIZE = 100
     }
@@ -90,21 +91,34 @@ class AudiusCatalogProvider(
     }
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
-        getArtist(artistId).getOrThrow() ?: error("AUDIUS_ARTIST_NOT_FOUND")
         val providerArtistId = artistId.removePrefix("audius:")
-        val allSongs = buildList {
-            var offset = 0
-            while (true) {
-                val page = requestArray(
-                    "/users/$providerArtistId/tracks",
-                    mapOf("limit" to DISCOGRAPHY_PAGE_SIZE.toString(), "offset" to offset.toString())
-                ).getOrThrow()
-                addAll(AudiusSongMapper.mapSongs(page).filter { it.artistId == artistId })
-                if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
-                offset += DISCOGRAPHY_PAGE_SIZE
-            }
-        }
-        allSongs.distinctBy { it.id }
+
+        val canonical = runCatching {
+            val allSongs = buildList {
+                var offset = 0
+                while (true) {
+                    val page = requestArray(
+                        "/users/$providerArtistId/tracks",
+                        mapOf("limit" to DISCOGRAPHY_PAGE_SIZE.toString(), "offset" to offset.toString())
+                    ).getOrThrow()
+                    addAll(AudiusSongMapper.mapSongs(page).filter { it.artistId == "audius:$providerArtistId" })
+                    if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
+                    offset += DISCOGRAPHY_PAGE_SIZE
+                }
+            }.distinctBy { it.id }
+            allSongs.takeIf { it.isNotEmpty() }
+        }.getOrNull()
+
+        if (!canonical.isNullOrEmpty()) return@runCatching canonical
+
+        // Audius can return live search results for an artist whose legacy user-tracks
+        // route is no longer resolvable. Keep the chain working by resolving the profile,
+        // searching the live catalog by the verified artist name, and requiring an exact id.
+        val artist = getArtist("audius:$providerArtistId").getOrNull()
+            ?: return@runCatching emptyList()
+        searchSongs(artist.name).getOrElse { emptyList() }
+            .filter { it.artistId == "audius:$providerArtistId" }
+            .distinctBy { it.id }
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
@@ -131,8 +145,6 @@ internal object AudiusArtistMapper {
 }
 
 internal object AudiusSongMapper {
-    private const val STREAM_BASE = "https://api.audius.co/v1/tracks"
-
     fun mapSongs(results: JSONArray): List<Song> = buildList {
         for (index in 0 until results.length()) {
             val item = results.optJSONObject(index) ?: continue
@@ -156,7 +168,7 @@ internal object AudiusSongMapper {
             add(Song(id = "audius:$id", title = title, artist = artist, artistId = "audius:$artistId",
                 album = item.optStringAny("album_name", "albumName").trim().ifBlank { "Single" },
                 durationMs = item.optLongAny("duration") * 1000L, category = category, language = inferLanguage(tags),
-                coverUrl = coverUrl, audioUrl = "$STREAM_BASE/$id/stream", releaseYear = releaseYear,
+                coverUrl = coverUrl, audioUrl = "$DISCOVERY_STREAM_BASE/$id/stream", releaseYear = releaseYear,
                 isNewRelease = releaseYear >= LocalDate.now(ZoneOffset.UTC).year,
                 playCount = item.optLongAny("playCount", "play_count", "plays"), sourceType = SongSourceType.VERIFIED_REMOTE))
         }
