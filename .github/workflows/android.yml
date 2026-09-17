@@ -97,12 +97,40 @@ jobs:
           pattern: lanu-music-debug-${{ github.sha }}
           path: release
           merge-multiple: true
-      - name: Publish release with APK and SHA-256
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: lanu-music-${{ github.run_number }}-${{ github.sha }}
-          name: LANU Music Build ${{ github.run_number }}
-          generate_release_notes: true
-          files: |
-            release/app-debug.apk
-            release/app-debug.apk.sha256
+      - name: Publish release with resilient asset upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: lanu-music-${{ github.run_number }}-${{ github.sha }}
+          RELEASE_NAME: LANU Music Build ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+
+          if ! gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release create "${TAG_NAME}" \
+              --target "${GITHUB_SHA}" \
+              --title "${RELEASE_NAME}" \
+              --generate-notes
+          fi
+
+          for attempt in 1 2 3 4; do
+            echo "Release asset upload attempt ${attempt}/4"
+            if gh release upload "${TAG_NAME}" \
+              release/app-debug.apk \
+              release/app-debug.apk.sha256 \
+              --clobber; then
+              echo "Release assets uploaded successfully."
+              break
+            fi
+            if [[ "${attempt}" -eq 4 ]]; then
+              echo "ERROR: GitHub Release asset upload failed after 4 attempts."
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
+
+          assets="$(gh release view "${TAG_NAME}" --json assets --jq '.assets[].name')"
+          grep -Fxq 'app-debug.apk' <<<"${assets}"
+          grep -Fxq 'app-debug.apk.sha256' <<<"${assets}"
+          echo "Verified release assets:"
+          printf '%s\n' "${assets}"
