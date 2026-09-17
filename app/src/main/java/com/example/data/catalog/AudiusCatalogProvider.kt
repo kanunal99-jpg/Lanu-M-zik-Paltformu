@@ -67,6 +67,10 @@ class AudiusCatalogProvider(
         }
     }
 
+    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> =
+        requestArray("/users/${artistId.removePrefix("audius:")}/tracks", mapOf("limit" to DEFAULT_LIMIT.toString(), "sort" to "date_created"))
+            .map { results -> AudiusSongMapper.mapSongs(results).filter { it.artistId == "audius:${artistId.removePrefix("audius:")}" } }
+
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
         requestArray("/tracks/latest", mapOf("limit" to DEFAULT_LIMIT.toString())).map { results ->
             AudiusSongMapper.mapSongs(results).filter { song -> since == null || song.releaseYear >= since.atZone(ZoneOffset.UTC).year }
