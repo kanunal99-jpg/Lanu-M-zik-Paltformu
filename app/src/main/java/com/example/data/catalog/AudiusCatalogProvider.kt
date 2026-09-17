@@ -89,12 +89,15 @@ class AudiusCatalogProvider(
     }
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
-        val providerArtistId = artistId.removePrefix("audius:")
+        val artist = getArtist(artistId).getOrThrow() ?: error("AUDIUS_ARTIST_NOT_FOUND")
+        val handle = artist.handle.trim()
+        if (handle.isBlank()) error("AUDIUS_ARTIST_HANDLE_MISSING")
+
         val allSongs = buildList {
             var offset = 0
             while (true) {
                 val page = requestArray(
-                    "/users/$providerArtistId/tracks",
+                    "/users/handle/${encode(handle)}/tracks",
                     mapOf(
                         "limit" to DISCOGRAPHY_PAGE_SIZE.toString(),
                         "offset" to offset.toString(),
@@ -104,7 +107,7 @@ class AudiusCatalogProvider(
 
                 addAll(
                     AudiusSongMapper.mapSongs(page)
-                        .filter { it.artistId == "audius:$providerArtistId" }
+                        .filter { it.artistId == artistId }
                 )
 
                 if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
@@ -128,10 +131,12 @@ internal object AudiusArtistMapper {
             val item = results.optJSONObject(index) ?: continue
             val id = item.optStringAny("id", "user_id").trim()
             val name = item.optStringAny("name", "handle").trim()
+            val handle = item.optStringAny("handle").trim()
             if (id.isBlank() || name.isBlank()) continue
             val image = item.optJSONObject("profile_picture")
             add(Artist(id = "audius:$id", name = name, genre = "", bio = item.optStringAny("bio").trim(),
-                imageUrl = image?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty(), monthlyListeners = ""))
+                imageUrl = image?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty(), monthlyListeners = "",
+                handle = handle))
         }
     }
 }

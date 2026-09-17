@@ -7,5 +7,7 @@ data class Artist(
     val bio: String,
     val imageUrl: String,
     val monthlyListeners: String,
-    val isVerified: Boolean = true
+    val isVerified: Boolean = true,
+    /** Provider-native handle used by catalog APIs that address profiles by handle. */
+    val handle: String = ""
 )

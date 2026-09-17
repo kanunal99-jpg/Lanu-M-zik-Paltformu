@@ -13,10 +13,11 @@ tracks_file="${WORK_DIR}/candidates.tsv"
 
 for query in "${queries[@]}"; do
   echo "[catalog] searching Audius tracks: ${query}"
+  safe_query="${query// /_}"
   curl -fsS --get "${BASE_URL}/tracks/search" \
     --data-urlencode "query=${query}" \
     --data-urlencode 'limit=50' \
-    > "${WORK_DIR}/search-${query// /_}.json"
+    > "${WORK_DIR}/search-${safe_query}.json"
 
   jq -r '
     .data[]
@@ -34,15 +35,15 @@ for query in "${queries[@]}"; do
         (.user.name // .user.handle // .artist_name | tostring)
       ]
     | @tsv
-  ' "${WORK_DIR}/search-${query// /_}.json" >> "${tracks_file}"
+  ' "${WORK_DIR}/search-${safe_query}.json" >> "${tracks_file}"
 done
 
 sort -u -t $'\t' -k1,1 "${tracks_file}" > "${WORK_DIR}/candidates-dedup.tsv"
 selected_file="${WORK_DIR}/selected.tsv"
 : > "${selected_file}"
 
-# Only accept artist profiles that the live API resolves successfully. Some search results
-# can become stale/unavailable; those are excluded instead of making the gate silently pass.
+# A live search result can outlive its profile endpoint. Resolve the profile first,
+# then use the provider-native handle for the documented handle-based track listing.
 mapfile -t artist_ids < <(cut -f3 "${WORK_DIR}/candidates-dedup.tsv" | awk 'NF && !seen[$0]++')
 validated_artists=0
 
@@ -57,25 +58,25 @@ for artist_id in "${artist_ids[@]}"; do
     continue
   fi
 
-  if ! jq -e --arg id "${artist_id}" '(.data.id // .data.user_id | tostring) == $id and ((.data.name // .data.handle // "") | tostring | length) > 0' "${WORK_DIR}/artist-${artist_id}.json" >/dev/null; then
-    echo "[catalog] skipping artist id=${artist_id}: profile payload did not validate"
-    continue
-  fi
+  handle="$(jq -r '(.data.handle // "") | tostring' "${WORK_DIR}/artist-${artist_id}.json")"
+  artist_name="$(jq -r '(.data.name // .data.handle // "") | tostring' "${WORK_DIR}/artist-${artist_id}.json")"
+  [[ -n "${handle}" && -n "${artist_name}" ]] || continue
 
-  # Prove the artist's catalog endpoint resolves before selecting the artist for the gate.
-  if ! curl -fsS --get "${BASE_URL}/users/${artist_id}/tracks" \
+  if ! curl -fsS --get "${BASE_URL}/users/handle/${handle}/tracks" \
       --data-urlencode 'limit=100' \
       --data-urlencode 'offset=0' \
       --data-urlencode 'sort=date_created' \
       > "${WORK_DIR}/discography-${artist_id}-0.json"; then
-    echo "[catalog] skipping artist id=${artist_id}: discography endpoint rejected this result"
+    echo "[catalog] skipping artist=${artist_name} id=${artist_id}: handle discography endpoint rejected this result"
     continue
   fi
 
   discography_count="$(jq '.data | length' "${WORK_DIR}/discography-${artist_id}-0.json")"
   (( discography_count > 0 )) || continue
 
-  cat "${artist_candidates}" >> "${selected_file}"
+  while IFS=$'\t' read -r track_id title _artist_id _artist_name; do
+    printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "${handle}" >> "${selected_file}"
+  done < "${artist_candidates}"
   validated_artists=$((validated_artists + 1))
 done
 
@@ -89,24 +90,25 @@ printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream
 
 # Final end-to-end verification for every selected track:
 # search result -> artist profile -> paginated artist discography -> exact track detail -> stream bytes.
-while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
+while IFS=$'\t' read -r track_id expected_title artist_id expected_artist handle; do
   echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
 
   curl -fsS "${BASE_URL}/users/${artist_id}" > "${WORK_DIR}/artist.json"
-  jq -e --arg id "${artist_id}" '
+  jq -e --arg id "${artist_id}" --arg handle "${handle}" '
     (.data.id // .data.user_id | tostring) == $id
+    and ((.data.handle // "") | tostring) == $handle
     and ((.data.name // .data.handle // "") | tostring | length) > 0
   ' "${WORK_DIR}/artist.json" >/dev/null
 
   found_in_discography=0
   offset=0
   while (( offset <= 500 )); do
-    if ! curl -fsS --get "${BASE_URL}/users/${artist_id}/tracks" \
+    if ! curl -fsS --get "${BASE_URL}/users/handle/${handle}/tracks" \
       --data-urlencode 'limit=100' \
       --data-urlencode "offset=${offset}" \
       --data-urlencode 'sort=date_created' \
       > "${WORK_DIR}/discography.json"; then
-      echo "[catalog] FAIL: discography request rejected artist=${artist_id} offset=${offset}"
+      echo "[catalog] FAIL: handle discography request rejected artist=${expected_artist} handle=${handle} offset=${offset}"
       exit 1
     fi
     page_count="$(jq '.data | length' "${WORK_DIR}/discography.json")"
