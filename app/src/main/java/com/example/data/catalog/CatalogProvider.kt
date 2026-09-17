@@ -11,5 +11,7 @@ interface CatalogProvider {
     suspend fun getSong(id: String): Result<Song?>
     suspend fun getArtist(id: String): Result<Artist?>
     suspend fun getAlbum(id: String): Result<Album?>
+    /** Returns only tracks resolved from the provider's verified artist identity. */
+    suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = Result.success(emptyList())
     suspend fun getLatestReleases(since: Instant?): Result<List<Song>>
 }
