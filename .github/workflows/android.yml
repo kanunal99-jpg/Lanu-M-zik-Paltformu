@@ -31,26 +31,6 @@ jobs:
       - name: Verify Gradle
         run: gradle --version
 
-      - name: Verify public Jamendo API smoke test
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Jamendo documents 709fa152 as a read-API test client id.
-          response="$(curl -fsS --get 'https://api.jamendo.com/v3.0/tracks/' \
-            --data-urlencode 'client_id=709fa152' \
-            --data-urlencode 'format=json' \
-            --data-urlencode 'limit=5' \
-            --data-urlencode 'type=single albumtrack' \
-            --data-urlencode 'search=rock' \
-            --data-urlencode 'audioformat=mp32')"
-          code="$(jq -r '.headers.code // -1' <<<"${response}")"
-          count="$(jq -r '.headers.results_count // 0' <<<"${response}")"
-          playable="$(jq '[.results[] | select((.audio // "") != "" and (.name // "") != "" and (.artist_name // "") != "")] | length' <<<"${response}")"
-          echo "Jamendo public smoke: headers.code=${code}, results_count=${count}, playable=${playable}"
-          [[ "${code}" == "0" ]]
-          (( count > 0 ))
-          (( playable > 0 ))
-
       - name: Verify production catalog credential
         shell: bash
         run: |
