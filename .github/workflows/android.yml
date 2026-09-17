@@ -32,9 +32,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${JAMENDO_CLIENT_ID:-}" ]]; then
-            echo "ERROR: JAMENDO_CLIENT_ID secret is missing. Jamendo is optional until configured; Audius is the default live catalog."
+            echo "INFO: JAMENDO_CLIENT_ID is not configured; Audius is the default live catalog and Jamendo remains optional."
           fi
-      - name: Verify live Audius catalog response
+      - name: Verify live Audius catalog response and stream
         shell: bash
         run: |
           set -euo pipefail
@@ -43,9 +43,12 @@ jobs:
             --data-urlencode 'limit=5')"
           count="$(jq '.data | length' <<<"${response}")"
           streamable="$(jq '[.data[] | select(.isStreamable == true or .isStreamable == "true") | select((.id // "") != "")] | length' <<<"${response}")"
-          echo "Audius live smoke: results=${count}, streamable=${streamable}"
+          track_id="$(jq -r '[.data[] | select(.isStreamable == true or .isStreamable == "true") | select((.id // "") != "") | .id][0] // empty' <<<"${response}")"
+          echo "Audius live smoke: results=${count}, streamable=${streamable}, track_id=${track_id}"
+          [[ -n "${track_id}" ]]
           (( count > 0 ))
           (( streamable > 0 ))
+          curl -fsSL -r 0-1 -o /dev/null "https://discoveryprovider.audius.co/v1/tracks/${track_id}/stream"
       - name: Verify Jamendo only when credential is configured
         if: env.JAMENDO_CLIENT_ID != ''
         shell: bash
