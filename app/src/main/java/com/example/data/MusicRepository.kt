@@ -128,6 +128,17 @@ class MusicRepository(context: Context) {
 
     suspend fun searchRemoteArtists(query: String): Result<List<Artist>> = catalogProvider.searchArtists(query)
 
+    /** Resolves an artist's tracks by the provider identity, never by artist-name substring. */
+    suspend fun getArtistDiscography(artistId: String): Result<List<Song>> =
+        catalogProvider.getArtistDiscography(artistId).map { songs ->
+            songs.filter { it.artistId == artistId }.distinctBy { it.id }.also { verifiedSongs ->
+                if (verifiedSongs.isNotEmpty()) cacheSongs(verifiedSongs)
+                if (verifiedSongs.isNotEmpty()) {
+                    _songs.value = (_songs.value + verifiedSongs).distinctBy { it.id }
+                }
+            }
+        }
+
     private suspend fun migrateLegacyLibraryIfNeeded() {
         val session = userLibraryService.session.value ?: return
         val snapshot = userLibraryService.snapshot.value ?: return
