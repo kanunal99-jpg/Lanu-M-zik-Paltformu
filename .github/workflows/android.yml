@@ -5,6 +5,7 @@ on:
     branches: [ "main", "master", "fix/consolidated-p0-p1" ]
   pull_request:
     branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
