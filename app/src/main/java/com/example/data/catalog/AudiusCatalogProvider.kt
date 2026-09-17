@@ -90,15 +90,14 @@ class AudiusCatalogProvider(
     }
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
-        val artist = getArtist(artistId).getOrThrow() ?: error("AUDIUS_ARTIST_NOT_FOUND")
-        val handle = artist.handle.trim()
-        if (handle.isBlank()) error("AUDIUS_ARTIST_HANDLE_MISSING")
+        getArtist(artistId).getOrThrow() ?: error("AUDIUS_ARTIST_NOT_FOUND")
+        val providerArtistId = artistId.removePrefix("audius:")
         val allSongs = buildList {
             var offset = 0
             while (true) {
                 val page = requestArray(
-                    "/users/handle/${encode(handle)}/tracks",
-                    mapOf("limit" to DISCOGRAPHY_PAGE_SIZE.toString(), "offset" to offset.toString(), "sort" to "date_created")
+                    "/users/$providerArtistId/tracks",
+                    mapOf("limit" to DISCOGRAPHY_PAGE_SIZE.toString(), "offset" to offset.toString())
                 ).getOrThrow()
                 addAll(AudiusSongMapper.mapSongs(page).filter { it.artistId == artistId })
                 if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
