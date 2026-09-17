@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -44,7 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -60,9 +61,7 @@ import com.example.ui.components.MusicSearchBar
 import com.example.ui.components.SearchFilterScope
 import com.example.ui.components.SongSearchBarWithListView
 import com.example.ui.theme.LanuDarkBg
-import com.example.ui.theme.LanuDarkBorder
 import com.example.ui.theme.LanuDarkSurface
-import com.example.ui.theme.LanuDarkSurfaceElevated
 import com.example.ui.theme.LanuGreen
 import com.example.ui.theme.LanuTextMuted
 import com.example.ui.theme.LanuTextPrimary
@@ -110,11 +109,15 @@ fun SearchScreen(
 
                 val searchResults = if (searchQuery.isNotEmpty() || selectedCategory != null) {
                     allSongs.filter { song ->
+                        val normalized = q
+                        val songTitle = song.title.lowercase()
+                        val songArtist = song.artist.lowercase()
+                        val songAlbum = song.album.lowercase()
                         val matchesScope = when (selectedScope) {
-                            SearchFilterScope.ALL -> q.isEmpty() || song.title.lowercase().contains(q) || song.artist.lowercase().contains(q) || song.album.lowercase().contains(q) || song.lyrics.any { it.text.lowercase().contains(q) }
-                            SearchFilterScope.SONGS -> q.isEmpty() || song.title.lowercase().contains(q) || song.lyrics.any { it.text.lowercase().contains(q) }
-                            SearchFilterScope.ARTISTS -> q.isEmpty() || song.artist.lowercase().contains(q)
-                            SearchFilterScope.ALBUMS -> q.isEmpty() || song.album.lowercase().contains(q)
+                            SearchFilterScope.ALL -> normalized.isEmpty() || songTitle.contains(normalized) || songArtist.contains(normalized) || songAlbum.contains(normalized) || song.lyrics.any { it.text.lowercase().contains(normalized) }
+                            SearchFilterScope.SONGS -> normalized.isEmpty() || songTitle.contains(normalized) || song.lyrics.any { it.text.lowercase().contains(normalized) }
+                            SearchFilterScope.ARTISTS -> normalized.isEmpty() || songArtist.contains(normalized)
+                            SearchFilterScope.ALBUMS -> normalized.isEmpty() || songAlbum.contains(normalized)
                         }
                         val matchesCategory = selectedCategory == null || song.category == selectedCategory
                         matchesScope && matchesCategory
@@ -133,24 +136,25 @@ fun SearchScreen(
                         Text(text = "${remoteArtists.size} doğrulanmış sanatçı", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxSize()) {
                             items(remoteArtists, key = { it.id }) { artist ->
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onSelectArtist(artist) }.padding(10.dp).testTag("artist_search_result_${artist.id}")) {
-                                    AsyncImage(model = artist.imageUrl, contentDescription = artist.name, contentScale = ContentScale.Crop, modifier = Modifier.size(54.dp).clip(CircleShape))
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = artist.name, color = LanuTextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                        Text(text = artist.genre.ifBlank { "Doğrulanmış katalog sanatçısı" }, color = LanuTextSecondary, fontSize = 12.sp, maxLines = 1)
-                                    }
-                                    Icon(imageVector = Icons.Default.Person, contentDescription = "Sanatçı", tint = LanuGreen, modifier = Modifier.size(20.dp))
-                                }
+                                ArtistSearchRow(artist = artist, onClick = { onSelectArtist(artist) })
                             }
                         }
                     } else {
+                        if (selectedScope == SearchFilterScope.ALL && q.isNotBlank() && remoteArtists.isNotEmpty()) {
+                            Text(text = "Sanatçılar", color = LanuTextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                                remoteArtists.take(8).forEach { artist ->
+                                    ArtistSearchRow(artist = artist, onClick = { onSelectArtist(artist) })
+                                }
+                            }
+                        }
+
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                             Text(text = "${searchResults.size} sonuç bulundu", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                             if (selectedScope != SearchFilterScope.ALL) Text(text = "Filtre: ${selectedScope.label}", color = LanuGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
 
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
                             items(searchResults, key = { it.id }) { song ->
                                 val matchingLyric = if (q.isNotEmpty()) song.lyrics.firstOrNull { it.text.lowercase().contains(q) } else null
                                 val isAlbumMatch = q.isNotEmpty() && song.album.lowercase().contains(q)
@@ -182,5 +186,18 @@ fun SearchScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ArtistSearchRow(artist: Artist, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable(onClick = onClick).padding(10.dp).testTag("artist_search_result_${artist.id}")) {
+        AsyncImage(model = artist.imageUrl, contentDescription = artist.name, contentScale = ContentScale.Crop, modifier = Modifier.size(54.dp).clip(CircleShape))
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = artist.name, color = LanuTextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(text = artist.genre.ifBlank { "Doğrulanmış katalog sanatçısı" }, color = LanuTextSecondary, fontSize = 12.sp, maxLines = 1)
+        }
+        Icon(imageVector = Icons.Default.Person, contentDescription = "Sanatçı", tint = LanuGreen, modifier = Modifier.size(20.dp))
     }
 }
