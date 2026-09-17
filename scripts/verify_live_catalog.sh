@@ -7,6 +7,46 @@ REPORT_PATH="${GITHUB_WORKSPACE:-.}/build/live-catalog-verification.tsv"
 mkdir -p "${WORK_DIR}" "$(dirname "${REPORT_PATH}")"
 rm -f "${WORK_DIR}"/*
 
+# Audius documents a 10 req/s free-tier limit. Keep the verification deliberately
+# below that ceiling and retry transient rate-limit/server responses before failing.
+request_json() {
+  local url="$1"
+  local output="$2"
+  local attempt=1
+  local http_code=""
+
+  while (( attempt <= 6 )); do
+    http_code="$(curl -sS -L --connect-timeout 10 --max-time 30 \
+      -w '%{http_code}' -o "${output}" "${url}" || true)"
+
+    if [[ "${http_code}" == "200" ]] && jq -e . "${output}" >/dev/null 2>&1; then
+      sleep 0.20
+      return 0
+    fi
+
+    if [[ "${http_code}" == "429" || "${http_code}" =~ ^5[0-9][0-9]$ ]]; then
+      echo "[catalog] transient HTTP ${http_code}; retry ${attempt}/6"
+      sleep $((attempt * 2))
+    else
+      echo "[catalog] non-JSON or unexpected HTTP ${http_code}; retry ${attempt}/6"
+      sleep 1
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  echo "[catalog] request failed after retries: ${url}"
+  echo "[catalog] response preview: $(head -c 180 "${output}" | tr '\n\r' '  ')"
+  return 1
+}
+
+request_stream_bytes() {
+  local url="$1"
+  local output="$2"
+  curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+    --connect-timeout 10 --max-time 45 --range 0-4095 -o "${output}" "${url}"
+  sleep 0.20
+}
+
 queries=(rock pop electronic "hip hop" acoustic jazz)
 tracks_file="${WORK_DIR}/candidates.tsv"
 : > "${tracks_file}"
@@ -14,10 +54,8 @@ tracks_file="${WORK_DIR}/candidates.tsv"
 for query in "${queries[@]}"; do
   echo "[catalog] searching Audius tracks: ${query}"
   safe_query="${query// /_}"
-  curl -fsS --get "${BASE_URL}/tracks/search" \
-    --data-urlencode "query=${query}" \
-    --data-urlencode 'limit=50' \
-    > "${WORK_DIR}/search-${safe_query}.json"
+  search_url="${BASE_URL}/tracks/search?query=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${query}")&limit=50"
+  request_json "${search_url}" "${WORK_DIR}/search-${safe_query}.json"
 
   jq -r '
     .data[]
@@ -43,7 +81,7 @@ selected_file="${WORK_DIR}/selected.tsv"
 : > "${selected_file}"
 
 # A live search result can outlive its profile endpoint. Resolve the profile first,
-# then use the stable user-id route; Audius documents this collection with limit/offset.
+# then use the stable user-id route; keep these successful responses for final verification.
 mapfile -t artist_ids < <(cut -f3 "${WORK_DIR}/candidates-dedup.tsv" | awk 'NF && !seen[$0]++')
 validated_artists=0
 
@@ -53,23 +91,23 @@ for artist_id in "${artist_ids[@]}"; do
   awk -F '\t' -v id="${artist_id}" '$3 == id { print; if (++n == 2) exit }' "${WORK_DIR}/candidates-dedup.tsv" > "${artist_candidates}"
   [[ "$(wc -l < "${artist_candidates}")" -ge 2 ]] || continue
 
-  if ! curl -fsS "${BASE_URL}/users/${artist_id}" > "${WORK_DIR}/artist-${artist_id}.json"; then
+  artist_json="${WORK_DIR}/artist-${artist_id}.json"
+  if ! request_json "${BASE_URL}/users/${artist_id}" "${artist_json}"; then
     echo "[catalog] skipping artist id=${artist_id}: profile endpoint rejected this result"
     continue
   fi
 
-  artist_name="$(jq -r '(.data.name // .data.handle // "") | tostring' "${WORK_DIR}/artist-${artist_id}.json")"
+  artist_name="$(jq -r '(.data.name // .data.handle // "") | tostring' "${artist_json}")"
   [[ -n "${artist_name}" ]] || continue
 
-  if ! curl -fsS --get "${BASE_URL}/users/${artist_id}/tracks" \
-      --data-urlencode 'limit=100' \
-      --data-urlencode 'offset=0' \
-      > "${WORK_DIR}/discography-${artist_id}-0.json"; then
+  discography_json="${WORK_DIR}/discography-${artist_id}-0.json"
+  discography_url="${BASE_URL}/users/${artist_id}/tracks?limit=100&offset=0"
+  if ! request_json "${discography_url}" "${discography_json}"; then
     echo "[catalog] skipping artist=${artist_name} id=${artist_id}: user tracks endpoint rejected this result"
     continue
   fi
 
-  discography_count="$(jq '.data | length' "${WORK_DIR}/discography-${artist_id}-0.json")"
+  discography_count="$(jq '.data | length' "${discography_json}")"
   (( discography_count > 0 )) || continue
 
   while IFS=$'\t' read -r track_id title _artist_id _artist_name; do
@@ -87,26 +125,28 @@ echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}
 printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
 
 # Final end-to-end verification for every selected track:
-# search result -> artist profile -> paginated artist track list -> exact track detail -> stream bytes.
+# search result -> cached artist profile -> paginated artist track list -> exact track detail -> stream bytes.
 while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
   echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
 
-  curl -fsS "${BASE_URL}/users/${artist_id}" > "${WORK_DIR}/artist.json"
+  artist_json="${WORK_DIR}/artist-${artist_id}.json"
   jq -e --arg id "${artist_id}" '
     (.data.id // .data.user_id | tostring) == $id
     and ((.data.name // .data.handle // "") | tostring | length) > 0
-  ' "${WORK_DIR}/artist.json" >/dev/null
+  ' "${artist_json}" >/dev/null
 
   found_in_discography=0
   offset=0
+  cached_page="${WORK_DIR}/discography-${artist_id}-0.json"
+
   while (( offset <= 500 )); do
-    if ! curl -fsS --get "${BASE_URL}/users/${artist_id}/tracks" \
-      --data-urlencode 'limit=100' \
-      --data-urlencode "offset=${offset}" \
-      > "${WORK_DIR}/discography.json"; then
-      echo "[catalog] FAIL: user tracks request rejected artist=${expected_artist} id=${artist_id} offset=${offset}"
-      exit 1
+    if (( offset == 0 )); then
+      cp "${cached_page}" "${WORK_DIR}/discography.json"
+    else
+      discography_url="${BASE_URL}/users/${artist_id}/tracks?limit=100&offset=${offset}"
+      request_json "${discography_url}" "${WORK_DIR}/discography.json" || exit 1
     fi
+
     page_count="$(jq '.data | length' "${WORK_DIR}/discography.json")"
     if jq -e --arg tid "${track_id}" '.data[]? | select((.id | tostring) == $tid)' "${WORK_DIR}/discography.json" >/dev/null; then
       found_in_discography=1
@@ -117,7 +157,8 @@ while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
   done
   (( found_in_discography == 1 ))
 
-  curl -fsS "${BASE_URL}/tracks/${track_id}" > "${WORK_DIR}/track.json"
+  track_json="${WORK_DIR}/track-${track_id}.json"
+  request_json "${BASE_URL}/tracks/${track_id}" "${track_json}"
   jq -e \
     --arg tid "${track_id}" \
     --arg title "${expected_title}" \
@@ -130,11 +171,11 @@ while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
      and (((.is_stream_gated // .isStreamGated // false) | tostring | ascii_downcase) != "true")
      and (((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")
      and ((.id // "") != "")'
-    "${WORK_DIR}/track.json" >/dev/null
+    "${track_json}" >/dev/null
 
-  license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${WORK_DIR}/track.json")"
+  license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
   stream_file="${WORK_DIR}/${track_id}.audio"
-  curl -fsSL --range 0-4095 -o "${stream_file}" "${BASE_URL}/tracks/${track_id}/stream"
+  request_stream_bytes "${BASE_URL}/tracks/${track_id}/stream" "${stream_file}"
   stream_bytes="$(wc -c < "${stream_file}" | tr -d ' ')"
   (( stream_bytes > 0 ))
 
