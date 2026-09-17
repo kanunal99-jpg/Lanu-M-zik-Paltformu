@@ -29,11 +29,8 @@ class AlternativeCatalogProvider(
             }.onFailure { lastError = it }
         }
 
-        return if (hadSuccess) {
-            Result.success(merged.values.toList())
-        } else {
-            Result.failure(lastError ?: IllegalStateException("NO_CATALOG_FALLBACK_AVAILABLE"))
-        }
+        return if (hadSuccess) Result.success(merged.values.toList())
+        else Result.failure(lastError ?: IllegalStateException("NO_CATALOG_FALLBACK_AVAILABLE"))
     }
 
     private fun valueKey(value: Any): Any = when (value) {
@@ -48,7 +45,6 @@ class AlternativeCatalogProvider(
     ): Result<T?> {
         var lastError: Throwable? = null
         var hadSuccess = false
-
         fallbacks.forEach { provider ->
             val result = runCatching { call(provider) }.getOrElse { Result.failure(it) }
             result.onSuccess { value ->
@@ -56,28 +52,18 @@ class AlternativeCatalogProvider(
                 if (value != null) return Result.success(value)
             }.onFailure { lastError = it }
         }
-
-        return if (hadSuccess) {
-            Result.success(null)
-        } else {
-            Result.failure(lastError ?: IllegalStateException("NO_CATALOG_FALLBACK_AVAILABLE"))
-        }
+        return if (hadSuccess) Result.success(null)
+        else Result.failure(lastError ?: IllegalStateException("NO_CATALOG_FALLBACK_AVAILABLE"))
     }
 
-    override suspend fun searchSongs(query: String): Result<List<Song>> =
-        mergeLists { it.searchSongs(query) }
+    override suspend fun searchSongs(query: String): Result<List<Song>> = mergeLists { it.searchSongs(query) }
+    override suspend fun searchArtists(query: String): Result<List<Artist>> = mergeLists { it.searchArtists(query) }
+    override suspend fun getSong(id: String): Result<Song?> = firstResolved { it.getSong(id) }
+    override suspend fun getArtist(id: String): Result<Artist?> = firstResolved { it.getArtist(id) }
+    override suspend fun getAlbum(id: String): Result<Album?> = firstResolved { it.getAlbum(id) }
 
-    override suspend fun searchArtists(query: String): Result<List<Artist>> =
-        mergeLists { it.searchArtists(query) }
-
-    override suspend fun getSong(id: String): Result<Song?> =
-        firstResolved { it.getSong(id) }
-
-    override suspend fun getArtist(id: String): Result<Artist?> =
-        firstResolved { it.getArtist(id) }
-
-    override suspend fun getAlbum(id: String): Result<Album?> =
-        firstResolved { it.getAlbum(id) }
+    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> =
+        mergeLists { provider -> provider.getArtistDiscography(artistId) }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
         mergeLists { it.getLatestReleases(since) }
