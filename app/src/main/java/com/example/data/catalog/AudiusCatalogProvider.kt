@@ -22,7 +22,6 @@ class AudiusCatalogProvider(
     companion object {
         private const val BASE_URL = "https://api.audius.co/v1"
         private const val FALLBACK_BASE_URL = "https://discoveryprovider.audius.co/v1"
-        private const val DISCOVERY_STREAM_BASE = "https://discoveryprovider.audius.co/v1/tracks"
         private const val DEFAULT_LIMIT = 40
         private const val DISCOGRAPHY_PAGE_SIZE = 100
     }
@@ -145,6 +144,8 @@ internal object AudiusArtistMapper {
 }
 
 internal object AudiusSongMapper {
+    private const val STREAM_BASE = "https://discoveryprovider.audius.co/v1/tracks"
+
     fun mapSongs(results: JSONArray): List<Song> = buildList {
         for (index in 0 until results.length()) {
             val item = results.optJSONObject(index) ?: continue
@@ -168,7 +169,7 @@ internal object AudiusSongMapper {
             add(Song(id = "audius:$id", title = title, artist = artist, artistId = "audius:$artistId",
                 album = item.optStringAny("album_name", "albumName").trim().ifBlank { "Single" },
                 durationMs = item.optLongAny("duration") * 1000L, category = category, language = inferLanguage(tags),
-                coverUrl = coverUrl, audioUrl = "$DISCOVERY_STREAM_BASE/$id/stream", releaseYear = releaseYear,
+                coverUrl = coverUrl, audioUrl = "$STREAM_BASE/$id/stream", releaseYear = releaseYear,
                 isNewRelease = releaseYear >= LocalDate.now(ZoneOffset.UTC).year,
                 playCount = item.optLongAny("playCount", "play_count", "plays"), sourceType = SongSourceType.VERIFIED_REMOTE))
         }
