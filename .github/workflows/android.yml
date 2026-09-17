@@ -42,12 +42,12 @@ jobs:
             --data-urlencode 'query=rock' \
             --data-urlencode 'limit=5')"
           count="$(jq '.data | length' <<<"${response}")"
-          streamable="$(jq '[.data[] | select(.isStreamable == true or .isStreamable == "true") | select((.id // "") != "")] | length' <<<"${response}")"
-          track_id="$(jq -r '[.data[] | select(.isStreamable == true or .isStreamable == "true") | select((.id // "") != "") | .id][0] // empty' <<<"${response}")"
+          streamable="$(jq '[.data[] | select((.is_streamable // .isStreamable // "") | tostring | ascii_downcase == "true") | select((.id // "") != "")] | length' <<<"${response}")"
+          track_id="$(jq -r '[.data[] | select((.is_streamable // .isStreamable // "") | tostring | ascii_downcase == "true") | select((.id // "") != "") | .id][0] // empty' <<<"${response}")"
           echo "Audius live smoke: results=${count}, streamable=${streamable}, track_id=${track_id}"
-          [[ -n "${track_id}" ]]
           (( count > 0 ))
           (( streamable > 0 ))
+          [[ -n "${track_id}" ]]
           curl -fsSL -r 0-1 -o /dev/null "https://discoveryprovider.audius.co/v1/tracks/${track_id}/stream"
       - name: Verify Jamendo only when credential is configured
         if: env.JAMENDO_CLIENT_ID != ''
