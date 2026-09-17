@@ -20,21 +20,29 @@ class AudiusCatalogProvider(
     private val httpClient: OkHttpClient = OkHttpClient()
 ) : CatalogProvider {
     companion object {
-        private const val BASE_URL = "https://discoveryprovider.audius.co/v1"
+        private const val BASE_URL = "https://api.audius.co/v1"
+        private const val FALLBACK_BASE_URL = "https://discoveryprovider.audius.co/v1"
         private const val DEFAULT_LIMIT = 40
         private const val DISCOGRAPHY_PAGE_SIZE = 100
     }
 
     private suspend fun requestJson(path: String, params: Map<String, String> = emptyMap()): Result<JSONObject> = withContext(Dispatchers.IO) {
-        runCatching {
+        val urls = listOf(BASE_URL, FALLBACK_BASE_URL)
+        var lastFailure: Throwable? = null
+        for (baseUrl in urls) {
             val query = if (params.isEmpty()) "" else params.entries.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }
-            val url = if (query.isBlank()) "$BASE_URL$path" else "$BASE_URL$path?$query"
-            val request = Request.Builder().url(url).get().build()
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) error("AUDIUS_HTTP_${response.code}")
-                JSONObject(response.body?.string().orEmpty())
+            val url = if (query.isBlank()) "$baseUrl$path" else "$baseUrl$path?$query"
+            try {
+                val request = Request.Builder().url(url).get().build()
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) error("AUDIUS_HTTP_${response.code}")
+                    return@withContext Result.success(JSONObject(response.body?.string().orEmpty()))
+                }
+            } catch (failure: Throwable) {
+                lastFailure = failure
             }
         }
+        Result.failure(lastFailure ?: IllegalStateException("AUDIUS_REQUEST_FAILED"))
     }
 
     private suspend fun requestArray(path: String, params: Map<String, String> = emptyMap()): Result<JSONArray> =
@@ -44,7 +52,6 @@ class AudiusCatalogProvider(
         val directResult = requestArray("/tracks/search", mapOf("query" to query, "limit" to DEFAULT_LIMIT.toString()))
             .map { AudiusSongMapper.mapSongs(it) }
         if (query.isBlank()) return directResult
-
         val directSongs = directResult.getOrElse { return directResult }
         val artistSearch = requestArray("/users/search", mapOf("query" to query, "limit" to 10.toString()))
             .getOrElse { return Result.success(directSongs) }
@@ -52,14 +59,8 @@ class AudiusCatalogProvider(
         val exactArtists = AudiusArtistMapper.mapArtists(artistSearch)
             .filter { it.name.trim().lowercase() == normalizedQuery }
             .take(3)
-
         if (exactArtists.isEmpty()) return Result.success(directSongs)
-
-        val artistTracks = buildList {
-            exactArtists.forEach { artist ->
-                getArtistDiscography(artist.id).onSuccess { addAll(it) }
-            }
-        }
+        val artistTracks = buildList { exactArtists.forEach { artist -> getArtistDiscography(artist.id).onSuccess { addAll(it) } } }
         return Result.success((directSongs + artistTracks).distinctBy { it.id })
     }
 
@@ -92,24 +93,14 @@ class AudiusCatalogProvider(
         val artist = getArtist(artistId).getOrThrow() ?: error("AUDIUS_ARTIST_NOT_FOUND")
         val handle = artist.handle.trim()
         if (handle.isBlank()) error("AUDIUS_ARTIST_HANDLE_MISSING")
-
         val allSongs = buildList {
             var offset = 0
             while (true) {
                 val page = requestArray(
                     "/users/handle/${encode(handle)}/tracks",
-                    mapOf(
-                        "limit" to DISCOGRAPHY_PAGE_SIZE.toString(),
-                        "offset" to offset.toString(),
-                        "sort" to "date_created"
-                    )
+                    mapOf("limit" to DISCOGRAPHY_PAGE_SIZE.toString(), "offset" to offset.toString(), "sort" to "date_created")
                 ).getOrThrow()
-
-                addAll(
-                    AudiusSongMapper.mapSongs(page)
-                        .filter { it.artistId == artistId }
-                )
-
+                addAll(AudiusSongMapper.mapSongs(page).filter { it.artistId == artistId })
                 if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
                 offset += DISCOGRAPHY_PAGE_SIZE
             }
@@ -135,14 +126,13 @@ internal object AudiusArtistMapper {
             if (id.isBlank() || name.isBlank()) continue
             val image = item.optJSONObject("profile_picture")
             add(Artist(id = "audius:$id", name = name, genre = "", bio = item.optStringAny("bio").trim(),
-                imageUrl = image?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty(), monthlyListeners = "",
-                handle = handle))
+                imageUrl = image?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty(), monthlyListeners = "", handle = handle))
         }
     }
 }
 
 internal object AudiusSongMapper {
-    private const val STREAM_BASE = "https://discoveryprovider.audius.co/v1/tracks"
+    private const val STREAM_BASE = "https://api.audius.co/v1/tracks"
 
     fun mapSongs(results: JSONArray): List<Song> = buildList {
         for (index in 0 until results.length()) {
@@ -164,11 +154,10 @@ internal object AudiusSongMapper {
             val releaseYear = item.optStringAny("releaseDate", "release_date", "releasedate").take(4).toIntOrNull() ?: 0
             val artwork = item.optJSONObject("artwork")
             val coverUrl = artwork?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty()
-            val audioUrl = "$STREAM_BASE/$id/stream"
             add(Song(id = "audius:$id", title = title, artist = artist, artistId = "audius:$artistId",
                 album = item.optStringAny("album_name", "albumName").trim().ifBlank { "Single" },
                 durationMs = item.optLongAny("duration") * 1000L, category = category, language = inferLanguage(tags),
-                coverUrl = coverUrl, audioUrl = audioUrl, releaseYear = releaseYear,
+                coverUrl = coverUrl, audioUrl = "$STREAM_BASE/$id/stream", releaseYear = releaseYear,
                 isNewRelease = releaseYear >= LocalDate.now(ZoneOffset.UTC).year,
                 playCount = item.optLongAny("playCount", "play_count", "plays"), sourceType = SongSourceType.VERIFIED_REMOTE))
         }
