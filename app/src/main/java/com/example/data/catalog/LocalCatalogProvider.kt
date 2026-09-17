@@ -39,6 +39,13 @@ class LocalCatalogProvider(private val dao: MusicDao) : CatalogProvider {
         return Result.success(null)
     }
 
+    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
+        dao.getAllLocalSongs().first()
+            .filter { it.artistId == artistId }
+            .map { it.toSong().asLocal() }
+            .distinctBy { it.id }
+    }
+
     override suspend fun getAlbum(id: String): Result<Album?> {
         val songs = dao.getAllLocalSongs().first().filter { it.album.equals(id, ignoreCase = true) }.map { it.toSong().asLocal() }
         if (songs.isNotEmpty()) {
