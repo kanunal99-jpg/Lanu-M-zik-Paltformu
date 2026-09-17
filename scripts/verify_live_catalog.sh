@@ -2,6 +2,7 @@
 set -euo pipefail
 
 BASE_URL="https://api.audius.co/v1"
+STREAM_BASE_URL="https://discoveryprovider.audius.co/v1"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/lanu-live-catalog"
 REPORT_PATH="${GITHUB_WORKSPACE:-.}/build/live-catalog-verification.tsv"
 mkdir -p "${WORK_DIR}" "$(dirname "${REPORT_PATH}")"
@@ -81,7 +82,7 @@ selected_file="${WORK_DIR}/selected.tsv"
 : > "${selected_file}"
 
 # A live search result can outlive its profile endpoint. Resolve the profile first,
-# then use the stable user-id route; keep these successful responses for final verification.
+# then verify the artist->discography chain through the live track search with an exact id.
 mapfile -t artist_ids < <(cut -f3 "${WORK_DIR}/candidates-dedup.tsv" | awk 'NF && !seen[$0]++')
 validated_artists=0
 
@@ -100,15 +101,16 @@ for artist_id in "${artist_ids[@]}"; do
   artist_name="$(jq -r '(.data.name // .data.handle // "") | tostring' "${artist_json}")"
   [[ -n "${artist_name}" ]] || continue
 
-  discography_json="${WORK_DIR}/discography-${artist_id}-0.json"
-  discography_url="${BASE_URL}/users/${artist_id}/tracks?limit=100&offset=0"
+  encoded_artist="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${artist_name}")"
+  discography_json="${WORK_DIR}/discography-${artist_id}.json"
+  discography_url="${BASE_URL}/tracks/search?query=${encoded_artist}&limit=50"
   if ! request_json "${discography_url}" "${discography_json}"; then
-    echo "[catalog] skipping artist=${artist_name} id=${artist_id}: user tracks endpoint rejected this result"
+    echo "[catalog] skipping artist=${artist_name} id=${artist_id}: artist catalog search rejected this result"
     continue
   fi
 
-  discography_count="$(jq '.data | length' "${discography_json}")"
-  (( discography_count > 0 )) || continue
+  discography_count="$(jq --arg id "${artist_id}" '[.data[]? | select((.user.id // .user.user_id // .artist_id | tostring) == $id)] | length' "${discography_json}")"
+  (( discography_count >= 2 )) || continue
 
   while IFS=$'\t' read -r track_id title _artist_id _artist_name; do
     printf '%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" >> "${selected_file}"
@@ -125,7 +127,7 @@ echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}
 printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
 
 # Final end-to-end verification for every selected track:
-# search result -> cached artist profile -> paginated artist track list -> exact track detail -> stream bytes.
+# search result -> artist profile -> artist-name discography search -> exact track detail -> stream bytes.
 while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
   echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
 
@@ -135,27 +137,12 @@ while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
     and ((.data.name // .data.handle // "") | tostring | length) > 0
   ' "${artist_json}" >/dev/null
 
-  found_in_discography=0
-  offset=0
-  cached_page="${WORK_DIR}/discography-${artist_id}-0.json"
-
-  while (( offset <= 500 )); do
-    if (( offset == 0 )); then
-      cp "${cached_page}" "${WORK_DIR}/discography.json"
-    else
-      discography_url="${BASE_URL}/users/${artist_id}/tracks?limit=100&offset=${offset}"
-      request_json "${discography_url}" "${WORK_DIR}/discography.json" || exit 1
-    fi
-
-    page_count="$(jq '.data | length' "${WORK_DIR}/discography.json")"
-    if jq -e --arg tid "${track_id}" '.data[]? | select((.id | tostring) == $tid)' "${WORK_DIR}/discography.json" >/dev/null; then
-      found_in_discography=1
-      break
-    fi
-    if (( page_count < 100 )); then break; fi
-    offset=$((offset + 100))
-  done
-  (( found_in_discography == 1 ))
+  encoded_artist="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${expected_artist}")"
+  discography_json="${WORK_DIR}/discography-${artist_id}.json"
+  jq -e --arg id "${artist_id}" --arg tid "${track_id}" '
+    [.data[]? | select((.user.id // .user.user_id // .artist_id | tostring) == $id)]
+    | any(.[]; (.id | tostring) == $tid)
+  ' "${discography_json}" >/dev/null
 
   track_json="${WORK_DIR}/track-${track_id}.json"
   request_json "${BASE_URL}/tracks/${track_id}" "${track_json}"
@@ -175,7 +162,7 @@ while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
 
   license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
   stream_file="${WORK_DIR}/${track_id}.audio"
-  request_stream_bytes "${BASE_URL}/tracks/${track_id}/stream" "${stream_file}"
+  request_stream_bytes "${STREAM_BASE_URL}/tracks/${track_id}/stream" "${stream_file}"
   stream_bytes="$(wc -c < "${stream_file}" | tr -d ' ')"
   (( stream_bytes > 0 ))
 
