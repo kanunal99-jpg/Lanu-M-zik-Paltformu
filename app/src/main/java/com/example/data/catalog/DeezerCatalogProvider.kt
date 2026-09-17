@@ -14,13 +14,8 @@ import org.json.JSONObject
 import java.net.URLEncoder
 import java.time.Instant
 
-/**
- * Deezer public catalog adapter.
- * Metadata is used for discovery; playback is limited to the official preview URL returned by Deezer.
- */
-class DeezerCatalogProvider(
-    private val httpClient: OkHttpClient = OkHttpClient()
-) : CatalogProvider {
+/** Deezer public catalog adapter. Playback is limited to official preview URLs. */
+class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient()) : CatalogProvider {
     companion object {
         private const val BASE_URL = "https://api.deezer.com"
         private const val LIMIT = 50
@@ -40,45 +35,34 @@ class DeezerCatalogProvider(
     }
 
     override suspend fun searchSongs(query: String): Result<List<Song>> =
-        request("/search", mapOf("q" to query, "limit" to LIMIT.toString())).map { json ->
-            mapTracks(json.optJSONArray("data") ?: JSONArray())
-        }
+        request("/search", mapOf("q" to query, "limit" to "50")).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> =
-        request("/search/artist", mapOf("q" to query, "limit" to LIMIT.toString())).map { json ->
-            mapArtists(json.optJSONArray("data") ?: JSONArray())
-        }
+        request("/search/artist", mapOf("q" to query, "limit" to "50")).map { json -> mapArtists(json.optJSONArray("data") ?: JSONArray()) }
 
-    override suspend fun getSong(id: String): Result<Song?> = request("/track/${id.removePrefix("deezer:")}").map { json ->
-        mapTracks(JSONArray().put(json)).firstOrNull()
-    }
+    override suspend fun getSong(id: String): Result<Song?> = request("/track/${id.removePrefix("deezer:")}").map { json -> mapTracks(JSONArray().put(json)).firstOrNull() }
 
-    override suspend fun getArtist(id: String): Result<Artist?> = request("/artist/${id.removePrefix("deezer:")}").map { json ->
-        mapArtists(JSONArray().put(json)).firstOrNull()
-    }
+    override suspend fun getArtist(id: String): Result<Artist?> = request("/artist/${id.removePrefix("deezer:")}").map { json -> mapArtists(JSONArray().put(json)).firstOrNull() }
 
-    override suspend fun getAlbum(id: String): Result<Album?> = request("/album/${id.removePrefix("deezer_album:")}").map { json ->
-        mapAlbum(json)
-    }
+    override suspend fun getAlbum(id: String): Result<Album?> = request("/album/${id.removePrefix("deezer_album:")}").map(::mapAlbum)
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
-        val id = artistId.removePrefix("deezer:")
-        val albums = request("/artist/$id/albums", mapOf("limit" to LIMIT.toString())).getOrThrow()
-            .optJSONArray("data") ?: JSONArray()
-        val songs = buildList {
+        val providerArtistId = artistId.removePrefix("deezer:")
+        val albumsJson = request("/artist/$providerArtistId/albums", mapOf("limit" to "50")).getOrThrow()
+        val albums = albumsJson.optJSONArray("data") ?: JSONArray()
+        buildList {
             for (i in 0 until albums.length()) {
                 val albumId = albums.optJSONObject(i)?.optString("id").orEmpty()
                 if (albumId.isBlank()) continue
                 request("/album/$albumId").getOrNull()?.let { albumJson ->
-                    addAll(mapTracks(albumJson.optJSONArray("tracks")?.optJSONArray("data") ?: JSONArray()))
+                    addAll(mapTracks(albumJson.optJSONObject("tracks")?.optJSONArray("data") ?: JSONArray()))
                 }
             }
-        }
-        songs.filter { it.artistId == artistId }.distinctBy { it.id }
+        }.filter { it.artistId == "deezer:$providerArtistId" }.distinctBy { it.id }
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
-        request("/chart/0/tracks", mapOf("limit" to LIMIT.toString())).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
+        request("/chart/0/tracks", mapOf("limit" to "50")).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
 
     private fun mapArtists(data: JSONArray): List<Artist> = buildList {
         for (i in 0 until data.length()) {
@@ -86,14 +70,9 @@ class DeezerCatalogProvider(
             val id = item.optString("id").trim()
             val name = item.optString("name").trim()
             if (id.isBlank() || name.isBlank()) continue
-            add(Artist(
-                id = "deezer:$id",
-                name = name,
-                genre = "",
-                bio = "Doğrulanmış Deezer katalog sanatçısı",
+            add(Artist(id = "deezer:$id", name = name, genre = "", bio = "Doğrulanmış Deezer katalog sanatçısı",
                 imageUrl = item.optString("picture_xl").ifBlank { item.optString("picture_big") },
-                monthlyListeners = item.optLong("nb_fan").takeIf { it > 0 }?.toString().orEmpty()
-            ))
+                monthlyListeners = item.optLong("nb_fan").takeIf { it > 0 }?.toString().orEmpty()))
         }
     }
 
@@ -108,23 +87,11 @@ class DeezerCatalogProvider(
             val preview = item.optString("preview").trim()
             if (id.isBlank() || title.isBlank() || artistId.isBlank() || artist.isBlank() || preview.isBlank()) continue
             val albumObj = item.optJSONObject("album")
-            val albumId = albumObj?.optString("id").orEmpty()
             val album = albumObj?.optString("title").orEmpty().ifBlank { "Single" }
             val cover = albumObj?.optString("cover_xl").orEmpty().ifBlank { albumObj?.optString("cover_big").orEmpty() }
-            add(Song(
-                id = "deezer:$id",
-                title = title,
-                artist = artist,
-                artistId = "deezer:$artistId",
-                album = album,
-                durationMs = item.optLong("duration", 0L) * 1000L,
-                category = MusicCategory.GLOBAL_POP,
-                language = "und",
-                coverUrl = cover,
-                audioUrl = preview,
-                releaseYear = 0,
-                sourceType = SongSourceType.VERIFIED_REMOTE
-            ))
+            add(Song(id = "deezer:$id", title = title, artist = artist, artistId = "deezer:$artistId", album = album,
+                durationMs = item.optLong("duration", 0L) * 1000L, category = MusicCategory.GLOBAL_POP, language = "und",
+                coverUrl = cover, audioUrl = preview, releaseYear = 0, sourceType = SongSourceType.VERIFIED_REMOTE))
         }
     }
 
@@ -136,16 +103,9 @@ class DeezerCatalogProvider(
         val artist = artistObj?.optString("name").orEmpty().trim()
         if (id.isBlank() || title.isBlank() || artistId.isBlank() || artist.isBlank()) return null
         val tracks = mapTracks(json.optJSONObject("tracks")?.optJSONArray("data") ?: JSONArray())
-        return Album(
-            id = "deezer_album:$id",
-            title = title,
-            artist = artist,
-            artistId = "deezer:$artistId",
+        return Album(id = "deezer_album:$id", title = title, artist = artist, artistId = "deezer:$artistId",
             coverUrl = json.optString("cover_xl").ifBlank { json.optString("cover_big") },
-            releaseYear = json.optString("release_date").take(4).toIntOrNull() ?: 0,
-            genre = "",
-            songs = tracks
-        )
+            releaseYear = json.optString("release_date").take(4).toIntOrNull() ?: 0, genre = "", songs = tracks)
     }
 
     private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
