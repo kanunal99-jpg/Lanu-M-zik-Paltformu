@@ -62,6 +62,13 @@ class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
         return Result.success(null)
     }
 
+    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
+        dao.getAllCachedSongs().first()
+            .map { it.toSong().withCachedProvenance() }
+            .filter { it.artistId == artistId }
+            .distinctBy { it.id }
+    }
+
     override suspend fun getAlbum(id: String): Result<Album?> {
         val songs = dao.getAllCachedSongs().first().filter { it.album.equals(id, ignoreCase = true) }
             .map { it.toSong().withCachedProvenance() }
