@@ -15,6 +15,7 @@ import androidx.media3.session.SessionToken
 import com.example.model.EqualizerPreset
 import com.example.model.EqualizerState
 import com.example.model.Song
+import com.example.model.SongSourceType
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -185,11 +186,16 @@ class AudioPlayerController(private val context: Context) {
         persistState()
     }
 
-    /** Local offline copy is authoritative when present; otherwise use the verified catalog URI. */
+    /**
+     * Playback gate: an offline file is always authoritative; otherwise only a
+     * URI explicitly mapped by a verified remote catalog provider may reach Media3.
+     * Legacy/static/uncertain catalog entries therefore cannot silently become playable.
+     */
     private fun playableUri(song: Song): Uri? {
         val offline = File(context.filesDir, "offline_audio/${song.id}.bin")
         if (offline.isFile && offline.length() > 0L) return Uri.fromFile(offline)
-        return song.audioUrl.takeIf { it.isNotBlank() }?.let(Uri::parse)
+        if (song.sourceType != SongSourceType.VERIFIED_REMOTE) return null
+        return song.audioUrl.takeIf { it.startsWith("https://") || it.startsWith("http://") }?.let(Uri::parse)
     }
 
     private fun showUnavailablePlayback() {
@@ -249,7 +255,7 @@ class AudioPlayerController(private val context: Context) {
         persistState()
     }
 
-    fun toggleRepeat() {
+    fun cycleRepeatMode() {
         _repeatMode.value = when (_repeatMode.value) {
             RepeatMode.OFF -> RepeatMode.ALL
             RepeatMode.ALL -> RepeatMode.ONE
@@ -259,85 +265,67 @@ class AudioPlayerController(private val context: Context) {
         persistState()
     }
 
-    fun toggleEqualizerEnabled() {
-        _equalizerState.value = _equalizerState.value.copy(isEnabled = !_equalizerState.value.isEnabled)
-        ensureAudioEffects()
-        audioEffects?.apply(_equalizerState.value)
+    fun addToQueue(song: Song) {
+        if (playableUri(song) == null) {
+            showUnavailablePlayback()
+            return
+        }
+        _queue.value = _queue.value + song
+        mediaController?.addMediaItem(
+            MediaItem.Builder()
+                .setMediaId(song.id)
+                .setUri(playableUri(song)!!)
+                .setMediaMetadata(
+                    MediaMetadata.Builder().setTitle(song.title).setArtist(song.artist).setAlbumTitle(song.album).build()
+                ).build()
+        )
+        persistState()
+    }
+
+    fun removeFromQueue(index: Int) {
+        if (index !in _queue.value.indices) return
+        val updated = _queue.value.toMutableList().apply { removeAt(index) }
+        _queue.value = updated
+        mediaController?.removeMediaItem(index)
+        _queueIndex.value = _queueIndex.value.coerceAtMost((updated.size - 1).coerceAtLeast(0))
+        persistState()
     }
 
     fun setEqualizerPreset(preset: EqualizerPreset) {
-        ensureAudioEffects()
-        _equalizerState.value = audioEffects?.applyPreset(preset, _equalizerState.value)
-            ?: _equalizerState.value.copy(activePreset = preset, bands = EqualizerState.getPresetBands(preset))
+        _equalizerState.value = _equalizerState.value.copy(preset = preset)
+        audioEffects?.apply(_equalizerState.value)
+        persistState()
     }
 
-    fun setBandLevel(bandIndex: Int, levelDb: Float) {
-        val bands = _equalizerState.value.bands.toMutableList()
-        if (bandIndex in bands.indices) bands[bandIndex] = bands[bandIndex].copy(levelDb = levelDb.coerceIn(-12f, 12f))
-        _equalizerState.value = _equalizerState.value.copy(bands = bands, activePreset = EqualizerPreset.CUSTOM)
-        ensureAudioEffects()
+    fun setEqualizerEnabled(enabled: Boolean) {
+        _equalizerState.value = _equalizerState.value.copy(enabled = enabled)
         audioEffects?.apply(_equalizerState.value)
-    }
-
-    fun setBassBoost(percent: Float) {
-        _equalizerState.value = _equalizerState.value.copy(bassBoostPercent = percent.coerceIn(0f, 1f))
-        ensureAudioEffects()
-        audioEffects?.apply(_equalizerState.value)
-    }
-
-    fun setVirtualizer(percent: Float) {
-        _equalizerState.value = _equalizerState.value.copy(virtualizerPercent = percent.coerceIn(0f, 1f))
-        ensureAudioEffects()
-        audioEffects?.apply(_equalizerState.value)
+        persistState()
     }
 
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
-            var persistTick = 0
             while (isActive) {
-                if (mediaController?.isPlaying == true) {
-                    _currentPositionMs.value = mediaController?.currentPosition ?: 0L
-                    mediaController?.duration?.takeIf { it > 0 }?.let { _durationMs.value = it }
-                    persistTick++
-                    if (persistTick % 4 == 0) persistState()
-                }
+                mediaController?.let { _currentPositionMs.value = it.currentPosition.coerceAtLeast(0L) }
                 delay(500)
             }
         }
     }
 
-    private fun stopProgressTracker() { progressJob?.cancel(); progressJob = null }
-
-    private fun RepeatMode.toMedia3RepeatMode(): Int = when (this) {
-        RepeatMode.OFF -> Player.REPEAT_MODE_OFF
-        RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-        RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+    private fun stopProgressTracker() {
+        progressJob?.cancel()
+        progressJob = null
     }
 
     private fun persistState() {
-        playerStateStore.save(
+        playerStateStore.write(
             PlayerStateStore.Snapshot(
-                songId = _currentSong.value?.id,
-                title = _currentSong.value?.title,
-                artist = _currentSong.value?.artist,
+                songId = _currentSong.value?.id ?: _queue.value.getOrNull(_queueIndex.value)?.id,
                 positionMs = _currentPositionMs.value,
-                isPlaying = _isPlaying.value,
                 shuffle = _isShuffle.value,
                 repeatMode = _repeatMode.value
             )
         )
     }
-
-    fun release() {
-        persistState()
-        stopProgressTracker()
-        audioEffects?.release()
-        audioEffects = null
-        controllerFuture?.let { MediaController.releaseFuture(it) }
-        controllerFuture = null
-        mediaController = null
-    }
 }
-
-enum class RepeatMode { OFF, ALL, ONE }
