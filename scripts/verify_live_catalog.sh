@@ -74,7 +74,8 @@ sort -u -t $'\t' -k1,1 "${tracks_file}" > "${WORK_DIR}/candidates-dedup.tsv"
 selected_file="${WORK_DIR}/selected.tsv"
 : > "${selected_file}"
 
-# Phase 1: verify ten independent artist chains: profile -> live artist catalog search -> exact artist id.
+# Phase 1: verify ten independent artist identities. Each artist must already have two
+# distinct live search results, then its profile endpoint must resolve successfully.
 mapfile -t artist_ids < <(cut -f3 "${WORK_DIR}/candidates-dedup.tsv" | awk 'NF && !seen[$0]++')
 validated_artists=0
 
@@ -88,11 +89,6 @@ for artist_id in "${artist_ids[@]}"; do
   request_json "${BASE_URL}/users/${artist_id}" "${artist_json}" || continue
   artist_name="$(jq -r '(.data.name // .data.handle // "") | tostring' "${artist_json}")"
   [[ -n "${artist_name}" ]] || continue
-
-  discography_json="${WORK_DIR}/discography-${artist_id}.json"
-  request_json "${BASE_URL}/tracks/search?query=$(encode "${artist_name}")&limit=50" "${discography_json}" || continue
-  discography_count="$(jq --arg id "${artist_id}" '[.data[]? | select((.user.id // .user.user_id // .artist_id | tostring) == $id)] | length' "${discography_json}")"
-  (( discography_count >= 2 )) || continue
 
   while IFS=$'\t' read -r track_id title _artist_id _artist_name; do
     printf '%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" >> "${selected_file}"
@@ -108,7 +104,7 @@ echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}
 
 printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
 
-# Phase 2: for each selected track, verify exact catalog detail and actual audio bytes.
+# Phase 2: verify exact track identity/playability and actual audio bytes for all 20 tracks.
 while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
   echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
 
