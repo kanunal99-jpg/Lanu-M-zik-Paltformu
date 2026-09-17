@@ -59,6 +59,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearRecommendationAlert() { _recommendationAlert.value = null }
     private val _showLyricsInNowPlaying = MutableStateFlow(false)
     val showLyricsInNowPlaying: StateFlow<Boolean> = _showLyricsInNowPlaying.asStateFlow()
+    fun toggleLyricsInNowPlaying() { _showLyricsInNowPlaying.value = !_showLyricsInNowPlaying.value }
     private val _selectedArtist = MutableStateFlow<Artist?>(null)
     val selectedArtist: StateFlow<Artist?> = _selectedArtist.asStateFlow()
     private val _remoteArtistResults = MutableStateFlow<List<Artist>>(emptyList())
@@ -133,7 +134,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setTab(tab: MainTab) { _currentTab.value = tab }
     fun openNowPlaying() { _isNowPlayingExpanded.value = true }
     fun closeNowPlaying() { _isNowPlayingExpanded.value = false }
-    fun toggleLyricsInNowPlaying() { _showLyricsInNowPlaying.value = !_showLyricsInNowPlaying.value }
     fun playSong(song: Song, queue: List<Song> = listOf(song)) { val index = queue.indexOfFirst { it.id == song.id }.coerceAtLeast(0); playerController.setQueue(queue, index, autoPlay = true); viewModelScope.launch { repository.recordPlayedSong(song.id) } }
     fun togglePlayPause() { if (currentSong.value == null) { val firstSong = allSongs.value.firstOrNull(); if (firstSong != null) { playSong(firstSong, allSongs.value); return } }; playerController.togglePlayPause() }
     fun nextSong() { playerController.next() }
@@ -172,10 +172,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 val existing = allSongs.value.filter { it.artistId == artist.id }
                 if (existing.isEmpty()) {
-                    repository.searchRemoteCatalog(artist.name).onSuccess { songs ->
-                        val verifiedArtistSongs = songs.filter { it.artistId == artist.id }
-                        if (verifiedArtistSongs.isNotEmpty()) repository.cacheSongs(verifiedArtistSongs)
-                    }.onFailure { error -> Log.w("MainViewModel", "Artist discography fallback search failed", error) }
+                    repository.getArtistDiscography(artist.id).onSuccess { verifiedSongs ->
+                        if (verifiedSongs.isEmpty()) {
+                            repository.searchRemoteCatalog(artist.name).onSuccess { songs ->
+                                val fallbackSongs = songs.filter { it.artistId == artist.id }.distinctBy { it.id }
+                                if (fallbackSongs.isNotEmpty()) repository.cacheSongs(fallbackSongs)
+                            }.onFailure { error -> Log.w("MainViewModel", "Artist name-search fallback failed", error) }
+                        }
+                    }.onFailure { error -> Log.w("MainViewModel", "Verified artist discography lookup failed", error) }
                 }
             }
         }
