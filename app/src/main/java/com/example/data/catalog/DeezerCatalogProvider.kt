@@ -91,7 +91,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
             val cover = albumObj?.optString("cover_xl").orEmpty().ifBlank { albumObj?.optString("cover_big").orEmpty() }
             add(Song(id = "deezer:$id", title = title, artist = artist, artistId = "deezer:$artistId", album = album,
                 durationMs = item.optLong("duration", 0L) * 1000L, category = MusicCategory.GLOBAL_POP, language = "und",
-                coverUrl = cover, audioUrl = preview, releaseYear = 0, sourceType = SongSourceType.VERIFIED_PREVIEW))
+                coverUrl = cover, audioUrl = preview, releaseYear = 0, license = "deezer:official-preview", sourceType = SongSourceType.VERIFIED_PREVIEW))
         }
     }
 
