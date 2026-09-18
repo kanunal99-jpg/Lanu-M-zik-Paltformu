@@ -152,6 +152,8 @@ class MusicRepository(context: Context) {
         } else {
             Log.w("MusicRepository", "Catalog expansion returned no verified songs; keeping existing catalog")
         }
+    }
+
     suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).map { remoteSongs ->
         remoteSongs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
     }.onSuccess { remoteSongs ->
