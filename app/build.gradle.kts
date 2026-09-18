@@ -18,7 +18,10 @@ android {
     versionName = "1.0"
 
     val jamendoClientId = System.getenv("JAMENDO_CLIENT_ID") ?: ""
+    val jamendoCommercialLicenseConfirmed =
+      (System.getenv("JAMENDO_COMMERCIAL_LICENSE_CONFIRMED") ?: "").equals("true", ignoreCase = true)
     buildConfigField("String", "JAMENDO_CLIENT_ID", "\"$jamendoClientId\"")
+    buildConfigField("Boolean", "JAMENDO_COMMERCIAL_LICENSE_CONFIRMED", jamendoCommercialLicenseConfirmed.toString())
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
