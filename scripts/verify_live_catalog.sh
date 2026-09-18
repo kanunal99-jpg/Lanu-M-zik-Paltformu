@@ -68,10 +68,10 @@ license_is_permitted() {
   [[ "${value}" != *"non-commercial"* ]] || return 1
   [[ "${value}" != *"cc by-nc"* ]] || return 1
   [[ "${value}" != *"cc-by-nc"* ]] || return 1
-  if [[ "${value}" == *"cc0"* || "${value}" == *"creative commons zero"* || "${value}" == *"creativecommons.org/licenses/by/"* ]]; then
-    return 0
-  fi
-  [[ "${value}" =~ (^|[^a-z])cc[-[:space:]]by([ -][0-9.]+)?([ -]international)?$ ]]
+  [[ "${value}" == *"cc0"* ||
+     "${value}" == *"creative commons zero"* ||
+     "${value}" == *"creativecommons.org/licenses/by/"* ||
+     "${value}" =~ (^|[^a-z])cc[-[:space:]]by([ -][0-9.]+)?([ -]international)?$ ]]
 }
 
 queries=(rock pop electronic "hip hop" acoustic jazz)
@@ -93,9 +93,7 @@ for query in "${queries[@]}"; do
     | select(((.is_streamable // .isStreamable // false) | tostring | ascii_downcase) == "true")
     | select(((.is_stream_gated // .isStreamGated // false) | tostring | ascii_downcase) != "true")
     | select(((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")
-    | (.license // .license_info // "" | tostring) as $license
-    | select($license != "")
-    | [(.id|tostring),(.title // .name|tostring),(.user.id // .user.user_id // .artist_id|tostring),(.user.name // .user.handle // .artist_name|tostring)]
+    | [(.id|tostring),(.title // .name|tostring),(.user.id // .user.user_id // .artist_id|tostring),(.user.name // .user.handle // .artist_name|tostring),(.license // .license_info // "" | tostring)]
     | @tsv
   ' "${WORK_DIR}/search-${safe_query}.json" >> "${tracks_file}"
 done
@@ -112,7 +110,7 @@ validated_artists=0
 for artist_id in "${artist_ids[@]}"; do
   (( validated_artists < 10 )) || break
   artist_candidates="${WORK_DIR}/artist-${artist_id}.tsv"
-  awk -F '\t' -v id="${artist_id}" '$3 == id { print; if (++n == 2) exit }' "${WORK_DIR}/candidates-dedup.tsv" > "${artist_candidates}"
+  awk -F '\t' -v id="${artist_id}" '$3 == id { print }' "${WORK_DIR}/candidates-dedup.tsv" > "${artist_candidates}"
   [[ "$(wc -l < "${artist_candidates}")" -ge 2 ]] || continue
 
   artist_json="${WORK_DIR}/artist-${artist_id}.json"
@@ -120,8 +118,8 @@ for artist_id in "${artist_ids[@]}"; do
   artist_name="$(jq -r '(.data.name // .data.handle // "") | tostring' "${artist_json}")"
   [[ -n "${artist_name}" ]] || continue
 
-  while IFS=  validated_artists=$((validated_artists + 1))
-done
+  artist_selected=0
+  while IFS=done
 
 artist_total="$(cut -f3 "${selected_file}" | sort -u | wc -l | tr -d ' ')"
 track_total="$(wc -l < "${selected_file}" | tr -d ' ')"
@@ -166,10 +164,16 @@ done < "${selected_file}"
 
 echo "[catalog] PASS: ${artist_total} live artists and ${track_total} live tracks verified end-to-end with explicit permitted licenses."
 echo "[catalog] Audit report: ${REPORT_PATH}"\t' read -r track_id title _artist_id _artist_name license; do
-    license_is_permitted "${license}" || continue
+    if ! license_is_permitted "${license}"; then
+      continue
+    fi
     printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "${license}" >> "${selected_file}"
+    artist_selected=$((artist_selected + 1))
+    (( artist_selected >= 2 )) && break
   done < "${artist_candidates}"
-  validated_artists=$((validated_artists + 1))
+  if (( artist_selected >= 2 )); then
+    validated_artists=$((validated_artists + 1))
+  fi
 done
 
 artist_total="$(cut -f3 "${selected_file}" | sort -u | wc -l | tr -d ' ')"
@@ -242,10 +246,16 @@ done < "${selected_file}"
 
 echo "[catalog] PASS: ${artist_total} live artists and ${track_total} live tracks verified end-to-end."
 echo "[catalog] Audit report: ${REPORT_PATH}"\t' read -r track_id title _artist_id _artist_name license; do
-    license_is_permitted "${license}" || continue
+    if ! license_is_permitted "${license}"; then
+      continue
+    fi
     printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "${license}" >> "${selected_file}"
+    artist_selected=$((artist_selected + 1))
+    (( artist_selected >= 2 )) && break
   done < "${artist_candidates}"
-  validated_artists=$((validated_artists + 1))
+  if (( artist_selected >= 2 )); then
+    validated_artists=$((validated_artists + 1))
+  fi
 done
 
 artist_total="$(cut -f3 "${selected_file}" | sort -u | wc -l | tr -d ' ')"
