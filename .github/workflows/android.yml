@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       JAMENDO_CLIENT_ID: ${{ secrets.JAMENDO_CLIENT_ID }}
+      JAMENDO_COMMERCIAL_LICENSE_CONFIRMED: ${{ secrets.JAMENDO_COMMERCIAL_LICENSE_CONFIRMED }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -56,8 +57,8 @@ jobs:
           set -euo pipefail
           chmod +x scripts/verify_live_catalog.sh
           scripts/verify_live_catalog.sh
-      - name: Verify Jamendo only when credential is configured
-        if: env.JAMENDO_CLIENT_ID != ''
+      - name: Verify Jamendo only when credential and commercial license are configured
+        if: env.JAMENDO_CLIENT_ID != '' && env.JAMENDO_COMMERCIAL_LICENSE_CONFIRMED == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -75,6 +76,14 @@ jobs:
           [[ "${code}" == "0" ]]
           (( count > 0 ))
           (( playable > 0 ))
+      - name: Report Jamendo commercial licensing gate
+        shell: bash
+        run: |
+          if [[ "${JAMENDO_COMMERCIAL_LICENSE_CONFIRMED:-}" == "true" ]]; then
+            echo "Jamendo commercial license gate: ENABLED"
+          else
+            echo "Jamendo commercial license gate: DISABLED (safe default); Audius is the default full-stream catalog."
+          fi
       - name: Run Unit & Robolectric Tests
         run: gradle testDebugUnitTest --stacktrace
       - name: Assemble Debug APK
