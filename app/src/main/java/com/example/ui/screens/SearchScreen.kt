@@ -62,6 +62,7 @@ import com.example.ui.theme.LanuTextSecondary
 fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}) {
     var searchMode by remember { mutableStateOf(0) }
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
+    var browseAll by remember { mutableStateOf(false) }
     val q = searchQuery.trim().lowercase()
     Column(modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().testTag("search_screen")) {
         if (searchQuery.isEmpty() && selectedCategory == null) {
@@ -139,15 +140,45 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                             }
                         }
                     }
+                } else if (browseAll) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
+                        Column {
+                            Text(text = "Tüm Şarkılar", color = LanuTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "${allSongs.size} doğrulanmış/yerel parça indekslendi", color = LanuTextSecondary, fontSize = 12.sp)
+                        }
+                        Text(text = "Kategoriler", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { browseAll = false })
+                    }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxSize()) {
+                        items(allSongs, key = { it.id }) { song ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, allSongs) }.padding(10.dp)) {
+                                AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(song.title, color = LanuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text("${song.artist} • ${song.album}", color = LanuTextSecondary, fontSize = 12.sp, maxLines = 1)
+                                    Text(song.category.titleTr, color = LanuTextMuted, fontSize = 11.sp, maxLines = 1)
+                                }
+                                Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) { Box(contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) } }
+                            }
+                        }
+                    }
                 } else {
-                    Text(text = "Hepsine Göz At (Kategoriler)", color = LanuTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        Text(text = "Hepsine Göz At (Kategoriler)", color = LanuTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Tüm Şarkılar (${allSongs.size})", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { browseAll = true })
+                    }
                     LazyVerticalGrid(columns = GridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxSize()) {
                         items(MusicCategory.values()) { category ->
-                            Box(modifier = Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(colors = listOf(category.primaryColor, category.secondaryColor))).clickable { onSelectCategory(category) }.padding(12.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(colors = listOf(category.primaryColor, category.secondaryColor))).clickable { browseAll = false; onSelectCategory(category) }.padding(12.dp)) {
                                 Text(text = category.titleTr, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopStart))
                             }
                         }
                     }
+                }
                 }
             }
         }
