@@ -125,10 +125,25 @@ for artist_id in "${artist_ids[@]}"; do
   [[ -n "${artist_name}" ]] || continue
 
   artist_selected=0
-  while IFS="$TAB" read -r track_id title _artist_id _artist_name license; do
-    if ! license_is_permitted "$license"; then
-      continue
-    fi
+  candidate_number=0
+  while IFS="$TAB" read -r track_id title _artist_id _artist_name _search_license; do
+    candidate_number=$((candidate_number + 1))
+    (( candidate_number > 25 )) && break
+
+    track_json="${WORK_DIR}/selection-track-${track_id}.json"
+    request_json "${BASE_URL}/tracks/${track_id}" "${track_json}" || continue
+    license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
+    actual_artist_id="$(jq -r '(.data.user.id // .data.user.user_id // .data.artist_id // "") | tostring' "${track_json}")"
+    streamable="$(jq -r '((.data.is_streamable // .data.isStreamable // false) | tostring | ascii_downcase)' "${track_json}")"
+    gated="$(jq -r '((.data.is_stream_gated // .data.isStreamGated // false) | tostring | ascii_downcase)' "${track_json}")"
+    unlisted="$(jq -r '((.data.is_unlisted // .data.isUnlisted // false) | tostring | ascii_downcase)' "${track_json}")"
+    echo "[catalog] candidate=${artist_name}/${title} license=${license:-UNKNOWN}"
+    [[ "$actual_artist_id" == "$artist_id" ]] || continue
+    [[ "$streamable" == "true" ]] || continue
+    [[ "$gated" != "true" ]] || continue
+    [[ "$unlisted" != "true" ]] || continue
+    license_is_permitted "$license" || continue
+
     printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "$license" >> "${selected_file}"
     artist_selected=$((artist_selected + 1))
     if (( artist_selected >= 2 )); then
