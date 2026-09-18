@@ -179,7 +179,6 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                         }
                     }
                 }
-                }
             }
         }
     }
