@@ -116,7 +116,10 @@ class MusicRepository(context: Context) {
                 .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain failed: $query", error) }
         }
         catalogProvider.getLatestReleases(null)
-            .onSuccess { songs -> songs.forEach { fetched[it.id] = it } }
+            .onSuccess { songs ->
+                songs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+                    .forEach { fetched[it.id] = it }
+            }
             .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain latest refresh failed", error) }
 
         if (fetched.isNotEmpty()) {
