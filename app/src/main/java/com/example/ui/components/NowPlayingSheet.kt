@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -117,6 +118,7 @@ fun NowPlayingSheet(
     var isSeeking by remember { mutableStateOf(false) }
     var seekFraction by remember { mutableFloatStateOf(0f) }
     var showQualityMenu by remember { mutableStateOf(false) }
+    var showSourceInfo by remember { mutableStateOf(false) }
 
     val currentFraction = if (durationMs > 0) {
         (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
@@ -125,6 +127,38 @@ fun NowPlayingSheet(
     val displayPositionMs = if (isSeeking) {
         (seekFraction * durationMs).toLong()
     } else currentPositionMs
+
+    if (showSourceInfo) {
+        AlertDialog(
+            onDismissRequest = { showSourceInfo = false },
+            title = { Text("Kaynak ve lisans") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Sanatçı / lisans sağlayıcı: ${song.artist}")
+                    Text("Kaynak türü: ${song.sourceType.name}")
+                    Text("Lisans: ${song.license.ifBlank { "Bilinmiyor" }}")
+                    Text("Kaynak URI: ${song.audioUrl.ifBlank { "Yok" }}")
+                    if (song.license.contains("Audius Open Music License", ignoreCase = true)) {
+                        Text(
+                            "Audius OML ticari kullanımında lisansın öngördüğü atıf bilgilerinin korunması gerekir.",
+                            color = LanuTextSecondary
+                        )
+                    }
+                    if (song.sourceType == com.example.model.SongSourceType.VERIFIED_PREVIEW) {
+                        Text(
+                            "Bu içerik tam parça değil, doğrulanmış resmi önizleme kaynağıdır.",
+                            color = LanuTextSecondary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showSourceInfo = false }) {
+                    Text("Kapat")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -219,6 +253,15 @@ fun NowPlayingSheet(
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
+
+                IconButton(onClick = { showSourceInfo = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Kaynak ve lisans bilgisi",
+                        tint = LanuTextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
                 IconButton(onClick = onShare) {
                     Icon(
