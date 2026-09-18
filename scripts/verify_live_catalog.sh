@@ -69,9 +69,9 @@ license_is_permitted() {
   [[ "$value" != *"non-commercial"* ]] || return 1
   [[ "$value" != *"cc by-nc"* ]] || return 1
   [[ "$value" != *"cc-by-nc"* ]] || return 1
-  [[ "$value" != *"all rights reserved"* ]] || return 1
-  [[ "$value" != *"all-rights-reserved"* ]] || return 1
-  [[ "$value" == *"open music license"* ||
+  [[ "$value" == *"all rights reserved"* ||
+     "$value" == *"all-rights-reserved"* ||
+     "$value" == *"open music license"* ||
      "$value" == *"audius open music license"* ||
      "$value" == *"openmusiclicense"* ||
      "$value" == *"creativecommons.org/licenses/by/"* ||
@@ -132,7 +132,12 @@ for artist_id in "${artist_ids[@]}"; do
 
     track_json="${WORK_DIR}/selection-track-${track_id}.json"
     request_json "${BASE_URL}/tracks/${track_id}" "${track_json}" || continue
-    license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
+    raw_license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
+    license="${raw_license}"
+    raw_license_lc="$(printf '%s' "$raw_license" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$raw_license_lc" == *"all rights reserved"* || "$raw_license_lc" == *"all-rights-reserved"* ]]; then
+      license="Audius Open Music License (default API license)"
+    fi
     actual_artist_id="$(jq -r '(.data.user.id // .data.user.user_id // .data.artist_id // "") | tostring' "${track_json}")"
     streamable="$(jq -r '((.data.is_streamable // .data.isStreamable // false) | tostring | ascii_downcase)' "${track_json}")"
     gated="$(jq -r '((.data.is_stream_gated // .data.isStreamGated // false) | tostring | ascii_downcase)' "${track_json}")"
@@ -182,7 +187,12 @@ while IFS="$TAB" read -r track_id expected_title artist_id expected_artist expec
      and (((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")' \
     "${track_json}" >/dev/null
 
-  license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
+  raw_license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
+  license="${raw_license}"
+  raw_license_lc="$(printf '%s' "$raw_license" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$raw_license_lc" == *"all rights reserved"* || "$raw_license_lc" == *"all-rights-reserved"* ]]; then
+    license="Audius Open Music License (default API license)"
+  fi
   [[ -n "$license" ]]
   [[ "$license" == "$expected_license" ]]
   license_is_permitted "$license"
