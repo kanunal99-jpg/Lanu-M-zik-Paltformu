@@ -16,7 +16,11 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-class JamendoCatalogProvider(private val clientId: String, private val httpClient: OkHttpClient = OkHttpClient()) : CatalogProvider {
+class JamendoCatalogProvider(
+    private val clientId: String,
+    private val commercialLicenseConfirmed: Boolean = false,
+    private val httpClient: OkHttpClient = OkHttpClient()
+) : CatalogProvider {
     companion object {
         private const val TRACKS_URL = "https://api.jamendo.com/v3.0/tracks/"
         private const val ARTISTS_URL = "https://api.jamendo.com/v3.0/artists/"
@@ -39,15 +43,15 @@ class JamendoCatalogProvider(private val clientId: String, private val httpClien
     }
     private suspend fun requestTracks(params: Map<String, String>): Result<JSONArray> = requestJson(TRACKS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
     private suspend fun requestArtists(params: Map<String, String>): Result<JSONArray> = requestJson(ARTISTS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
-    override suspend fun searchSongs(query: String): Result<List<Song>> = requestTracks(mapOf("search" to query, "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { JamendoSongMapper.mapSongs(it) }
+    override suspend fun searchSongs(query: String): Result<List<Song>> = requestTracks(mapOf("search" to query, "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { JamendoSongMapper.mapSongs(it, commercialLicenseConfirmed) }
     override suspend fun searchArtists(query: String): Result<List<Artist>> = requestArtists(mapOf("namesearch" to query, "hasimage" to "true", "imagesize" to "300")).map { JamendoArtistMapper.mapArtists(it) }
-    override suspend fun getSong(id: String): Result<Song?> = requestTracks(mapOf("id" to id.removePrefix("jamendo:"), "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { JamendoSongMapper.mapSongs(it).firstOrNull() }
+    override suspend fun getSong(id: String): Result<Song?> = requestTracks(mapOf("id" to id.removePrefix("jamendo:"), "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { JamendoSongMapper.mapSongs(it, commercialLicenseConfirmed).firstOrNull() }
     override suspend fun getArtist(id: String): Result<Artist?> = requestArtists(mapOf("id" to id.removePrefix("jamendo:"), "hasimage" to "true", "imagesize" to "300")).map { JamendoArtistMapper.mapArtists(it).firstOrNull() }
     override suspend fun getAlbum(id: String): Result<Album?> = requestTracks(mapOf("album_id" to id.removePrefix("jamendo:"), "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { results ->
-        val songs = JamendoSongMapper.mapSongs(results)
+        val songs = JamendoSongMapper.mapSongs(results, commercialLicenseConfirmed)
         songs.firstOrNull()?.let { first -> Album(id = id, title = first.album, artist = first.artist, artistId = first.artistId, coverUrl = first.coverUrl, releaseYear = first.releaseYear, genre = first.category.titleTr, songs = songs) }
     }
-    override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> = requestTracks(mapOf("order" to "releasedate_desc", "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { results -> JamendoSongMapper.mapSongs(results).filter { song -> since == null || song.releaseYear >= since.atZone(ZoneOffset.UTC).year } }
+    override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> = requestTracks(mapOf("order" to "releasedate_desc", "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { results -> JamendoSongMapper.mapSongs(results, commercialLicenseConfirmed).filter { song -> since == null || song.releaseYear >= since.atZone(ZoneOffset.UTC).year } }
     private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
 }
 
@@ -63,7 +67,7 @@ internal object JamendoArtistMapper {
 }
 
 internal object JamendoSongMapper {
-    fun mapSongs(results: JSONArray): List<Song> = buildList {
+    fun mapSongs(results: JSONArray, commercialLicenseConfirmed: Boolean = false): List<Song> = buildList {
         for (index in 0 until results.length()) {
             val item = results.optJSONObject(index) ?: continue
             val audioUrl = item.optString("audio").trim(); val title = item.optString("name").trim(); val artist = item.optString("artist_name").trim()
@@ -73,10 +77,15 @@ internal object JamendoSongMapper {
             val language = musicInfo?.optString("lang").orEmpty().lowercase().ifBlank { inferLanguage(allTags, item) }
             val category = inferCategory(allTags, language); val releaseYear = item.optString("releasedate").take(4).toIntOrNull() ?: 0; val id = item.optString("id")
             if (id.isBlank()) continue
+            val license = item.optString("license_ccurl").trim()
+            val sourceType = if (
+                commercialLicenseConfirmed &&
+                CatalogLicensePolicy.isPermittedRemoteLicense(license)
+            ) SongSourceType.VERIFIED_REMOTE else SongSourceType.UNKNOWN
             add(Song(id = "jamendo:$id", title = title, artist = artist, artistId = "jamendo:${item.optString("artist_id")}", album = item.optString("album_name").ifBlank { "Single" },
                 durationMs = item.optLong("duration", 0L) * 1000L, category = category, language = language.ifBlank { "und" }, coverUrl = item.optString("album_image").ifBlank { item.optString("image") }, audioUrl = audioUrl,
                 releaseYear = releaseYear, isNewRelease = releaseYear >= LocalDate.now(ZoneOffset.UTC).year, playCount = item.optJSONObject("stats")?.optLong("listens_month", 0L) ?: 0L,
-                sourceType = SongSourceType.VERIFIED_REMOTE))
+                sourceType = sourceType, license = license))
         }
     }
     private fun inferLanguage(tags: Set<String>, item: JSONObject): String { val text = "${item.optString("name")} ${item.optString("album_name")} ${item.optString("artist_name")}".lowercase(); return when { "turkish" in tags || "türkçe" in tags || text.contains("turkish") -> "tr"; "english" in tags || "english" in text -> "en"; else -> "und" } }
