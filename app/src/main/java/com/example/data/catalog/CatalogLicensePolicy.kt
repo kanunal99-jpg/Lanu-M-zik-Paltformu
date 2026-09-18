@@ -34,7 +34,9 @@ object CatalogLicensePolicy {
             value.contains("cc-by-nc")
         ) return false
 
-        return isExplicitOpenLicense(value) ||
+        return value.contains("cc0") ||
+            value.contains("creative commons zero") ||
+            isExplicitOpenLicense(value) ||
             value.contains("all rights reserved") ||
             value.contains("all-rights-reserved")
     }
