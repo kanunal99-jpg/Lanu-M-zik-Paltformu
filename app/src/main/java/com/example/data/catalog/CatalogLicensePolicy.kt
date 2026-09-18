@@ -10,7 +10,8 @@ package com.example.data.catalog
  * their respective conditions. NC variants stay blocked.
  */
 object CatalogLicensePolicy {
-    private const val AUDIUS_OML = "Audius Open Music License (default API license)"
+    const val AUDIUS_OML = "Audius Open Music License (default API license)"
+    const val AUDIUS_OML_URI = "https://audius.org/open-music-license.pdf"
 
     fun isPermittedRemoteLicense(rawLicense: String): Boolean {
         val value = rawLicense.trim().lowercase()
