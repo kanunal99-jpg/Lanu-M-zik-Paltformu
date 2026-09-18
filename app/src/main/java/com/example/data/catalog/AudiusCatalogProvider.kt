@@ -160,8 +160,9 @@ internal object AudiusSongMapper {
             val artist = user?.optStringAny("name", "handle").orEmpty().trim().ifBlank { item.optStringAny("artist_name").trim() }
             val artistId = user?.optStringAny("id", "user_id").orEmpty().trim().ifBlank { item.optStringAny("artist_id").trim() }
             if (artist.isBlank() || artistId.isBlank()) continue
-            val license = item.optStringAny("license", "license_info").trim()
-            if (!CatalogLicensePolicy.isPermittedRemoteLicense(license)) continue
+            val rawLicense = item.optStringAny("license", "license_info").trim()
+            if (!CatalogLicensePolicy.isPermittedAudiusLicense(rawLicense)) continue
+            val license = CatalogLicensePolicy.effectiveAudiusLicense(rawLicense)
             val genre = item.optStringAny("genre").trim().lowercase()
             val tags = item.optJSONArrayAny("tags").strings().map(String::lowercase)
             val category = inferCategory(genre, tags)
