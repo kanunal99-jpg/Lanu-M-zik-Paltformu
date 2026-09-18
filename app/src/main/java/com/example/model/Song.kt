@@ -39,7 +39,7 @@ enum class AudioQuality(val title: String, val bitRate: String, val description:
     val bitrate: String get() = bitRate
 }
 
-/** Provenance of a playable song. UNKNOWN is deliberately not playable. */
+/** Provenance of a playable song. UNKNOWN is deliberately not playable. VERIFIED_REMOTE also requires explicit permitted license provenance. */
 enum class SongSourceType {
     UNKNOWN,
     LOCAL,
