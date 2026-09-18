@@ -22,7 +22,9 @@ object CatalogLicensePolicy {
         ) return false
         if (value.contains("all rights reserved") || value.contains("all-rights-reserved")) return false
 
-        return isExplicitOpenLicense(value)
+        return value.contains("cc0") ||
+            value.contains("creative commons zero") ||
+            isExplicitOpenLicense(value)
     }
 
     fun isPermittedAudiusLicense(rawLicense: String): Boolean {
@@ -55,7 +57,9 @@ object CatalogLicensePolicy {
 
     private fun isExplicitOpenLicense(value: String): Boolean =
         value.contains("open music license") ||
+            value.contains("open-music-license") ||
             value.contains("audius open music license") ||
+            value.contains("audius-open-music-license") ||
             value.contains("openmusiclicense") ||
             value.contains("creativecommons.org/licenses/by/") ||
             value.contains("creativecommons.org/licenses/by-sa/") ||
