@@ -160,6 +160,8 @@ internal object AudiusSongMapper {
             val artist = user?.optStringAny("name", "handle").orEmpty().trim().ifBlank { item.optStringAny("artist_name").trim() }
             val artistId = user?.optStringAny("id", "user_id").orEmpty().trim().ifBlank { item.optStringAny("artist_id").trim() }
             if (artist.isBlank() || artistId.isBlank()) continue
+            val license = item.optStringAny("license", "license_info").trim()
+            if (!isPermittedLicense(license)) continue
             val genre = item.optStringAny("genre").trim().lowercase()
             val tags = item.optJSONArrayAny("tags").strings().map(String::lowercase)
             val category = inferCategory(genre, tags)
@@ -185,6 +187,17 @@ internal object AudiusSongMapper {
         genre.contains("classical") -> MusicCategory.CHILL_LOFI
         else -> MusicCategory.GLOBAL_POP
     }
+
+    private fun isPermittedLicense(rawLicense: String): Boolean {
+        val value = rawLicense.trim().lowercase()
+        if (value.isBlank()) return false
+        if (value.contains("noncommercial") || value.contains("non-commercial") || value.contains("cc by-nc") || value.contains("cc-by-nc")) return false
+        return value.contains("cc0") ||
+            value.contains("creative commons zero") ||
+            value.contains("creativecommons.org/licenses/by/") ||
+            Regex("""(^|[^a-z])cc[- ]?by(?:[ -][0-9.]+)?(?:[ -]international)?$""").containsMatchIn(value)
+    }
+
 
     private fun inferLanguage(tags: List<String>): String = when {
         tags.any { it == "turkish" || it == "türkçe" } -> "tr"
