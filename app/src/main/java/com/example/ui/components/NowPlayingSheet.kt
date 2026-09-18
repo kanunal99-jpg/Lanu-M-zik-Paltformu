@@ -75,6 +75,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.AudioQuality
 import com.example.model.Song
+import com.example.model.SongSourceType
+import com.example.data.catalog.CatalogLicensePolicy
 import com.example.service.RepeatMode
 import com.example.ui.theme.LanuCyan
 import com.example.ui.theme.LanuDarkBg
@@ -139,12 +141,14 @@ fun NowPlayingSheet(
                     Text("Lisans: ${song.license.ifBlank { "Bilinmiyor" }}")
                     Text("Kaynak URI: ${song.audioUrl.ifBlank { "Yok" }}")
                     if (song.license.contains("Audius Open Music License", ignoreCase = true)) {
+                        Text("OML referansı: ${CatalogLicensePolicy.AUDIUS_OML_URI}", color = LanuTextSecondary)
+                        Text("Atıf kimliği: ${song.artist}", color = LanuTextSecondary)
                         Text(
-                            "Audius OML ticari kullanımında lisansın öngördüğü atıf bilgilerinin korunması gerekir.",
+                            "Ticari kullanımda Audius OML'nin öngördüğü lisans sağlayıcı kimliği, telif bildirimi, OML bildirimi ve kaynak bağlantısı mümkün olduğunca korunmalıdır.",
                             color = LanuTextSecondary
                         )
                     }
-                    if (song.sourceType == com.example.model.SongSourceType.VERIFIED_PREVIEW) {
+                    if (song.sourceType == SongSourceType.VERIFIED_PREVIEW) {
                         Text(
                             "Bu içerik tam parça değil, doğrulanmış resmi önizleme kaynağıdır.",
                             color = LanuTextSecondary
