@@ -48,7 +48,10 @@ class MusicRepository(context: Context) {
 
     private val audiusCatalogProvider: CatalogProvider = AudiusCatalogProvider()
     private val deezerCatalogProvider: CatalogProvider = DeezerCatalogProvider()
-    private val jamendoCatalogProvider: CatalogProvider = PrimaryCatalogProvider(BuildConfig.JAMENDO_CLIENT_ID)
+    private val jamendoCatalogProvider: CatalogProvider = PrimaryCatalogProvider(
+        BuildConfig.JAMENDO_CLIENT_ID,
+        BuildConfig.JAMENDO_COMMERCIAL_LICENSE_CONFIRMED
+    )
     private val catalogProvider: CatalogProvider = AlternativeCatalogProvider(
         listOf(
             audiusCatalogProvider,
@@ -106,7 +109,10 @@ class MusicRepository(context: Context) {
         val fetched = LinkedHashMap<String, Song>()
         queries.forEach { query ->
             catalogProvider.searchSongs(query)
-                .onSuccess { songs -> songs.forEach { fetched[it.id] = it } }
+                .onSuccess { songs ->
+                    songs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+                        .forEach { fetched[it.id] = it }
+                }
                 .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain failed: $query", error) }
         }
         catalogProvider.getLatestReleases(null)
@@ -123,7 +129,9 @@ class MusicRepository(context: Context) {
         }
     }
 
-    suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).onSuccess { remoteSongs ->
+    suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).map { remoteSongs ->
+        remoteSongs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+    }.onSuccess { remoteSongs ->
         if (remoteSongs.isNotEmpty()) {
             cacheSongs(remoteSongs)
             _songs.value = (_songs.value + remoteSongs).distinctBy { it.id }
@@ -135,7 +143,8 @@ class MusicRepository(context: Context) {
     /** Resolves an artist's tracks by the provider identity, never by artist-name substring. */
     suspend fun getArtistDiscography(artistId: String): Result<List<Song>> =
         catalogProvider.getArtistDiscography(artistId).map { songs ->
-            songs.filter { it.artistId == artistId }.distinctBy { it.id }.also { verifiedSongs ->
+            songs.filter { it.artistId == artistId && it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+                .distinctBy { it.id }.also { verifiedSongs ->
                 if (verifiedSongs.isNotEmpty()) cacheSongs(verifiedSongs)
                 if (verifiedSongs.isNotEmpty()) {
                     _songs.value = (_songs.value + verifiedSongs).distinctBy { it.id }
