@@ -34,6 +34,14 @@ class CatalogLicensePolicyTest {
     }
 
     @Test
+    fun treatsAudiusAllRightsReservedMetadataAsDefaultOml() {
+        assertFalse(CatalogLicensePolicy.isPermittedRemoteLicense("All rights reserved"))
+        assertTrue(CatalogLicensePolicy.isPermittedAudiusLicense("All rights reserved"))
+        assertTrue(CatalogLicensePolicy.isAudiusOmlLicense("All rights reserved"))
+        assertTrue(CatalogLicensePolicy.isAudiusOmlLicense("Audius Open Music License (default API license)"))
+    }
+
+    @Test
     fun rejectsNonCommercialCreativeCommons() {
         assertFalse(CatalogLicensePolicy.isPermittedRemoteLicense("CC BY-NC 4.0"))
         assertFalse(CatalogLicensePolicy.isPermittedRemoteLicense("CC BY-NC-ND 3.0"))
