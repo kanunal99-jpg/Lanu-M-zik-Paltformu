@@ -16,6 +16,7 @@ import com.example.model.EqualizerPreset
 import com.example.model.EqualizerState
 import com.example.model.Song
 import com.example.model.SongSourceType
+import com.example.data.catalog.CatalogLicensePolicy
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -201,6 +202,9 @@ class AudioPlayerController(private val context: Context) {
         if (raw.startsWith("content://") || raw.startsWith("file://")) {
             return Uri.parse(raw)
         }
+        if (song.sourceType == SongSourceType.VERIFIED_REMOTE &&
+            !CatalogLicensePolicy.isPermittedRemoteLicense(song.license)
+        ) return null
         if (song.sourceType != SongSourceType.VERIFIED_REMOTE && song.sourceType != SongSourceType.VERIFIED_PREVIEW) return null
         return raw.takeIf { it.startsWith("https://") || it.startsWith("http://") }?.let(Uri::parse)
     }
