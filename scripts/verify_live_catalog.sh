@@ -5,6 +5,7 @@ BASE_URL="https://api.audius.co/v1"
 STREAM_BASE_URL="https://discoveryprovider.audius.co/v1"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/lanu-live-catalog"
 REPORT_PATH="${GITHUB_WORKSPACE:-.}/build/live-catalog-verification.tsv"
+TAB="$(printf "\t")"
 mkdir -p "${WORK_DIR}" "$(dirname "${REPORT_PATH}")"
 rm -f "${WORK_DIR}"/*
 
@@ -62,16 +63,16 @@ encode() {
 license_is_permitted() {
   local raw="$1"
   local value
-  value="$(printf '%s' "${raw}" | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')"
-  [[ -n "${value}" ]] || return 1
-  [[ "${value}" != *"noncommercial"* ]] || return 1
-  [[ "${value}" != *"non-commercial"* ]] || return 1
-  [[ "${value}" != *"cc by-nc"* ]] || return 1
-  [[ "${value}" != *"cc-by-nc"* ]] || return 1
-  [[ "${value}" == *"cc0"* ||
-     "${value}" == *"creative commons zero"* ||
-     "${value}" == *"creativecommons.org/licenses/by/"* ||
-     "${value}" =~ (^|[^a-z])cc[-[:space:]]by([ -][0-9.]+)?([ -]international)?$ ]]
+  value="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')"
+  [[ -n "$value" ]] || return 1
+  [[ "$value" != *"noncommercial"* ]] || return 1
+  [[ "$value" != *"non-commercial"* ]] || return 1
+  [[ "$value" != *"cc by-nc"* ]] || return 1
+  [[ "$value" != *"cc-by-nc"* ]] || return 1
+  [[ "$value" == *"cc0"* ||
+     "$value" == *"creative commons zero"* ||
+     "$value" == *"creativecommons.org/licenses/by/"* ||
+     "$value" =~ (^|[^a-z])cc[-[:space:]]by([ -][0-9.]+)?([ -]international)?$ ]]
 }
 
 queries=(rock pop electronic "hip hop" acoustic jazz)
@@ -98,7 +99,7 @@ for query in "${queries[@]}"; do
   ' "${WORK_DIR}/search-${safe_query}.json" >> "${tracks_file}"
 done
 
-sort -u -t $'\t' -k1,1 "${tracks_file}" > "${WORK_DIR}/candidates-dedup.tsv"
+sort -u -t "$TAB" -k1,1 "${tracks_file}" > "${WORK_DIR}/candidates-dedup.tsv"
 selected_file="${WORK_DIR}/selected.tsv"
 : > "${selected_file}"
 
@@ -119,7 +120,20 @@ for artist_id in "${artist_ids[@]}"; do
   [[ -n "${artist_name}" ]] || continue
 
   artist_selected=0
-  while IFS=done
+  while IFS="$TAB" read -r track_id title _artist_id _artist_name license; do
+    if ! license_is_permitted "$license"; then
+      continue
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "$license" >> "${selected_file}"
+    artist_selected=$((artist_selected + 1))
+    if (( artist_selected >= 2 )); then
+      break
+    fi
+  done < "${artist_candidates}"
+  if (( artist_selected >= 2 )); then
+    validated_artists=$((validated_artists + 1))
+  fi
+done
 
 artist_total="$(cut -f3 "${selected_file}" | sort -u | wc -l | tr -d ' ')"
 track_total="$(wc -l < "${selected_file}" | tr -d ' ')"
@@ -130,7 +144,7 @@ echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}
 printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
 
 # Phase 2: verify exact track identity/playability and actual audio bytes for all 20 tracks.
-while IFS=
+while IFS="$TAB" read -r track_id expected_title artist_id expected_artist expected_license; do
   echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
 
   track_json="${WORK_DIR}/track-${track_id}.json"
@@ -149,9 +163,9 @@ while IFS=
     "${track_json}" >/dev/null
 
   license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
-  [[ -n "${license}" ]]
-  [[ "${license}" == "${expected_license}" ]]
-  license_is_permitted "${license}"
+  [[ -n "$license" ]]
+  [[ "$license" == "$expected_license" ]]
+  license_is_permitted "$license"
   stream_file="${WORK_DIR}/${track_id}.audio"
   request_stream_bytes "${STREAM_BASE_URL}/tracks/${track_id}/stream" "${stream_file}"
   stream_bytes="$(wc -c < "${stream_file}" | tr -d ' ')"
@@ -163,138 +177,4 @@ while IFS=
 done < "${selected_file}"
 
 echo "[catalog] PASS: ${artist_total} live artists and ${track_total} live tracks verified end-to-end with explicit permitted licenses."
-echo "[catalog] Audit report: ${REPORT_PATH}"\t' read -r track_id title _artist_id _artist_name license; do
-    if ! license_is_permitted "${license}"; then
-      continue
-    fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "${license}" >> "${selected_file}"
-    artist_selected=$((artist_selected + 1))
-    (( artist_selected >= 2 )) && break
-  done < "${artist_candidates}"
-  if (( artist_selected >= 2 )); then
-    validated_artists=$((validated_artists + 1))
-  fi
-done
-
-artist_total="$(cut -f3 "${selected_file}" | sort -u | wc -l | tr -d ' ')"
-track_total="$(wc -l < "${selected_file}" | tr -d ' ')"
-echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}"
-(( artist_total >= 10 ))
-(( track_total >= 20 ))
-
-printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
-
-# Phase 2: verify exact track identity/playability and actual audio bytes for all 20 tracks.
-while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
-  echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
-
-  track_json="${WORK_DIR}/track-${track_id}.json"
-  request_json "${BASE_URL}/tracks/${track_id}" "${track_json}"
-  jq -e \
-    --arg tid "${track_id}" \
-    --arg title "${expected_title}" \
-    --arg artist_id "${artist_id}" \
-    '.data
-     | ((.id | tostring) == $tid)
-     and ((.title // .name | tostring) == $title)
-     and (((.user.id // .user.user_id // .artist_id) | tostring) == $artist_id)
-     and (((.is_streamable // .isStreamable // false) | tostring | ascii_downcase) == "true")
-     and (((.is_stream_gated // .isStreamGated // false) | tostring | ascii_downcase) != "true")
-     and (((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")' \
-    "${track_json}" >/dev/null
-
-  license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
-  stream_file="${WORK_DIR}/${track_id}.audio"
-  request_stream_bytes "${STREAM_BASE_URL}/tracks/${track_id}/stream" "${stream_file}"
-  stream_bytes="$(wc -c < "${stream_file}" | tr -d ' ')"
-  (( stream_bytes > 0 ))
-
-  safe_license="$(printf '%s' "${license}" | tr '\t\n' '  ')"
-  printf 'Audius\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "${artist_id}" "${expected_artist}" "${track_id}" "${expected_title}" "${safe_license}" "${stream_bytes}" >> "${REPORT_PATH}"
-done < "${selected_file}"
-
-echo "[catalog] PASS: ${artist_total} live artists and ${track_total} live tracks verified end-to-end."
-echo "[catalog] Audit report: ${REPORT_PATH}"\t' read -r track_id expected_title artist_id expected_artist expected_license; do
-  echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
-
-  track_json="${WORK_DIR}/track-${track_id}.json"
-  request_json "${BASE_URL}/tracks/${track_id}" "${track_json}"
-  jq -e \
-    --arg tid "${track_id}" \
-    --arg title "${expected_title}" \
-    --arg artist_id "${artist_id}" \
-    '.data
-     | ((.id | tostring) == $tid)
-     and ((.title // .name | tostring) == $title)
-     and (((.user.id // .user.user_id // .artist_id) | tostring) == $artist_id)
-     and (((.is_streamable // .isStreamable // false) | tostring | ascii_downcase) == "true")
-     and (((.is_stream_gated // .isStreamGated // false) | tostring | ascii_downcase) != "true")
-     and (((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")' \
-    "${track_json}" >/dev/null
-
-  license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
-  stream_file="${WORK_DIR}/${track_id}.audio"
-  request_stream_bytes "${STREAM_BASE_URL}/tracks/${track_id}/stream" "${stream_file}"
-  stream_bytes="$(wc -c < "${stream_file}" | tr -d ' ')"
-  (( stream_bytes > 0 ))
-
-  safe_license="$(printf '%s' "${license}" | tr '\t\n' '  ')"
-  printf 'Audius\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "${artist_id}" "${expected_artist}" "${track_id}" "${expected_title}" "${safe_license}" "${stream_bytes}" >> "${REPORT_PATH}"
-done < "${selected_file}"
-
-echo "[catalog] PASS: ${artist_total} live artists and ${track_total} live tracks verified end-to-end."
-echo "[catalog] Audit report: ${REPORT_PATH}"\t' read -r track_id title _artist_id _artist_name license; do
-    if ! license_is_permitted "${license}"; then
-      continue
-    fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "${track_id}" "${title}" "${artist_id}" "${artist_name}" "${license}" >> "${selected_file}"
-    artist_selected=$((artist_selected + 1))
-    (( artist_selected >= 2 )) && break
-  done < "${artist_candidates}"
-  if (( artist_selected >= 2 )); then
-    validated_artists=$((validated_artists + 1))
-  fi
-done
-
-artist_total="$(cut -f3 "${selected_file}" | sort -u | wc -l | tr -d ' ')"
-track_total="$(wc -l < "${selected_file}" | tr -d ' ')"
-echo "[catalog] selected validated artists=${artist_total} tracks=${track_total}"
-(( artist_total >= 10 ))
-(( track_total >= 20 ))
-
-printf 'provider\tartist_id\tartist_name\ttrack_id\ttrack_title\tlicense\tstream_bytes\n' > "${REPORT_PATH}"
-
-# Phase 2: verify exact track identity/playability and actual audio bytes for all 20 tracks.
-while IFS=$'\t' read -r track_id expected_title artist_id expected_artist; do
-  echo "[catalog] verifying artist=${expected_artist} track=${expected_title} (${track_id})"
-
-  track_json="${WORK_DIR}/track-${track_id}.json"
-  request_json "${BASE_URL}/tracks/${track_id}" "${track_json}"
-  jq -e \
-    --arg tid "${track_id}" \
-    --arg title "${expected_title}" \
-    --arg artist_id "${artist_id}" \
-    '.data
-     | ((.id | tostring) == $tid)
-     and ((.title // .name | tostring) == $title)
-     and (((.user.id // .user.user_id // .artist_id) | tostring) == $artist_id)
-     and (((.is_streamable // .isStreamable // false) | tostring | ascii_downcase) == "true")
-     and (((.is_stream_gated // .isStreamGated // false) | tostring | ascii_downcase) != "true")
-     and (((.is_unlisted // .isUnlisted // false) | tostring | ascii_downcase) != "true")' \
-    "${track_json}" >/dev/null
-
-  license="$(jq -r '(.data.license // .data.license_info // "") | tostring' "${track_json}")"
-  stream_file="${WORK_DIR}/${track_id}.audio"
-  request_stream_bytes "${STREAM_BASE_URL}/tracks/${track_id}/stream" "${stream_file}"
-  stream_bytes="$(wc -c < "${stream_file}" | tr -d ' ')"
-  (( stream_bytes > 0 ))
-
-  safe_license="$(printf '%s' "${license}" | tr '\t\n' '  ')"
-  printf 'Audius\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "${artist_id}" "${expected_artist}" "${track_id}" "${expected_title}" "${safe_license}" "${stream_bytes}" >> "${REPORT_PATH}"
-done < "${selected_file}"
-
-echo "[catalog] PASS: ${artist_total} live artists and ${track_total} live tracks verified end-to-end."
 echo "[catalog] Audit report: ${REPORT_PATH}"
