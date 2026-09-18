@@ -21,6 +21,19 @@ class CatalogLicensePolicyTest {
     }
 
     @Test
+    fun allowsCommercialCreativeCommonsVariants() {
+        assertTrue(CatalogLicensePolicy.isPermittedRemoteLicense("CC BY-SA 4.0"))
+        assertTrue(CatalogLicensePolicy.isPermittedRemoteLicense("CC BY-ND 4.0"))
+        assertTrue(CatalogLicensePolicy.isPermittedRemoteLicense("https://creativecommons.org/licenses/by-sa/4.0/"))
+    }
+
+    @Test
+    fun allowsAudiusOpenMusicLicense() {
+        assertTrue(CatalogLicensePolicy.isPermittedRemoteLicense("Audius Open Music License"))
+        assertTrue(CatalogLicensePolicy.isPermittedRemoteLicense("https://audius.org/open-music-license"))
+    }
+
+    @Test
     fun rejectsNonCommercialCreativeCommons() {
         assertFalse(CatalogLicensePolicy.isPermittedRemoteLicense("CC BY-NC 4.0"))
         assertFalse(CatalogLicensePolicy.isPermittedRemoteLicense("CC BY-NC-ND 3.0"))
