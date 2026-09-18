@@ -201,7 +201,7 @@ class AudioPlayerController(private val context: Context) {
         if (raw.startsWith("content://") || raw.startsWith("file://")) {
             return Uri.parse(raw)
         }
-        if (song.sourceType != SongSourceType.VERIFIED_REMOTE) return null
+        if (song.sourceType != SongSourceType.VERIFIED_REMOTE && song.sourceType != SongSourceType.VERIFIED_PREVIEW) return null
         return raw.takeIf { it.startsWith("https://") || it.startsWith("http://") }?.let(Uri::parse)
     }
 
