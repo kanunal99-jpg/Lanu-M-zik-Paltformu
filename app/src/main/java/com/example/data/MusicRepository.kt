@@ -20,6 +20,9 @@ import com.example.model.Song
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +66,7 @@ class MusicRepository(context: Context) {
     )
     private val catalogPreferences = context.getSharedPreferences("catalog_sync", Context.MODE_PRIVATE)
     private val catalogRefreshIntervalMs = 6L * 60L * 60L * 1000L
+    private val catalogSyncVersion = 2
 
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
@@ -100,20 +104,35 @@ class MusicRepository(context: Context) {
     private suspend fun refreshRemoteCatalogIfStale() {
         val now = System.currentTimeMillis()
         val lastSync = catalogPreferences.getLong("last_sync_ms", 0L)
-        if (now - lastSync < catalogRefreshIntervalMs) return
+        val storedVersion = catalogPreferences.getInt("catalog_sync_version", 0)
+        if (storedVersion == catalogSyncVersion && now - lastSync < catalogRefreshIntervalMs) return
 
+        // Expand a real-provider index; this is not a fabricated claim of every song on earth.
+        // Every returned item still passes the provider provenance/playability gate.
         val queries = listOf(
-            "turkish pop", "turkish rap", "turkish rock", "anatolian rock", "turkish classical",
-            "global pop", "hip hop", "rock", "electronic dance", "acoustic chill"
+            "turkish pop", "turkish rap", "turkish rock", "anatolian rock",
+            "turkish classical", "turkish folk", "turkish electronic", "turkish indie",
+            "turkish alternative", "turkish acoustic",
+            "global pop", "pop", "hip hop", "rap", "r&b soul", "rock", "indie rock",
+            "alternative rock", "metal", "punk", "electronic", "house", "techno",
+            "edm", "acoustic", "chill", "lofi", "ambient", "jazz", "blues",
+            "classical", "latin", "reggaeton", "arabic", "kpop", "jpop", "afrobeat",
+            "reggae", "country"
         )
         val fetched = LinkedHashMap<String, Song>()
-        queries.forEach { query ->
-            catalogProvider.searchSongs(query)
-                .onSuccess { songs ->
-                    songs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
-                        .forEach { fetched[it.id] = it }
+        coroutineScope {
+            queries.map { query ->
+                async {
+                    catalogProvider.searchSongs(query)
+                        .onSuccess { songs ->
+                            synchronized(fetched) {
+                                songs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+                                    .forEach { fetched[it.id] = it }
+                            }
+                        }
+                        .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain failed: $query", error) }
                 }
-                .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain failed: $query", error) }
+            }.awaitAll()
         }
         catalogProvider.getLatestReleases(null)
             .onSuccess { songs ->
@@ -125,13 +144,14 @@ class MusicRepository(context: Context) {
         if (fetched.isNotEmpty()) {
             cacheSongs(fetched.values.toList())
             _songs.value = (_songs.value + fetched.values).distinctBy { it.id }
-            catalogPreferences.edit().putLong("last_sync_ms", now).apply()
-            Log.i("MusicRepository", "Verified catalog refresh added ${fetched.size} songs")
+            catalogPreferences.edit()
+                .putLong("last_sync_ms", now)
+                .putInt("catalog_sync_version", catalogSyncVersion)
+                .apply()
+            Log.i("MusicRepository", "Expanded verified catalog index added ${fetched.size} songs; total=${_songs.value.size}")
         } else {
-            Log.w("MusicRepository", "Catalog refresh returned no verified songs; keeping existing catalog")
+            Log.w("MusicRepository", "Catalog expansion returned no verified songs; keeping existing catalog")
         }
-    }
-
     suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).map { remoteSongs ->
         remoteSongs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
     }.onSuccess { remoteSongs ->
