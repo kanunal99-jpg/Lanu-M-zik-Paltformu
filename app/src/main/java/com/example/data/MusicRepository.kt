@@ -84,6 +84,7 @@ class MusicRepository(context: Context) {
                 localAuthBackend.ensureLocalSession()
                 userLibraryService.restoreSession()
                 val cached = dao.getAllCachedSongs().first().map { it.toSong() }
+                    .filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
                 val local = dao.getAllLocalSongs().first().map { it.toSong() }
                 _songs.value = (local + cached).distinctBy { it.id }
                 migrateLegacyLibraryIfNeeded()
@@ -258,8 +259,8 @@ class MusicRepository(context: Context) {
     suspend fun clearHistory(): AuthResult = userLibraryService.clearHistory()
     val history: Flow<List<HistoryRecord>> = userLibrarySnapshot.map { it?.history.orEmpty() }
     suspend fun signOut(): AuthResult = userLibraryService.signOut()
-    val cachedSongs: Flow<List<Song>> = dao.getAllCachedSongs().map { it.map { item -> item.toSong() } }
-    fun searchCachedSongs(query: String): Flow<List<Song>> { val q = normalizeSearch(query); return dao.getAllCachedSongs().map { items -> val songs = items.map { it.toSong() }; if (q.isEmpty()) songs else songs.filter { matchesQuery(it, q) } } }
+    val cachedSongs: Flow<List<Song>> = dao.getAllCachedSongs().map { items -> items.map { it.toSong() }.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN } }
+    fun searchCachedSongs(query: String): Flow<List<Song>> { val q = normalizeSearch(query); return dao.getAllCachedSongs().map { items -> val songs = items.map { it.toSong() }.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }; if (q.isEmpty()) songs else songs.filter { matchesQuery(it, q) } } }
     suspend fun cacheSongs(songsToCache: List<Song>) = dao.insertCachedSongs(songsToCache.map { it.toCachedEntity() })
     fun searchSongs(query: String, categoryFilter: MusicCategory? = null, languageFilter: String? = null): List<Song> { val q = normalizeSearch(query); return _songs.value.filter { song -> val matches = q.isEmpty() || matchesQuery(song, q); matches && (categoryFilter == null || song.category == categoryFilter) && (languageFilter == null || song.language == languageFilter) } }
     private fun matchesQuery(song: Song, normalizedQuery: String): Boolean = listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } || song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
