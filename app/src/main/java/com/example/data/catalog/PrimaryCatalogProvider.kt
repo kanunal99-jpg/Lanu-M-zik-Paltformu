@@ -6,9 +6,10 @@ import com.example.model.Song
 import java.time.Instant
 
 class PrimaryCatalogProvider(
-    clientId: String
+    clientId: String,
+    commercialLicenseConfirmed: Boolean = false
 ) : CatalogProvider {
-    private val delegate: CatalogProvider = JamendoCatalogProvider(clientId)
+    private val delegate: CatalogProvider = JamendoCatalogProvider(clientId, commercialLicenseConfirmed)
 
     override suspend fun searchSongs(query: String): Result<List<Song>> = delegate.searchSongs(query)
     override suspend fun searchArtists(query: String): Result<List<Artist>> = delegate.searchArtists(query)
