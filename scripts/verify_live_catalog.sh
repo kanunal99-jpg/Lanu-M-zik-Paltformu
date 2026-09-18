@@ -69,10 +69,15 @@ license_is_permitted() {
   [[ "$value" != *"non-commercial"* ]] || return 1
   [[ "$value" != *"cc by-nc"* ]] || return 1
   [[ "$value" != *"cc-by-nc"* ]] || return 1
-  [[ "$value" == *"cc0"* ||
-     "$value" == *"creative commons zero"* ||
+  [[ "$value" != *"all rights reserved"* ]] || return 1
+  [[ "$value" != *"all-rights-reserved"* ]] || return 1
+  [[ "$value" == *"open music license"* ||
+     "$value" == *"audius open music license"* ||
+     "$value" == *"openmusiclicense"* ||
      "$value" == *"creativecommons.org/licenses/by/"* ||
-     "$value" =~ (^|[^a-z])cc[-[:space:]]by([ -][0-9.]+)?([ -]international)?$ ]]
+     "$value" == *"creativecommons.org/licenses/by-sa/"* ||
+     "$value" == *"creativecommons.org/licenses/by-nd/"* ||
+     "$value" =~ (^|[^a-z])cc[-[:space:]]by([-[:space:]](sa|nd))?([ -][0-9.]+)?([ -]international)?$ ]]
 }
 
 queries=(rock pop electronic "hip hop" acoustic jazz)
