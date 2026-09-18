@@ -8,8 +8,7 @@ import com.example.model.Album
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 
-/** Disk cache fallback. A cached remote record keeps verified provenance only when its
- * provider namespace identifies a provider that explicitly produced a verified source. */
+/** Disk cache fallback. Only cache rows carrying persisted verified provenance are exposed. */
 class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
     private fun List<Song>.verifiedOnly(): List<Song> =
         filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
@@ -91,7 +90,8 @@ class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> {
         val latest = dao.getAllCachedSongs().first().filter { it.isNewRelease }
-            .map { it.toSong().withCachedProvenance() }
+            .map { it.toSong() }
+            .verifiedOnly()
         return Result.success(latest)
     }
 }
