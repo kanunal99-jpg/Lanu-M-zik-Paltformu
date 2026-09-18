@@ -66,8 +66,8 @@ data class Song(
     // 0 means the count is unknown/not supplied by a verified catalog provider.
     // Never present a fabricated popularity number as real data.
     val playCount: Long = 0L,
-    // License/provenance recorded by the verified provider. Empty means unknown.
-    val license: String = "",
     // Legacy/static songs remain UNKNOWN until a verified source explicitly maps them.
-    val sourceType: SongSourceType = SongSourceType.UNKNOWN
+    val sourceType: SongSourceType = SongSourceType.UNKNOWN,
+    // License/provenance recorded by the verified provider. Empty means unknown.
+    val license: String = ""
 )
