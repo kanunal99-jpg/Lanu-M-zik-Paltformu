@@ -161,7 +161,7 @@ internal object AudiusSongMapper {
             val artistId = user?.optStringAny("id", "user_id").orEmpty().trim().ifBlank { item.optStringAny("artist_id").trim() }
             if (artist.isBlank() || artistId.isBlank()) continue
             val license = item.optStringAny("license", "license_info").trim()
-            if (!isPermittedLicense(license)) continue
+            if (!CatalogLicensePolicy.isPermittedRemoteLicense(license)) continue
             val genre = item.optStringAny("genre").trim().lowercase()
             val tags = item.optJSONArrayAny("tags").strings().map(String::lowercase)
             val category = inferCategory(genre, tags)
@@ -173,7 +173,9 @@ internal object AudiusSongMapper {
                 durationMs = item.optLongAny("duration") * 1000L, category = category, language = inferLanguage(tags),
                 coverUrl = coverUrl, audioUrl = "$STREAM_BASE/$id/stream", releaseYear = releaseYear,
                 isNewRelease = releaseYear >= LocalDate.now(ZoneOffset.UTC).year,
-                playCount = item.optLongAny("playCount", "play_count", "plays"), sourceType = SongSourceType.VERIFIED_REMOTE))
+                playCount = item.optLongAny("playCount", "play_count", "plays"),
+                license = license,
+                sourceType = SongSourceType.VERIFIED_REMOTE))
         }
     }
 
@@ -187,17 +189,6 @@ internal object AudiusSongMapper {
         genre.contains("classical") -> MusicCategory.CHILL_LOFI
         else -> MusicCategory.GLOBAL_POP
     }
-
-    private fun isPermittedLicense(rawLicense: String): Boolean {
-        val value = rawLicense.trim().lowercase()
-        if (value.isBlank()) return false
-        if (value.contains("noncommercial") || value.contains("non-commercial") || value.contains("cc by-nc") || value.contains("cc-by-nc")) return false
-        return value.contains("cc0") ||
-            value.contains("creative commons zero") ||
-            value.contains("creativecommons.org/licenses/by/") ||
-            Regex("""(^|[^a-z])cc[- ]?by(?:[ -][0-9.]+)?(?:[ -]international)?$""").containsMatchIn(value)
-    }
-
 
     private fun inferLanguage(tags: List<String>): String = when {
         tags.any { it == "turkish" || it == "türkçe" } -> "tr"
