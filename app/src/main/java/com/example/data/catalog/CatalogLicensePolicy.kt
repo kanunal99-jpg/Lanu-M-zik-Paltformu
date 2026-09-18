@@ -2,7 +2,12 @@ package com.example.data.catalog
 
 /**
  * Single source of truth for remote content that LANU may treat as continuously playable.
- * Unknown/custom licenses stay blocked; only explicit CC0 or CC BY are accepted.
+ * UNKNOWN/NC/All-Rights-Reserved licenses stay blocked.
+ *
+ * Audius' Open Music License explicitly grants Music Players rights to stream and
+ * publicly perform Licensed Material; commercial use requires the attribution terms
+ * from the license. Creative Commons BY/BY-SA/BY-ND permit commercial use with their
+ * respective attribution/share-alike/no-derivatives conditions.
  */
 object CatalogLicensePolicy {
     fun isPermittedRemoteLicense(rawLicense: String): Boolean {
@@ -13,11 +18,15 @@ object CatalogLicensePolicy {
             value.contains("cc by-nc") ||
             value.contains("cc-by-nc")
         ) return false
+        if (value.contains("all rights reserved") || value.contains("all-rights-reserved")) return false
 
-        return value.contains("cc0") ||
-            value.contains("creative commons zero") ||
+        return value.contains("open music license") ||
+            value.contains("audius open music license") ||
+            value.contains("openmusiclicense") ||
             value.contains("creativecommons.org/licenses/by/") ||
-            Regex("""(^|[^a-z])cc[- ]?by(?:[ -][0-9.]+)?(?:[ -]international)?$""")
+            value.contains("creativecommons.org/licenses/by-sa/") ||
+            value.contains("creativecommons.org/licenses/by-nd/") ||
+            Regex("""(^|[^a-z])cc[- ]?by(?:[- ]?(?:sa|nd))?(?:[ -][0-9.]+)?(?:[ -]international)?$""")
                 .containsMatchIn(value)
     }
 }
