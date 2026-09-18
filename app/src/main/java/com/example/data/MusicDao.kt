@@ -95,7 +95,9 @@ data class CachedSongEntity(
     val releaseYear: Int = 2024,
     val playCount: Long = 0L,
     val isNewRelease: Boolean = false,
-    val cachedAt: Long = System.currentTimeMillis()
+    val cachedAt: Long = System.currentTimeMillis(),
+    val sourceTypeName: String = "UNKNOWN",
+    val license: String = ""
 )
 
 @Entity(
@@ -365,7 +367,10 @@ fun CachedSongEntity.toSong(): Song {
         audioUrl = audioUrl,
         releaseYear = releaseYear,
         playCount = playCount,
-        isNewRelease = isNewRelease
+        isNewRelease = isNewRelease,
+        license = license,
+        sourceType = runCatching { com.example.model.SongSourceType.valueOf(sourceTypeName) }
+            .getOrDefault(com.example.model.SongSourceType.UNKNOWN)
     )
 }
 
@@ -383,7 +388,9 @@ fun Song.toCachedEntity(): CachedSongEntity {
         audioUrl = audioUrl,
         releaseYear = releaseYear,
         playCount = playCount,
-        isNewRelease = isNewRelease
+        isNewRelease = isNewRelease,
+        sourceTypeName = sourceType.name,
+        license = license
     )
 }
 
