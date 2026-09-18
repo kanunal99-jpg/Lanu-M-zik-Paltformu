@@ -35,10 +35,10 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
     }
 
     override suspend fun searchSongs(query: String): Result<List<Song>> =
-        request("/search", mapOf("q" to query, "limit" to "50")).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
+        request("/search", mapOf("q" to query, "limit" to LIMIT.toString())).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> =
-        request("/search/artist", mapOf("q" to query, "limit" to "50")).map { json -> mapArtists(json.optJSONArray("data") ?: JSONArray()) }
+        request("/search/artist", mapOf("q" to query, "limit" to LIMIT.toString())).map { json -> mapArtists(json.optJSONArray("data") ?: JSONArray()) }
 
     override suspend fun getSong(id: String): Result<Song?> = request("/track/${id.removePrefix("deezer:")}").map { json -> mapTracks(JSONArray().put(json)).firstOrNull() }
 
@@ -48,7 +48,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
         val providerArtistId = artistId.removePrefix("deezer:")
-        val albumsJson = request("/artist/$providerArtistId/albums", mapOf("limit" to "50")).getOrThrow()
+        val albumsJson = request("/artist/$providerArtistId/albums", mapOf("limit" to LIMIT.toString())).getOrThrow()
         val albums = albumsJson.optJSONArray("data") ?: JSONArray()
         buildList {
             for (i in 0 until albums.length()) {
@@ -62,7 +62,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
-        request("/chart/0/tracks", mapOf("limit" to "50")).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
+        request("/chart/0/tracks", mapOf("limit" to LIMIT.toString())).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
 
     private fun mapArtists(data: JSONArray): List<Artist> = buildList {
         for (i in 0 until data.length()) {
@@ -91,7 +91,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
             val cover = albumObj?.optString("cover_xl").orEmpty().ifBlank { albumObj?.optString("cover_big").orEmpty() }
             add(Song(id = "deezer:$id", title = title, artist = artist, artistId = "deezer:$artistId", album = album,
                 durationMs = item.optLong("duration", 0L) * 1000L, category = MusicCategory.GLOBAL_POP, language = "und",
-                coverUrl = cover, audioUrl = preview, releaseYear = 0, sourceType = SongSourceType.VERIFIED_REMOTE))
+                coverUrl = cover, audioUrl = preview, releaseYear = 0, sourceType = SongSourceType.VERIFIED_PREVIEW))
         }
     }
 
