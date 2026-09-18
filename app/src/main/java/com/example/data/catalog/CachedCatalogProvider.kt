@@ -5,26 +5,23 @@ import com.example.data.toSong
 import com.example.model.Song
 import com.example.model.Artist
 import com.example.model.Album
-import com.example.model.SongSourceType
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 
 /** Disk cache fallback. A cached remote record keeps verified provenance only when its
  * provider namespace identifies a provider that explicitly produced a verified source. */
 class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
-    private fun Song.withCachedProvenance(): Song = copy(sourceType = when {
-        id.startsWith("audius:") || id.startsWith("jamendo:") -> SongSourceType.VERIFIED_REMOTE
-        id.startsWith("local_") -> SongSourceType.LOCAL
-        else -> SongSourceType.UNKNOWN
-    })
+    private fun List<Song>.verifiedOnly(): List<Song> =
+        filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+
 
     override suspend fun searchSongs(query: String): Result<List<Song>> {
         val cached = dao.searchCachedSongsByTitleOrArtist(query).first()
-        return Result.success(cached.map { it.toSong().withCachedProvenance() })
+        return Result.success(cached.map { it.toSong() }.verifiedOnly())
     }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> {
-        val cached = dao.getAllCachedSongs().first().map { it.toSong().withCachedProvenance() }
+        val cached = dao.getAllCachedSongs().first().map { it.toSong() }.verifiedOnly()
         val filtered = cached.filter { it.artist.contains(query, ignoreCase = true) }
             .distinctBy { it.artistId }
             .map {
@@ -41,12 +38,12 @@ class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
     }
 
     override suspend fun getSong(id: String): Result<Song?> {
-        val song = dao.getAllCachedSongs().first().find { it.id == id }?.toSong()?.withCachedProvenance()
+        val song = dao.getAllCachedSongs().first().find { it.id == id }?.toSong()?.takeIf { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
         return Result.success(song)
     }
 
     override suspend fun getArtist(id: String): Result<Artist?> {
-        val song = dao.getAllCachedSongs().first().find { it.artistId == id }?.toSong()?.withCachedProvenance()
+        val song = dao.getAllCachedSongs().first().find { it.artistId == id }?.toSong()?.takeIf { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
         if (song != null) {
             return Result.success(
                 Artist(
@@ -64,14 +61,16 @@ class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
         dao.getAllCachedSongs().first()
-            .map { it.toSong().withCachedProvenance() }
+            .map { it.toSong() }
+            .verifiedOnly()
             .filter { it.artistId == artistId }
             .distinctBy { it.id }
     }
 
     override suspend fun getAlbum(id: String): Result<Album?> {
         val songs = dao.getAllCachedSongs().first().filter { it.album.equals(id, ignoreCase = true) }
-            .map { it.toSong().withCachedProvenance() }
+            .map { it.toSong() }
+            .verifiedOnly()
         if (songs.isNotEmpty()) {
             val first = songs.first()
             return Result.success(
