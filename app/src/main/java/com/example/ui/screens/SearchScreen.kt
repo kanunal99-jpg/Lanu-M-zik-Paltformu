@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,7 +60,7 @@ import com.example.ui.theme.LanuTextPrimary
 import com.example.ui.theme.LanuTextSecondary
 
 @Composable
-fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}) {
+fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}) {
     var searchMode by remember { mutableStateOf(0) }
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
     var browseAll by remember { mutableStateOf(false) }
@@ -146,13 +147,27 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(text = "Tüm Şarkılar", color = LanuTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "${allSongs.size} doğrulanmış/yerel parça indekslendi", color = LanuTextSecondary, fontSize = 12.sp)
+                            Text(text = "${allSongs.size} gerçek katalog sonucu/cihaz parçası indekslendi", color = LanuTextSecondary, fontSize = 12.sp)
                         }
                         Text(text = "Kategoriler", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { browseAll = false })
                     }
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuGreen.copy(alpha = 0.12f)).clickable(enabled = !isCatalogExpanding) { onExpandCatalog() }.padding(horizontal = 14.dp, vertical = 11.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                            if (isCatalogExpanding) {
+                                CircularProgressIndicator(color = LanuGreen, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Gerçek katalog genişletiliyor…", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            } else {
+                                Text("Daha fazla gerçek katalog yükle", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
                         items(allSongs, key = { it.id }) { song ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, allSongs) }.padding(10.dp)) {
                                 AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))

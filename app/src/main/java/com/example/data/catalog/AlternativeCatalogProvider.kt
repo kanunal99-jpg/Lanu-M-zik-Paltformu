@@ -57,6 +57,8 @@ class AlternativeCatalogProvider(
     }
 
     override suspend fun searchSongs(query: String): Result<List<Song>> = mergeLists { it.searchSongs(query) }
+    override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> =
+        mergeLists { it.searchSongsPage(query, page, pageSize) }
     override suspend fun searchArtists(query: String): Result<List<Artist>> = mergeLists { it.searchArtists(query) }
     override suspend fun getSong(id: String): Result<Song?> = firstResolved { it.getSong(id) }
     override suspend fun getArtist(id: String): Result<Artist?> = firstResolved { it.getArtist(id) }

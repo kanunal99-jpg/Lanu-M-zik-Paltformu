@@ -154,6 +154,49 @@ class MusicRepository(context: Context) {
         }
     }
 
+    /**
+     * User-triggered expansion of the verified remote index. This does not claim to contain
+     * every recording that exists; it progressively imports real provider pages and keeps only
+     * songs that already passed provider provenance/playability validation.
+     */
+    suspend fun expandVerifiedCatalog(): Int = coroutineScope {
+        val queries = listOf(
+            "turkish", "turkish pop", "turkish rap", "turkish rock",
+            "pop", "rock", "rap", "electronic", "jazz", "classical"
+        )
+        val pageCount = 2
+        val pageSize = 40
+        val fetched = LinkedHashMap<String, Song>()
+        queries.flatMap { query ->
+            (0 until pageCount).map { page ->
+                async {
+                    catalogProvider.searchSongsPage(query, page, pageSize)
+                        .onSuccess { songs ->
+                            synchronized(fetched) {
+                                songs.asSequence()
+                                    .filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+                                    .forEach { fetched[it.id] = it }
+                            }
+                        }
+                        .onFailure { error ->
+                            Log.w("MusicRepository", "Catalog expansion failed: $query page=$page", error)
+                        }
+                }
+            }
+        }.awaitAll()
+
+        if (fetched.isNotEmpty()) {
+            val merged = (_songs.value + fetched.values).distinctBy { it.id }
+            cacheSongs(fetched.values.toList())
+            _songs.value = merged
+            catalogPreferences.edit()
+                .putLong("last_manual_expand_ms", System.currentTimeMillis())
+                .putInt("catalog_sync_version", catalogSyncVersion)
+                .apply()
+        }
+        fetched.size
+    }
+
     suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).map { remoteSongs ->
         remoteSongs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
     }.onSuccess { remoteSongs ->

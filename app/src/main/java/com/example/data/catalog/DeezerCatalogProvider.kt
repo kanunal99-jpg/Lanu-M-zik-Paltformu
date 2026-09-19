@@ -34,8 +34,17 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
         }
     }
 
-    override suspend fun searchSongs(query: String): Result<List<Song>> =
-        request("/search", mapOf("q" to query, "limit" to LIMIT.toString())).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
+    override suspend fun searchSongs(query: String): Result<List<Song>> = searchSongsPage(query, 0, LIMIT)
+
+    override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
+        val safePage = page.coerceAtLeast(0)
+        val safeSize = pageSize.coerceIn(1, 100)
+        return request("/search", mapOf(
+            "q" to query,
+            "limit" to safeSize.toString(),
+            "index" to (safePage * safeSize).toString()
+        )).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
+    }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> =
         request("/search/artist", mapOf("q" to query, "limit" to LIMIT.toString())).map { json -> mapArtists(json.optJSONArray("data") ?: JSONArray()) }
