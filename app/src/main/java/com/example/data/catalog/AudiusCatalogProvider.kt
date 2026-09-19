@@ -48,19 +48,32 @@ class AudiusCatalogProvider(
     private suspend fun requestArray(path: String, params: Map<String, String> = emptyMap()): Result<JSONArray> =
         requestJson(path, params).map { it.optJSONArray("data") ?: JSONArray() }
 
-    override suspend fun searchSongs(query: String): Result<List<Song>> {
-        val directResult = requestArray("/tracks/search", mapOf("query" to query, "limit" to DEFAULT_LIMIT.toString()))
-            .map { AudiusSongMapper.mapSongs(it) }
+    override suspend fun searchSongs(query: String): Result<List<Song>> = searchSongsPage(query, 0, DEFAULT_LIMIT)
+
+    override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
+        val safePage = page.coerceAtLeast(0)
+        val safeSize = pageSize.coerceIn(1, 100)
+        val directResult = requestArray(
+            "/tracks/search",
+            mapOf(
+                "query" to query,
+                "limit" to safeSize.toString(),
+                "offset" to (safePage * safeSize).toString()
+            )
+        ).map { AudiusSongMapper.mapSongs(it) }
         if (query.isBlank()) return directResult
         val directSongs = directResult.getOrElse { return directResult }
-        val artistSearch = requestArray("/users/search", mapOf("query" to query, "limit" to 10.toString()))
+        if (safePage > 0) return Result.success(directSongs)
+        val artistSearch = requestArray("/users/search", mapOf("query" to query, "limit" to "10"))
             .getOrElse { return Result.success(directSongs) }
         val normalizedQuery = query.trim().lowercase()
         val exactArtists = AudiusArtistMapper.mapArtists(artistSearch)
             .filter { it.name.trim().lowercase() == normalizedQuery }
             .take(3)
         if (exactArtists.isEmpty()) return Result.success(directSongs)
-        val artistTracks = buildList { exactArtists.forEach { artist -> getArtistDiscography(artist.id).onSuccess { addAll(it) } } }
+        val artistTracks = buildList {
+            exactArtists.forEach { artist -> getArtistDiscography(artist.id).onSuccess { addAll(it) } }
+        }
         return Result.success((directSongs + artistTracks).distinctBy { it.id })
     }
 
