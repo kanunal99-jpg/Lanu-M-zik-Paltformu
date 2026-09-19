@@ -178,13 +178,14 @@ internal object AudiusSongMapper {
             val license = CatalogLicensePolicy.effectiveAudiusLicense(rawLicense)
             val genre = item.optStringAny("genre").trim().lowercase()
             val tags = item.optJSONArrayAny("tags").strings().map(String::lowercase)
-            val category = inferCategory(genre, tags)
+            val language = inferLanguage(tags)
+            val category = inferCategory(genre, tags, language)
             val releaseYear = item.optStringAny("releaseDate", "release_date", "releasedate").take(4).toIntOrNull() ?: 0
             val artwork = item.optJSONObject("artwork")
             val coverUrl = artwork?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty()
             add(Song(id = "audius:$id", title = title, artist = artist, artistId = "audius:$artistId",
                 album = item.optStringAny("album_name", "albumName").trim().ifBlank { "Single" },
-                durationMs = item.optLongAny("duration") * 1000L, category = category, language = inferLanguage(tags),
+                durationMs = item.optLongAny("duration") * 1000L, category = category, language = language,
                 coverUrl = coverUrl, audioUrl = "$STREAM_BASE/$id/stream", releaseYear = releaseYear,
                 isNewRelease = releaseYear >= LocalDate.now(ZoneOffset.UTC).year,
                 playCount = item.optLongAny("playCount", "play_count", "plays"),
@@ -193,8 +194,9 @@ internal object AudiusSongMapper {
         }
     }
 
-    private fun inferCategory(genre: String, tags: List<String>): MusicCategory = when {
-        genre.contains("rap") || genre.contains("hip") || tags.any { it.contains("rap") || it.contains("hiphop") } -> MusicCategory.HIP_HOP
+    private fun inferCategory(genre: String, tags: List<String>, language: String): MusicCategory = when {
+        genre.contains("rap") || genre.contains("hip") || tags.any { it.contains("rap") || it.contains("hiphop") } ->
+            if (language == "tr") MusicCategory.TURKCE_RAP else MusicCategory.HIP_HOP
         genre.contains("rock") || genre.contains("metal") -> MusicCategory.ROCK_CLASSICS
         genre.contains("electronic") || genre.contains("dance") || genre.contains("house") || genre.contains("techno") -> MusicCategory.EDM_DANCE
         genre.contains("r&b") || genre.contains("rnb") || genre.contains("soul") -> MusicCategory.HIP_HOP
@@ -205,7 +207,7 @@ internal object AudiusSongMapper {
     }
 
     private fun inferLanguage(tags: List<String>): String = when {
-        tags.any { it == "turkish" || it == "türkçe" } -> "tr"
+        tags.any { it == "turkish" || it == "türkçe" || it == "turkey" || it == "türkiye" || it == "tr" } -> "tr"
         tags.any { it == "english" } -> "en"
         else -> "und"
     }
