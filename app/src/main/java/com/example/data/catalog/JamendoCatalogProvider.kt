@@ -43,7 +43,20 @@ class JamendoCatalogProvider(
     }
     private suspend fun requestTracks(params: Map<String, String>): Result<JSONArray> = requestJson(TRACKS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
     private suspend fun requestArtists(params: Map<String, String>): Result<JSONArray> = requestJson(ARTISTS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
-    override suspend fun searchSongs(query: String): Result<List<Song>> = requestTracks(mapOf("search" to query, "type" to "single albumtrack", "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { JamendoSongMapper.mapSongs(it, commercialLicenseConfirmed) }
+    override suspend fun searchSongs(query: String): Result<List<Song>> = searchSongsPage(query, 0, DEFAULT_LIMIT)
+    override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
+        val safePage = page.coerceAtLeast(0)
+        val safeSize = pageSize.coerceIn(1, 200)
+        return requestTracks(mapOf(
+            "search" to query,
+            "offset" to (safePage * safeSize).toString(),
+            "limit" to safeSize.toString(),
+            "type" to "single albumtrack",
+            "audioformat" to "mp32",
+            "imagesize" to "300",
+            "include" to "musicinfo"
+        )).map { JamendoSongMapper.mapSongs(it, commercialLicenseConfirmed) }
+    }
     override suspend fun searchArtists(query: String): Result<List<Artist>> = requestArtists(mapOf("namesearch" to query, "hasimage" to "true", "imagesize" to "300")).map { JamendoArtistMapper.mapArtists(it) }
     override suspend fun getSong(id: String): Result<Song?> = requestTracks(mapOf("id" to id.removePrefix("jamendo:"), "audioformat" to "mp32", "imagesize" to "300", "include" to "musicinfo")).map { JamendoSongMapper.mapSongs(it, commercialLicenseConfirmed).firstOrNull() }
     override suspend fun getArtist(id: String): Result<Artist?> = requestArtists(mapOf("id" to id.removePrefix("jamendo:"), "hasimage" to "true", "imagesize" to "300")).map { JamendoArtistMapper.mapArtists(it).firstOrNull() }
