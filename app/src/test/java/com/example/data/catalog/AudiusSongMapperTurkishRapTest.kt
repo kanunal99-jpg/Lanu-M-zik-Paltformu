@@ -17,7 +17,7 @@ class AudiusSongMapperTurkishRapTest {
             .put("duration", 180)
             .put("genre", "Hip-Hop")
             .put("is_streamable", true)
-            .put("license", "Audius Open Music License")
+            .put("license", CatalogLicensePolicy.AUDIUS_OML)
             .put("release_date", "2026-01-01")
             .put("tags", JSONArray().put("turkish"))
             .put(
@@ -27,10 +27,10 @@ class AudiusSongMapperTurkishRapTest {
                     .put("name", "Bağımsız Sanatçı")
             )
 
-        val song = AudiusSongMapper
-            .mapSongs(JSONArray().put(track))
-            .single()
+        val songs = AudiusSongMapper.mapSongs(JSONArray().put(track))
+        assertTrue("Expected the permitted Audius fixture to map", songs.isNotEmpty())
 
+        val song = songs.single()
         assertEquals("tr", song.language)
         assertEquals(MusicCategory.TURKCE_RAP, song.category)
         assertEquals(com.example.model.SongSourceType.VERIFIED_REMOTE, song.sourceType)
