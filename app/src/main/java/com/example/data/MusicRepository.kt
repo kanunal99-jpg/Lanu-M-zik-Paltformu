@@ -11,6 +11,7 @@ import com.example.data.catalog.CachedCatalogProvider
 import com.example.data.catalog.CatalogProvider
 import com.example.data.catalog.DeezerCatalogProvider
 import com.example.data.catalog.LocalCatalogProvider
+import com.example.data.catalog.MusicBrainzTurkishRapDiscovery
 import com.example.data.catalog.PrimaryCatalogProvider
 import com.example.model.Artist
 import com.example.model.AudioQuality
@@ -65,8 +66,9 @@ class MusicRepository(context: Context) {
         )
     )
     private val catalogPreferences = context.getSharedPreferences("catalog_sync", Context.MODE_PRIVATE)
+    private val musicBrainzTurkishRapDiscovery = MusicBrainzTurkishRapDiscovery()
     private val catalogRefreshIntervalMs = 6L * 60L * 60L * 1000L
-    private val catalogSyncVersion = 3
+    private val catalogSyncVersion = 4
     private val catalogPageSize = 40
     private val backgroundPagesPerQuery = 1
     private val manualPagesPerQuery = 3
@@ -218,6 +220,50 @@ class MusicRepository(context: Context) {
     }
 
     /**
+     * Resolve a small batch of historically indexed Turkish-rap artist identities from
+     * MusicBrainz into the existing playable providers. MusicBrainz remains metadata-only;
+     * a song is added only after a provider returns a verified playable/preview source.
+     */
+    private suspend fun expandHistoricalTurkishRapArtists(fetched: MutableMap<String, Song>) {
+        val offset = catalogPreferences.getInt("musicbrainz_turkish_rap_offset", 0)
+        val candidates = musicBrainzTurkishRapDiscovery.searchArtists(offset = offset, limit = 25)
+            .getOrElse { error ->
+                Log.w("MusicRepository", "MusicBrainz Turkish rap discovery failed", error)
+                return
+            }
+
+        if (candidates.isEmpty()) {
+            Log.i("MusicRepository", "MusicBrainz Turkish rap discovery reached an empty page at offset=" + offset)
+            return
+        }
+
+        candidates.take(12).forEach { candidate ->
+            val resolvedArtist = catalogProvider.searchArtists(candidate.name)
+                .getOrNull()
+                ?.firstOrNull { normalizeSearch(it.name) == normalizeSearch(candidate.name) }
+                ?: return@forEach
+
+            catalogProvider.getArtistDiscography(resolvedArtist.id)
+                .getOrNull()
+                .orEmpty()
+                .filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+                .filter { normalizeSearch(it.artist) == normalizeSearch(candidate.name) }
+                .forEach { fetched[it.id] = it }
+        }
+
+        catalogPreferences.edit()
+            .putInt("musicbrainz_turkish_rap_offset", offset + candidates.size)
+            .apply()
+
+        Log.i(
+            "MusicRepository",
+            "Historical Turkish rap discovery processed " + candidates.size +
+                " identities; resolvedSongs=" + fetched.size +
+                "; nextOffset=" + (offset + candidates.size)
+        )
+    }
+
+    /**
      * User-triggered expansion of the verified remote index.
      * It resumes per-query cursors instead of repeatedly downloading page zero, allowing the
      * indexed catalog to grow deeper across repeated expansions without inventing records.
@@ -228,6 +274,10 @@ class MusicRepository(context: Context) {
         queries.map { query ->
             async { collectVerifiedCatalogPages(query, manualPagesPerQuery, fetched) }
         }.awaitAll()
+
+        // Historical identity discovery finds older/independent Turkish rap artists that
+        // generic genre searches may miss, then resolves them through verified providers.
+        expandHistoricalTurkishRapArtists(fetched)
 
         if (fetched.isNotEmpty()) {
             val merged = (_songs.value + fetched.values).distinctBy { it.id }
