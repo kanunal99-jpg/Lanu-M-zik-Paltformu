@@ -19,6 +19,12 @@ class CachedCatalogProvider(private val dao: MusicDao) : CatalogProvider {
         return Result.success(cached.map { it.toSong() }.verifiedOnly())
     }
 
+    /** Cache is a page-zero fallback; remote providers own progressive pagination. */
+    override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
+        if (page > 0) return Result.success(emptyList())
+        return searchSongs(query)
+    }
+
     override suspend fun searchArtists(query: String): Result<List<Artist>> {
         val cached = dao.getAllCachedSongs().first().map { it.toSong() }.verifiedOnly()
         val filtered = cached.filter { it.artist.contains(query, ignoreCase = true) }
