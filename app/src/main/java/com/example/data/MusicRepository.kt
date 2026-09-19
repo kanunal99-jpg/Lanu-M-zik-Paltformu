@@ -66,7 +66,25 @@ class MusicRepository(context: Context) {
     )
     private val catalogPreferences = context.getSharedPreferences("catalog_sync", Context.MODE_PRIVATE)
     private val catalogRefreshIntervalMs = 6L * 60L * 60L * 1000L
-    private val catalogSyncVersion = 2
+    private val catalogSyncVersion = 3
+    private val catalogPageSize = 40
+    private val backgroundPagesPerQuery = 1
+    private val manualPagesPerQuery = 3
+    private val maxConsecutiveEmptyPages = 2
+
+    // Long-tail discovery plan for Turkish rap. The app progressively advances page cursors,
+    // so repeated refresh/expansion operations can keep discovering deeper verified pages.
+    private val turkishRapCatalogQueries = listOf(
+        "turkish rap", "türkçe rap", "turkish hip hop", "türkçe hip hop",
+        "turkish underground rap", "türkçe underground rap", "turkish trap", "türkçe trap",
+        "turkish drill", "türkçe drill", "turkish old school rap", "türkçe old school rap"
+    )
+
+    private val generalCatalogQueries = listOf(
+        "turkish pop", "turkish rock", "anatolian rock", "turkish indie", "turkish alternative",
+        "pop", "rock", "hip hop", "rap", "electronic", "jazz", "classical", "latin", "arabic",
+        "kpop", "jpop", "afrobeat", "reggae", "country"
+    )
 
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
@@ -101,37 +119,78 @@ class MusicRepository(context: Context) {
         }
     }
 
+    private fun catalogCursorKey(query: String): String =
+        "catalog_next_page_${Math.abs(query.trim().lowercase().hashCode()).toString(16)}"
+
+    private fun catalogExhaustedKey(query: String): String =
+        "catalog_exhausted_${Math.abs(query.trim().lowercase().hashCode()).toString(16)}"
+
+    private suspend fun collectVerifiedCatalogPages(
+        query: String,
+        maxPages: Int,
+        fetched: MutableMap<String, Song>
+    ) {
+        val normalized = query.trim().lowercase()
+        if (normalized.isBlank()) return
+        val exhaustedKey = catalogExhaustedKey(normalized)
+        if (catalogPreferences.getBoolean(exhaustedKey, false)) return
+
+        var page = catalogPreferences.getInt(catalogCursorKey(normalized), 0).coerceAtLeast(0)
+        var consecutiveEmptyPages = 0
+        var pagesRead = 0
+
+        while (pagesRead < maxPages && !catalogPreferences.getBoolean(exhaustedKey, false)) {
+            val result = runCatching {
+                catalogProvider.searchSongsPage(normalized, page, catalogPageSize)
+            }.getOrElse { failure ->
+                Log.w("MusicRepository", "Catalog page failed: query=$normalized page=$page", failure)
+                return
+            }
+
+            if (result.isFailure) {
+                Log.w("MusicRepository", "Catalog page provider failure: query=$normalized page=$page", result.exceptionOrNull())
+                return
+            }
+
+            val songs = result.getOrDefault(emptyList())
+                .filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+
+            synchronized(fetched) {
+                songs.forEach { fetched[it.id] = it }
+            }
+
+            page += 1
+            pagesRead += 1
+            if (songs.isEmpty()) {
+                consecutiveEmptyPages += 1
+            } else {
+                consecutiveEmptyPages = 0
+            }
+
+            catalogPreferences.edit().putInt(catalogCursorKey(normalized), page).apply()
+
+            // A sparse provider can legally return an empty page before its true end.
+            // Require two consecutive empty verified pages before marking this query exhausted.
+            if (consecutiveEmptyPages >= maxConsecutiveEmptyPages) {
+                catalogPreferences.edit().putBoolean(exhaustedKey, true).apply()
+                break
+            }
+        }
+    }
+
     private suspend fun refreshRemoteCatalogIfStale() {
         val now = System.currentTimeMillis()
         val lastSync = catalogPreferences.getLong("last_sync_ms", 0L)
         val storedVersion = catalogPreferences.getInt("catalog_sync_version", 0)
         if (storedVersion == catalogSyncVersion && now - lastSync < catalogRefreshIntervalMs) return
 
-        // Expand a real-provider index; this is not a fabricated claim of every song on earth.
-        // Every returned item still passes the provider provenance/playability gate.
-        val queries = listOf(
-            "turkish pop", "turkish rap", "turkish rock", "anatolian rock",
-            "turkish classical", "turkish folk", "turkish electronic", "turkish indie",
-            "turkish alternative", "turkish acoustic",
-            "global pop", "pop", "hip hop", "rap", "r&b soul", "rock", "indie rock",
-            "alternative rock", "metal", "punk", "electronic", "house", "techno",
-            "edm", "acoustic", "chill", "lofi", "ambient", "jazz", "blues",
-            "classical", "latin", "reggaeton", "arabic", "kpop", "jpop", "afrobeat",
-            "reggae", "country"
-        )
+        // Automatic refresh advances a small batch of real provider pages. It deliberately
+        // prioritizes Turkish rap long-tail discovery while keeping startup network usage bounded.
+        val queries = (turkishRapCatalogQueries.take(6) + generalCatalogQueries.take(4)).distinct()
         val fetched = LinkedHashMap<String, Song>()
         coroutineScope {
             queries.map { query ->
-                async {
-                    catalogProvider.searchSongs(query)
-                        .onSuccess { songs ->
-                            synchronized(fetched) {
-                                songs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
-                                    .forEach { fetched[it.id] = it }
-                            }
-                        }
-                        .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain failed: $query", error) }
-                }
+                async { collectVerifiedCatalogPages(query, backgroundPagesPerQuery, fetched) }
             }.awaitAll()
         }
         catalogProvider.getLatestReleases(null)
@@ -139,7 +198,7 @@ class MusicRepository(context: Context) {
                 songs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
                     .forEach { fetched[it.id] = it }
             }
-            .onFailure { error -> Log.w("MusicRepository", "Catalog fallback chain latest refresh failed", error) }
+            .onFailure { error -> Log.w("MusicRepository", "Catalog latest refresh failed", error) }
 
         if (fetched.isNotEmpty()) {
             cacheSongs(fetched.values.toList())
@@ -148,55 +207,41 @@ class MusicRepository(context: Context) {
                 .putLong("last_sync_ms", now)
                 .putInt("catalog_sync_version", catalogSyncVersion)
                 .apply()
-            Log.i("MusicRepository", "Expanded verified catalog index added ${fetched.size} songs; total=${_songs.value.size}")
+            Log.i("MusicRepository", "Progressive verified catalog sync added ${fetched.size} songs; total=${_songs.value.size}")
         } else {
-            Log.w("MusicRepository", "Catalog expansion returned no verified songs; keeping existing catalog")
+            catalogPreferences.edit()
+                .putLong("last_sync_ms", now)
+                .putInt("catalog_sync_version", catalogSyncVersion)
+                .apply()
+            Log.w("MusicRepository", "Progressive catalog sync returned no new verified songs; existing catalog retained")
         }
     }
 
     /**
-     * User-triggered expansion of the verified remote index. This does not claim to contain
-     * every recording that exists; it progressively imports real provider pages and keeps only
-     * songs that already passed provider provenance/playability validation.
+     * User-triggered expansion of the verified remote index.
+     * It resumes per-query cursors instead of repeatedly downloading page zero, allowing the
+     * indexed catalog to grow deeper across repeated expansions without inventing records.
      */
     suspend fun expandVerifiedCatalog(): Int = coroutineScope {
-        val queries = listOf(
-            "turkish", "turkish pop", "turkish rap", "turkish rock",
-            "pop", "rock", "rap", "electronic", "jazz", "classical"
-        )
-        val pageCount = 2
-        val pageSize = 40
+        val queries = (turkishRapCatalogQueries + generalCatalogQueries.take(6)).distinct()
         val fetched = LinkedHashMap<String, Song>()
-        queries.flatMap { query ->
-            (0 until pageCount).map { page ->
-                async {
-                    catalogProvider.searchSongsPage(query, page, pageSize)
-                        .onSuccess { songs ->
-                            synchronized(fetched) {
-                                songs.asSequence()
-                                    .filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
-                                    .forEach { fetched[it.id] = it }
-                            }
-                        }
-                        .onFailure { error ->
-                            Log.w("MusicRepository", "Catalog expansion failed: $query page=$page", error)
-                        }
-                }
-            }
+        queries.map { query ->
+            async { collectVerifiedCatalogPages(query, manualPagesPerQuery, fetched) }
         }.awaitAll()
 
         if (fetched.isNotEmpty()) {
             val merged = (_songs.value + fetched.values).distinctBy { it.id }
             cacheSongs(fetched.values.toList())
             _songs.value = merged
-            catalogPreferences.edit()
-                .putLong("last_manual_expand_ms", System.currentTimeMillis())
-                .putInt("catalog_sync_version", catalogSyncVersion)
-                .apply()
         }
+
+        catalogPreferences.edit()
+            .putLong("last_manual_expand_ms", System.currentTimeMillis())
+            .putInt("catalog_sync_version", catalogSyncVersion)
+            .apply()
+
         fetched.size
     }
-
     suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).map { remoteSongs ->
         remoteSongs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
     }.onSuccess { remoteSongs ->
