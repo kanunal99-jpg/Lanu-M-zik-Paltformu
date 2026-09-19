@@ -72,6 +72,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val songToAddToPlaylist: StateFlow<Song?> = _songToAddToPlaylist.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _isCatalogExpanding = MutableStateFlow(false)
+    val isCatalogExpanding: StateFlow<Boolean> = _isCatalogExpanding.asStateFlow()
     @Deprecated("Artificial network loading was removed; use real operation state instead.") fun simulateNetworkLoading(delayMs: Long = 0) = Unit
     private val _audioQuality = MutableStateFlow(AudioQuality.HIGH)
     val audioQuality: StateFlow<AudioQuality> = _audioQuality.asStateFlow()
@@ -151,6 +153,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSearchQuery(query: String) { _searchQuery.value = query }
     fun filterByCategory(category: MusicCategory?) { _selectedCategoryFilter.value = category }
     fun scanLocalMusic() { viewModelScope.launch { _isLoading.value = true; try { repository.scanAndSyncLocalMusic() } catch (e: Exception) { Log.e("MainViewModel", "Local music scan failed", e) } finally { _isLoading.value = false } } }
+    fun expandVerifiedCatalog() {
+        if (_isCatalogExpanding.value) return
+        viewModelScope.launch {
+            _isCatalogExpanding.value = true
+            try {
+                repository.expandVerifiedCatalog()
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Verified catalog expansion failed", e)
+            } finally {
+                _isCatalogExpanding.value = false
+            }
+        }
+    }
     fun toggleFavorite(songId: String) { viewModelScope.launch { repository.toggleFavorite(songId) } }
     fun toggleDownload(song: Song) { viewModelScope.launch { repository.toggleDownload(song, _audioQuality.value) } }
     fun signOut() { viewModelScope.launch { when (val result = repository.signOut()) { is AuthResult.Failure -> Log.e("MainViewModel", "Sign out failed: ${result.message}"); is AuthResult.Success -> _currentTab.value = MainTab.HOME } } }
