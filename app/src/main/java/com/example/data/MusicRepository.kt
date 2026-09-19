@@ -140,9 +140,9 @@ class MusicRepository(context: Context) {
         var pagesRead = 0
 
         while (pagesRead < maxPages && !catalogPreferences.getBoolean(exhaustedKey, false)) {
-            val result = runCatching {
+            val result = try {
                 catalogProvider.searchSongsPage(normalized, page, catalogPageSize)
-            }.getOrElse { failure ->
+            } catch (failure: Throwable) {
                 Log.w("MusicRepository", "Catalog page failed: query=$normalized page=$page", failure)
                 return
             }
