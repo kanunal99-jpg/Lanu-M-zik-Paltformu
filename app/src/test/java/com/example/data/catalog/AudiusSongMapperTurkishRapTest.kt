@@ -17,7 +17,7 @@ class AudiusSongMapperTurkishRapTest {
             .put("duration", 180)
             .put("genre", "Hip-Hop")
             .put("is_streamable", true)
-            .put("license", "All rights reserved")
+            .put("license", "Audius Open Music License")
             .put("release_date", "2026-01-01")
             .put("tags", JSONArray().put("turkish"))
             .put(
