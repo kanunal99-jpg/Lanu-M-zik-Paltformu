@@ -20,6 +20,12 @@ class LocalCatalogProvider(private val dao: MusicDao) : CatalogProvider {
         return Result.success(songs)
     }
 
+    /** Local files are page-zero fallback data; they must not block remote catalog paging. */
+    override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
+        if (page > 0) return Result.success(emptyList())
+        return searchSongs(query)
+    }
+
     override suspend fun searchArtists(query: String): Result<List<Artist>> {
         val songs = dao.getAllLocalSongs().first().map { it.toSong().asLocal() }
         val artists = songs.filter { TypoTolerantSearch.matches(query, it.artist) }.distinctBy { it.artistId }.map {
