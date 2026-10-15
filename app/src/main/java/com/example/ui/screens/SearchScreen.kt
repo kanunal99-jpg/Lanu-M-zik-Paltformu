@@ -60,7 +60,7 @@ import com.example.ui.theme.LanuTextPrimary
 import com.example.ui.theme.LanuTextSecondary
 
 @Composable
-fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}) {
+fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}, searchIsLoading: Boolean = false, searchHasMore: Boolean = false, searchError: String? = null, onLoadMoreResults: () -> Unit = {}) {
     var searchMode by remember { mutableStateOf(0) }
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
     var browseAll by remember { mutableStateOf(false) }
@@ -91,7 +91,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                         val songTitle = song.title.lowercase(); val songArtist = song.artist.lowercase(); val songAlbum = song.album.lowercase()
                         val matchesScope = when (selectedScope) {
                             SearchFilterScope.ALL -> q.isEmpty() || songTitle.contains(q) || songArtist.contains(q) || songAlbum.contains(q) || song.lyrics.any { it.text.lowercase().contains(q) }
-                            SearchFilterScope.SONGS -> q.isEmpty() || songTitle.contains(q) || song.lyrics.any { it.text.lowercase().contains(q) }
+                            SearchFilterScope.SONGS -> q.isEmpty() || songTitle.contains(q) || songArtist.contains(q) || song.lyrics.any { it.text.lowercase().contains(q) }
                             SearchFilterScope.ARTISTS -> q.isEmpty() || songArtist.contains(q)
                             SearchFilterScope.ALBUMS -> q.isEmpty() || songAlbum.contains(q)
                         }
@@ -118,10 +118,12 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(text = "${searchResults.size} sonuç bulundu", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            Text(text = "${searchResults.size} kayıt tarandı (katalog tamamı olmayabilir)", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                             if (selectedScope != SearchFilterScope.ALL) Text(text = "Filtre: ${selectedScope.label}", color = LanuGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            if (searchIsLoading) item { Text("Katalog ve sanatçı diskografisi taranıyor…", color = LanuTextSecondary, fontSize = 12.sp) }
+                            if (searchError != null) item { Text(searchError, color = LanuTextSecondary, fontSize = 12.sp) }
                             items(searchResults, key = { it.id }) { song ->
                                 val matchingLyric = if (q.isNotEmpty()) song.lyrics.firstOrNull { it.text.lowercase().contains(q) } else null
                                 val isAlbumMatch = q.isNotEmpty() && song.album.lowercase().contains(q)
@@ -137,6 +139,16 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                                     }
                                     if (song.lyrics.isNotEmpty()) Icon(imageVector = Icons.Default.Mic, contentDescription = "Sözler", tint = LanuGreen, modifier = Modifier.padding(end = 8.dp).size(16.dp))
                                     Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) { Box(contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) } }
+                                }
+                            }
+                            if (q.isNotBlank() && searchHasMore) {
+                                item {
+                                    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                        .background(LanuGreen.copy(alpha = 0.12f))
+                                        .clickable(enabled = !searchIsLoading) { onLoadMoreResults() }
+                                        .padding(14.dp).testTag("search_load_more"), contentAlignment = Alignment.Center) {
+                                        Text("Katalogdaki diğer şarkıları getir", color = LanuGreen, fontSize = 13.sp)
+                                    }
                                 }
                             }
                         }

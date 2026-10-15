@@ -149,6 +149,26 @@ class MusicSearchBarTest {
     }
 
     @Test
+    fun testSearchScopeSongsIncludesArtistDiscography() {
+        var query by mutableStateOf("Mert Demir")
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                SearchScreen(
+                    searchQuery = query,
+                    selectedCategory = null,
+                    allSongs = sampleSongs,
+                    onQueryChange = { query = it },
+                    onSelectCategory = {},
+                    onPlaySong = { _, _ -> }
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag("search_filter_chip_SONGS").performClick()
+        composeTestRule.onNodeWithTag("search_result_song_1").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("search_result_song_2").assertIsDisplayed()
+    }
+
+    @Test
     fun testSearchScreen_findsSongsByArtist() {
         var query by mutableStateOf("Mert Demir")
 

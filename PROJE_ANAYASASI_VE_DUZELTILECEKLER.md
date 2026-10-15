@@ -64,3 +64,14 @@ MusicBrainz parseArtists testini düzelt; testleri tekrar çalıştır; başarı
 - **Ücret onayı:** Ücretli API/kota/servis tüketimi kullanıcı onayı olmadan genişletilmez; gerçek alternatif ve fallback test edilir.
 - **Kanıtlı kapanış:** Bulgu ID, önem, dosya+satır, CI kanıtı, kök neden, düzeltme commit'i, kabul testi, sürüm, geri dönüş planı ile izlenir.
 - **Faz durumu:** Bu ekleme yalnız analiz/dokümantasyon; kaynak kod düzeltmesi veya üretim doğrulaması değildir.
+
+
+## EK ZORUNLU KURAL: Katalog Bütünlüğü ve Sanatçı Diskografileri (15.10.2026)
+
+- Kullanıcı kabul kriteri: **Ceza örneği dahil, tüm sanatçı ve şarkı aramalarında ilk 9 / 40 / 50 sonuçla kalınmayacak.** Sanatçı kimliğiyle doğrulanmış diskografi ve provider sayfalaması aranacak; sonuçlar kademeli yüklenecek.
+- Arama kutusundaki sonuç sayısı yalnızca **şu ana kadar indekslenen/erişilebilen kayıtları** gösterir; gerçek dünya diskografisinin tümü olduğu iddia edilmez.
+- Birden çok sağlayıcıdan gelen sonuçlar gerçek provider kimliğine göre birleştirilir; kayıt kaynağı ve lisans korunur; olmayan veya oynatma hakkı bulunmayan dosya uydurulmaz.
+- Şarkı filtresi sanatçı adına göre de çalışmalı; sanatçıya özgü aramada diskografisi adıyla doğrulanmış kaynaktan taranır.
+- API başarısızlığında mevcut sonuçlar korunur, hata gösterilir, tekrar deneme mümkün olur; keşif durumu sonuçlardan ayrı gösterilir.
+- **Regresyon:** Ceza ve diğer popüler Türkçe sanatçılar, aynı isimli farklı sanatçılar, ilk 50 üzerindeki şarkılar, albüm sayfalama, düşük ağ kalitesi ve kaynak kesintisi test edilir.
+- **Tam katalog vaadi yok:** Üçüncü taraf katalog kapsamı ve lisansların dışındaki kayıtlar gerçek ses olarak sağlanamaz; eksiklikler açık belirtilir.

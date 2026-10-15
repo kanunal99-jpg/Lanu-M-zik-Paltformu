@@ -43,3 +43,10 @@
 4. Doğrula ve yayınla: tüm testler yeşil; Android APK Releases altında SHA-256 ile doğrudan indirilebilir; smoke ve bağlantı doğrulaması.
 
 **Bulgu kapatma:** Kod satırı + kök neden + düzeltme commit'i + test + CI + sürüm/ürün smoke kanıtı olmadan hiçbir madde bitmiş sayılmaz.
+
+
+### Yeni P1 — Sanatçı diskografisinin eksik listelenmesi (15.10.2026)
+- **Kullanıcı kanıtı:** Ekran görüntüsünde Ceza sorgusu, Şarkılar filtresinde yalnızca 9 kayıt. Bu sayı sanatçının tüm eserlerini karşılamıyor.
+- **Kod kök nedeni:** SearchScreen.kt yerel indeks dışına çıkmıyor; MusicRepository.searchRemoteCatalog önceden yalnızca searchSongs'un ilk sayfasını çağırıyor. DeezerCatalogProvider.getArtistDiscography daha önce yalnızca ilk 50 albümü ve albümün ilk track sayfasını alıyordu. MainViewModel.selectArtist önceden diskografiyi sadece mevcut sanatçı kayıtları sıfırsa çağırıyordu.
+- **Yapılacak/doğrulanacak:** Aramaya ek sayfa yükleme, sanatçı adıyla eşleşen doğrulanmış diskografi, albüm sayfa taraması, yükleme ve eksik katalog açıklaması; CI/unit/gerçek cihaz testleri ve APK Release kanıtı.
+- **Kısıt:** 9 kayıt hatası tüm dünyadaki müzik eserlerinin kullanım/lisans haklarını otomatik çözmez.

@@ -115,6 +115,9 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
     val remoteArtistResults by viewModel.remoteArtistResults.collectAsState()
+    val searchIsLoading by viewModel.searchIsLoading.collectAsState()
+    val searchHasMore by viewModel.searchHasMore.collectAsState()
+    val searchError by viewModel.searchError.collectAsState()
     val selectedArtist by viewModel.selectedArtist.collectAsState()
     val selectedPlaylist by viewModel.selectedPlaylist.collectAsState()
     val showCreatePlaylistDialog by viewModel.showCreatePlaylistDialog.collectAsState()
@@ -164,7 +167,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
             Box(Modifier.fillMaxSize().padding(innerPadding)) {
                 when (currentTab) {
                     MainTab.HOME -> HomeScreen(songs = allSongs, artists = viewModel.artists, newReleaseAlert = newReleaseAlert, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onSelectArtist = { viewModel.selectArtist(it) }, onCategoryClick = { category -> viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) }, onSimulateNewRelease = { viewModel.simulateNewReleasePush() }, onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() })
-                    MainTab.SEARCH -> SearchScreen(searchQuery = searchQuery, selectedCategory = selectedCategoryFilter, allSongs = allSongs, cachedSongs = cachedSongs, remoteArtists = remoteArtistResults, onSelectArtist = { viewModel.selectArtist(it) }, onQueryChange = { viewModel.updateSearchQuery(it) }, onSelectCategory = { viewModel.filterByCategory(it) }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, isCatalogExpanding = isCatalogExpanding, onExpandCatalog = { viewModel.expandVerifiedCatalog() })
+                    MainTab.SEARCH -> SearchScreen(searchQuery = searchQuery, selectedCategory = selectedCategoryFilter, allSongs = allSongs, cachedSongs = cachedSongs, remoteArtists = remoteArtistResults, onSelectArtist = { viewModel.selectArtist(it) }, onQueryChange = { viewModel.updateSearchQuery(it) }, onSelectCategory = { viewModel.filterByCategory(it) }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, isCatalogExpanding = isCatalogExpanding, onExpandCatalog = { viewModel.expandVerifiedCatalog() }, searchIsLoading = searchIsLoading, searchHasMore = searchHasMore, searchError = searchError, onLoadMoreResults = { viewModel.loadMoreSearchResults() })
                     MainTab.LIBRARY -> LibraryScreen(playlists = playlists, downloadedEntities = downloadedEntities, favoriteIds = favoriteIds, allSongs = allSongs, onSelectPlaylist = { viewModel.selectPlaylist(it) }, onCreatePlaylist = { viewModel.openCreatePlaylistDialog() }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) })
                     MainTab.FRIENDS -> FriendActivityView(activities = friendActivities, availableSongs = allSongs, onPlaySong = { song -> viewModel.playSong(song, listOf(song)) }, onShareSong = { song -> viewModel.shareSong(context, song) }, onLikeActivity = { id -> viewModel.likeFriendActivity(id) }, onSendRecommendation = { friendName, song, note -> viewModel.shareRecommendationToFriends(friendName, song, note) })
                     MainTab.EQUALIZER -> EqualizerView(equalizerState = equalizerState, isPlaying = isPlaying, onPresetSelected = { viewModel.setEqualizerPreset(it) }, onBandLevelChanged = { band, level -> viewModel.setBandLevel(band, level) }, onBassBoostChanged = { viewModel.setBassBoost(it) }, onVirtualizerChanged = { viewModel.setVirtualizer(it) }, onToggleEqualizer = { viewModel.toggleEqualizer() })

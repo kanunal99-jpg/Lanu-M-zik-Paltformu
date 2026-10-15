@@ -292,14 +292,23 @@ class MusicRepository(context: Context) {
 
         fetched.size
     }
-    suspend fun searchRemoteCatalog(query: String): Result<List<Song>> = catalogProvider.searchSongs(query).map { remoteSongs ->
-        remoteSongs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
-    }.onSuccess { remoteSongs ->
-        if (remoteSongs.isNotEmpty()) {
-            cacheSongs(remoteSongs)
-            _songs.value = (_songs.value + remoteSongs).distinctBy { it.id }
+    /**
+     * Fetch one genuine provider page for the active user query. This is NOT the
+     * entire catalog. Pages are indexed incrementally and existing cached songs remain.
+     */
+    suspend fun searchRemoteCatalogPage(query: String, page: Int, pageSize: Int = 50): Result<List<Song>> =
+        catalogProvider.searchSongsPage(query, page.coerceAtLeast(0), pageSize).map { remoteSongs ->
+            remoteSongs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }.distinctBy { it.id }
+        }.onSuccess { remoteSongs ->
+            if (remoteSongs.isNotEmpty()) {
+                cacheSongs(remoteSongs)
+                _songs.value = (_songs.value + remoteSongs).distinctBy { it.id }
+            }
         }
-    }
+
+    suspend fun searchRemoteCatalog(query: String): Result<List<Song>> =
+        searchRemoteCatalogPage(query, 0)
+
 
     suspend fun searchRemoteArtists(query: String): Result<List<Artist>> = catalogProvider.searchArtists(query)
 

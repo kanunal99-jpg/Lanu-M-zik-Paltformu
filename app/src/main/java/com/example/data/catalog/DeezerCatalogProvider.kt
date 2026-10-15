@@ -57,17 +57,36 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
         val providerArtistId = artistId.removePrefix("deezer:")
-        val albumsJson = request("/artist/$providerArtistId/albums", mapOf("limit" to LIMIT.toString())).getOrThrow()
-        val albums = albumsJson.optJSONArray("data") ?: JSONArray()
-        buildList {
+        val verified = linkedMapOf<String, Song>()
+        // Deezer artist 'top' includes singles and featured songs that are not always
+        // represented in the first artist-album response.
+        request("/artist/$providerArtistId/top", mapOf("limit" to "100"))
+            .getOrNull()?.optJSONArray("data")?.let { top ->
+                mapTracks(top).filter { it.artistId == "deezer:$providerArtistId" }
+                    .forEach { verified[it.id] = it }
+            }
+        val visitedAlbums = hashSetOf<String>()
+        for (page in 0 until 6) {
+            val albumsJson = request(
+                "/artist/$providerArtistId/albums",
+                mapOf("limit" to "50", "index" to (page * 50).toString())
+            ).getOrElse { error ->
+                if (page == 0 && verified.isEmpty()) throw error
+                break
+            }
+            val albums = albumsJson.optJSONArray("data") ?: JSONArray()
+            if (albums.length() == 0) break
             for (i in 0 until albums.length()) {
                 val albumId = albums.optJSONObject(i)?.optString("id").orEmpty()
-                if (albumId.isBlank()) continue
-                request("/album/$albumId").getOrNull()?.let { albumJson ->
-                    addAll(mapTracks(albumJson.optJSONObject("tracks")?.optJSONArray("data") ?: JSONArray()))
-                }
+                if (albumId.isBlank() || !visitedAlbums.add(albumId)) continue
+                val albumJson = request("/album/$albumId").getOrNull() ?: continue
+                mapTracks(albumJson.optJSONObject("tracks")?.optJSONArray("data") ?: JSONArray())
+                    .filter { it.artistId == "deezer:$providerArtistId" }
+                    .forEach { verified[it.id] = it }
             }
-        }.filter { it.artistId == "deezer:$providerArtistId" }.distinctBy { it.id }
+            if (albums.length() < 50) break
+        }
+        verified.values.toList()
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
