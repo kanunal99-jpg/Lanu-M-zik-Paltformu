@@ -3,6 +3,7 @@ package com.example.data.catalog
 import com.example.model.Album
 import com.example.model.Artist
 import com.example.model.MusicCategory
+import com.example.model.MusicGenreResolver
 import com.example.model.Song
 import com.example.model.SongSourceType
 import kotlinx.coroutines.Dispatchers
@@ -151,7 +152,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
             val album = albumObj?.optString("title").orEmpty().ifBlank { "Single" }
             val cover = albumObj?.optString("cover_xl").orEmpty().ifBlank { albumObj?.optString("cover_big").orEmpty() }
             add(Song(id = "deezer:$id", title = title, artist = artist, artistId = "deezer:$artistId", album = album,
-                durationMs = item.optLong("duration", 0L) * 1000L, category = MusicCategory.GLOBAL_POP, language = "und",
+                durationMs = item.optLong("duration", 0L) * 1000L, category = MusicGenreResolver.fromMetadata(artist, "", emptyList(), "und"), language = "und",
                 coverUrl = cover, audioUrl = preview, releaseYear = 0, license = "deezer:official-preview", sourceType = SongSourceType.VERIFIED_PREVIEW))
         }
     }

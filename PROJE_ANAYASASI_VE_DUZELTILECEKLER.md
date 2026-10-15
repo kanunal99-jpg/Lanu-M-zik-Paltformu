@@ -75,3 +75,12 @@ MusicBrainz parseArtists testini düzelt; testleri tekrar çalıştır; başarı
 - API başarısızlığında mevcut sonuçlar korunur, hata gösterilir, tekrar deneme mümkün olur; keşif durumu sonuçlardan ayrı gösterilir.
 - **Regresyon:** Ceza ve diğer popüler Türkçe sanatçılar, aynı isimli farklı sanatçılar, ilk 50 üzerindeki şarkılar, albüm sayfalama, düşük ağ kalitesi ve kaynak kesintisi test edilir.
 - **Tam katalog vaadi yok:** Üçüncü taraf katalog kapsamı ve lisansların dışındaki kayıtlar gerçek ses olarak sağlanamaz; eksiklikler açık belirtilir.
+
+## EK ZORUNLU KURAL: Premium Keşif + Kanıtlı Genre (15 Ekim 2026)
+
+- Kullanıcı talebi ve mobil ekran kanıtı: Sosyal ve Arşiv alt navigasyondan çıkartılır, **yerel kayıt/çalma listeleri silinmez**. Dört ana sekme: Ana Sayfa, Keşfet, Ekolayzır, Hesabım.
+- Her katalog verisi için gerçek kaynak ID'si, erişilebilirlik, oynatma lisansı ve metadata vs. ses ayrımı; türü kanıtlanmayan kayda **Global Pop değil Türü Belirsiz** etiketi verilir.
+- Türkçe Pop, Türkçe Rap, Anadolu Rock ve diğer kategorilerde gerçek indeks sayısı gösterilir; boş kategori sessiz beyaz/siyah ekran değildir.
+- 'Tüm dünyadaki bütün şarkılar' garantisi verilemez: metadata kapsamı ve full-stream hakları ayrıdır. YouTube videolarının sesini ayrıştırmak veya görünmez arka planda oynatmak yasaktır; resmî görünür gömülü oynatıcı veya izinli tam ses kaynakları kullanılır.
+- Ayrıntılı kanıt, düzeltme kriterleri ve dört faz: [LANU_KATALOG_VE_PREMIUM_ANAYASA_2026-10-15.md](docs/LANU_KATALOG_VE_PREMIUM_ANAYASA_2026-10-15.md).
+- **Yayın kapısı:** PR CI, APK imza/sürüm ve gerçek cihazda ceza/genre/oynatma/arama testleri ayrı aşamalardır. CI yeşil = kullanıcı arızaları düzeldi anlamına gelmez.

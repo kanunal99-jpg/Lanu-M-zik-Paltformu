@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.model.Album
+import com.example.model.MusicGenreResolver
 import com.example.ui.components.AddToPlaylistDialog
 import com.example.ui.components.AlbumDetailSheet
 import com.example.ui.components.ArtistDetailSheet
@@ -103,6 +104,8 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val equalizerState by viewModel.equalizerState.collectAsState()
     val audioQuality by viewModel.audioQuality.collectAsState()
     val allSongs by viewModel.allSongs.collectAsState()
+    // Reclassify only the displayed catalog; never delete or migrate user libraries.
+    val categorizedSongs = remember(allSongs) { allSongs.map(MusicGenreResolver::resolve) }
     val cachedSongs by viewModel.cachedSongs.collectAsState()
     val favoriteIds by viewModel.favoriteSongIds.collectAsState()
     val downloadedEntities by viewModel.downloadedSongs.collectAsState()
@@ -128,7 +131,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     LaunchedEffect(deepLink) {
         when (val target = deepLink) {
             LanuDeepLink.Home -> viewModel.setTab(MainTab.HOME)
-            LanuDeepLink.Library -> viewModel.setTab(MainTab.LIBRARY)
+            LanuDeepLink.Library -> viewModel.setTab(MainTab.HOME)
             is LanuDeepLink.Search -> { viewModel.updateSearchQuery(target.query); viewModel.setTab(MainTab.SEARCH) }
             is LanuDeepLink.PlayerAction -> when (target.action) {
                 LanuDeepLink.Action.PLAY_PAUSE -> viewModel.togglePlayPause()
@@ -156,7 +159,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
             Column(Modifier.navigationBarsPadding()) {
                 if (!isNowPlayingExpanded) PlayerBottomAppBar(song = currentSong, isPlaying = isPlaying, currentPositionMs = currentPositionMs, durationMs = durationMs, isFavorite = currentSong?.let { favoriteIds.contains(it.id) } ?: false, isShuffle = isShuffle, repeatMode = repeatMode, onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it.id) } }, onTogglePlayPause = { viewModel.togglePlayPause() }, onPrevious = { viewModel.prevSong() }, onNext = { viewModel.nextSong() }, onToggleShuffle = { viewModel.toggleShuffle() }, onToggleRepeat = { viewModel.toggleRepeat() }, onExpand = { viewModel.openNowPlaying() }, onSeekTo = { viewModel.seekTo(it) })
                 NavigationBar(containerColor = LanuDarkSurface, tonalElevation = 8.dp, modifier = Modifier.testTag("bottom_navigation_bar")) {
-                    val tabs = listOf(Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home), Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search), Triple(MainTab.LIBRARY, "Arşivim", Icons.Default.LibraryMusic), Triple(MainTab.FRIENDS, "Sosyal", Icons.Default.Group), Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer), Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person))
+                    val tabs = listOf(Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home), Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search), Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer), Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person))
                     tabs.forEach { (tab, label, icon) ->
                         val isSelected = currentTab == tab
                         NavigationBarItem(selected = isSelected, onClick = { if (currentTab != tab) viewModel.setTab(tab) }, icon = { Icon(icon, contentDescription = label, tint = if (isSelected) LanuGreen else LanuTextMuted, modifier = Modifier.size(24.dp)) }, label = { Text(label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) LanuGreen else LanuTextMuted) }, colors = NavigationBarItemDefaults.colors(indicatorColor = LanuGreen.copy(alpha = 0.15f)), modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"))
@@ -166,10 +169,10 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
         }) { innerPadding ->
             Box(Modifier.fillMaxSize().padding(innerPadding)) {
                 when (currentTab) {
-                    MainTab.HOME -> HomeScreen(songs = allSongs, artists = viewModel.artists, newReleaseAlert = newReleaseAlert, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onSelectArtist = { viewModel.selectArtist(it) }, onCategoryClick = { category -> viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) }, onSimulateNewRelease = { viewModel.simulateNewReleasePush() }, onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() })
-                    MainTab.SEARCH -> SearchScreen(searchQuery = searchQuery, selectedCategory = selectedCategoryFilter, allSongs = allSongs, cachedSongs = cachedSongs, remoteArtists = remoteArtistResults, onSelectArtist = { viewModel.selectArtist(it) }, onQueryChange = { viewModel.updateSearchQuery(it) }, onSelectCategory = { viewModel.filterByCategory(it) }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, isCatalogExpanding = isCatalogExpanding, onExpandCatalog = { viewModel.expandVerifiedCatalog() }, searchIsLoading = searchIsLoading, searchHasMore = searchHasMore, searchError = searchError, onLoadMoreResults = { viewModel.loadMoreSearchResults() })
-                    MainTab.LIBRARY -> LibraryScreen(playlists = playlists, downloadedEntities = downloadedEntities, favoriteIds = favoriteIds, allSongs = allSongs, onSelectPlaylist = { viewModel.selectPlaylist(it) }, onCreatePlaylist = { viewModel.openCreatePlaylistDialog() }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) })
-                    MainTab.FRIENDS -> FriendActivityView(activities = friendActivities, availableSongs = allSongs, onPlaySong = { song -> viewModel.playSong(song, listOf(song)) }, onShareSong = { song -> viewModel.shareSong(context, song) }, onLikeActivity = { id -> viewModel.likeFriendActivity(id) }, onSendRecommendation = { friendName, song, note -> viewModel.shareRecommendationToFriends(friendName, song, note) })
+                    MainTab.HOME -> HomeScreen(songs = categorizedSongs, artists = viewModel.artists, newReleaseAlert = newReleaseAlert, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onSelectArtist = { viewModel.selectArtist(it) }, onCategoryClick = { category -> viewModel.updateSearchQuery(""); viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) }, onSimulateNewRelease = { viewModel.simulateNewReleasePush() }, onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() })
+                    MainTab.SEARCH -> SearchScreen(searchQuery = searchQuery, selectedCategory = selectedCategoryFilter, allSongs = categorizedSongs, cachedSongs = cachedSongs.map(MusicGenreResolver::resolve), remoteArtists = remoteArtistResults, onSelectArtist = { viewModel.selectArtist(it) }, onQueryChange = { viewModel.updateSearchQuery(it) }, onSelectCategory = { viewModel.filterByCategory(it) }, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, isCatalogExpanding = isCatalogExpanding, onExpandCatalog = { viewModel.expandVerifiedCatalog() }, searchIsLoading = searchIsLoading, searchHasMore = searchHasMore, searchError = searchError, onLoadMoreResults = { viewModel.loadMoreSearchResults() })
+                    MainTab.LIBRARY -> HomeScreen(songs = categorizedSongs, artists = viewModel.artists, newReleaseAlert = newReleaseAlert, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onSelectArtist = { viewModel.selectArtist(it) }, onCategoryClick = { category -> viewModel.updateSearchQuery(""); viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) }, onSimulateNewRelease = { viewModel.simulateNewReleasePush() }, onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() })
+                    MainTab.FRIENDS -> HomeScreen(songs = categorizedSongs, artists = viewModel.artists, newReleaseAlert = newReleaseAlert, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onSelectArtist = { viewModel.selectArtist(it) }, onCategoryClick = { category -> viewModel.updateSearchQuery(""); viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) }, onSimulateNewRelease = { viewModel.simulateNewReleasePush() }, onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() })
                     MainTab.EQUALIZER -> EqualizerView(equalizerState = equalizerState, isPlaying = isPlaying, onPresetSelected = { viewModel.setEqualizerPreset(it) }, onBandLevelChanged = { band, level -> viewModel.setBandLevel(band, level) }, onBassBoostChanged = { viewModel.setBassBoost(it) }, onVirtualizerChanged = { viewModel.setVirtualizer(it) }, onToggleEqualizer = { viewModel.toggleEqualizer() })
                     MainTab.ACCOUNT -> AccountHistoryScreen(session = session, history = history, allSongs = allSongs, onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) }, onSignOut = { viewModel.signOut() })
                 }
