@@ -11,6 +11,7 @@ import com.example.auth.AuthSession
 import com.example.data.DownloadedSongEntity
 import com.example.data.HistoryRecord
 import com.example.data.MusicRepository
+import com.example.data.SearchCatalogSource
 import com.example.data.PlaylistEntity
 import com.example.model.Artist
 import com.example.model.AudioQuality
@@ -24,6 +25,9 @@ import com.example.model.toSettings
 import com.example.service.AudioPlayerController
 import com.example.service.RepeatMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -88,7 +92,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val searchHasMore: StateFlow<Boolean> = _searchHasMore.asStateFlow()
     private val _searchError = MutableStateFlow<String?>(null)
     val searchError: StateFlow<String?> = _searchError.asStateFlow()
-    private var nextSearchPage = 0
+    private val searchSources = SearchCatalogSource.entries.toList()
+    private val sourcePages = mutableMapOf<SearchCatalogSource, Int>()
+    private val sourceEmptyPages = mutableMapOf<SearchCatalogSource, Int>()
+    private val exhaustedSources = mutableSetOf<SearchCatalogSource>()
+    private var artistDiscoveryJob: Job? = null
+
+    private fun recordSearchPage(source: SearchCatalogSource, page: Int, result: Result<List<Song>>?) {
+        if (result == null || result.isFailure) {
+            _searchError.value = "Bazı müzik kaynaklarına ulaşılamadı; bulunan şarkılar korunuyor."
+            return
+        }
+        sourcePages[source] = page + 1
+        val emptyCount = if (result.getOrThrow().isEmpty()) (sourceEmptyPages[source] ?: 0) + 1 else 0
+        sourceEmptyPages[source] = emptyCount
+        if (emptyCount >= 2) exhaustedSources.add(source)
+        _searchHasMore.value = searchSources.any { it !in exhaustedSources }
+    }
 
     private val _selectedCategoryFilter = MutableStateFlow<MusicCategory?>(null)
     val selectedCategoryFilter: StateFlow<MusicCategory?> = _selectedCategoryFilter.asStateFlow()
@@ -133,46 +153,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { allSongs.collect { songs -> playerController.restoreStateFromCatalog(songs) } }
         viewModelScope.launch {
             _searchQuery.map(::normalizeSearch).distinctUntilChanged().debounce(350).collectLatest { query ->
+                artistDiscoveryJob?.cancel()
                 _remoteArtistResults.value = emptyList()
                 _searchError.value = null
                 _searchHasMore.value = false
-                nextSearchPage = 0
+                sourcePages.clear()
+                sourceEmptyPages.clear()
+                exhaustedSources.clear()
                 if (query.length < 2) {
                     _searchIsLoading.value = false
                     return@collectLatest
                 }
-                _searchIsLoading.value = true
-                try {
-                    val artists = repository.searchRemoteArtists(query).getOrElse { error ->
-                        Log.w("MainViewModel", "Remote artist discovery failed", error)
-                        _searchError.value = "Sanatçı kaynağının bir bölümü şu anda erişilemiyor."
-                        emptyList()
-                    }.distinctBy { it.id }
-                    if (query == normalizeSearch(_searchQuery.value)) {
-                        _remoteArtistResults.value = artists
+
+                // Artist discovery and potentially huge discographies are not allowed
+                // to block initial song results. Cancellation prevents stale queries.
+                artistDiscoveryJob = viewModelScope.launch {
+                    val artistsResult = withTimeoutOrNull(8_000L) {
+                        repository.searchRemoteArtists(query)
                     }
-                    // Unlike title-only search, an exact artist query also retrieves
-                    // verified provider discographies (Ceza and every other artist).
-                    artists.filter { normalizeSearch(it.name) == query }.take(3).forEach { artist ->
-                        repository.getArtistDiscography(artist.id).onFailure { error ->
+                    if (query != normalizeSearch(_searchQuery.value)) return@launch
+                    val artists = artistsResult?.getOrNull().orEmpty().distinctBy { it.id }
+                    _remoteArtistResults.value = artists
+                    // The detailed discography is optional enrichment, not a search gate.
+                    artists.filter { normalizeSearch(it.name) == query }.take(2).forEach { artist ->
+                        withTimeoutOrNull(12_000L) {
+                            repository.getArtistDiscography(artist.id)
+                        }?.onFailure { error ->
                             Log.w("MainViewModel", "Artist discography unavailable: ${artist.id}", error)
                         }
                     }
-                    // Search is paginated, not permanently capped to its first 40/50 hits.
-                    // Load the first two remote pages, then allow further verified pages.
-                    var emptyPages = 0
-                    repeat(2) { index ->
-                        val result = repository.searchRemoteCatalogPage(query, index)
-                        result.onSuccess { songs -> if (songs.isEmpty()) emptyPages++ else emptyPages = 0 }
-                            .onFailure { error ->
-                                Log.w("MainViewModel", "Remote catalog page failed", error)
-                                _searchError.value = "Bazı katalog sayfaları alınamadı. Tekrar deneyebilirsiniz."
+                }
+
+                _searchIsLoading.value = true
+                try {
+                    // Concurrent, independently bounded source fetches publish songs
+                    // progressively. A slow or unavailable provider no longer hides
+                    // results already returned by faster sources.
+                    coroutineScope {
+                        searchSources.forEach { source ->
+                            launch {
+                                val page = sourcePages[source] ?: 0
+                                val result = withTimeoutOrNull(10_000L) {
+                                    runCatching {
+                                        repository.searchRemoteCatalogPageFromSource(query, page, source)
+                                    }.getOrElse { Result.failure(it) }
+                                }
+                                if (query != normalizeSearch(_searchQuery.value)) return@launch
+                                recordSearchPage(source, page, result)
                             }
-                        nextSearchPage = index + 1
+                        }
                     }
-                    _searchHasMore.value = emptyPages < 2
                 } finally {
-                    _searchIsLoading.value = false
+                    if (query == normalizeSearch(_searchQuery.value))
+                        _searchIsLoading.value = false
                 }
             }
         }
@@ -202,19 +235,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _searchIsLoading.value = true
             try {
-                val page = nextSearchPage
-                repository.searchRemoteCatalogPage(query, page).onSuccess { songs ->
-                    if (query != normalizeSearch(_searchQuery.value)) return@onSuccess
-                    nextSearchPage = page + 1
-                    _searchHasMore.value = songs.isNotEmpty()
-                    _searchError.value = null
-                }.onFailure { error ->
-                    Log.w("MainViewModel", "Next music search page failed", error)
-                    if (query == normalizeSearch(_searchQuery.value))
-                        _searchError.value = "Yeni sayfa alınamadı. Tekrar deneyin."
+                coroutineScope {
+                    searchSources.filter { it !in exhaustedSources }.forEach { source ->
+                        launch {
+                            val page = sourcePages[source] ?: 0
+                            val result = withTimeoutOrNull(10_000L) {
+                                runCatching {
+                                    repository.searchRemoteCatalogPageFromSource(query, page, source)
+                                }.getOrElse { Result.failure(it) }
+                            }
+                            if (query == normalizeSearch(_searchQuery.value))
+                                recordSearchPage(source, page, result)
+                        }
+                    }
                 }
             } finally {
-                _searchIsLoading.value = false
+                if (query == normalizeSearch(_searchQuery.value))
+                    _searchIsLoading.value = false
             }
         }
     }
