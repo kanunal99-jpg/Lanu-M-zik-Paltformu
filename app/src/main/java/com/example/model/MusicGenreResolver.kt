@@ -72,10 +72,9 @@ object MusicGenreResolver {
     fun resolve(song: Song): Song {
         if (song.category != MusicCategory.GLOBAL_POP && song.category != MusicCategory.OTHER) return song
         // Imported old cache tagged virtually every Deezer/unknown song as Global Pop.
-        val corrected = curatedArtist(song.artist)
-            ?: if (song.category == MusicCategory.GLOBAL_POP &&
-                song.sourceType == SongSourceType.VERIFIED_REMOTE && song.language == "en")
-                MusicCategory.GLOBAL_POP else MusicCategory.OTHER
+        // Legacy data did not record whether Global Pop came from a genuine
+        // genre tag or from a hard-coded default. Do not guess either way.
+        val corrected = curatedArtist(song.artist) ?: MusicCategory.OTHER
         return if (song.category == corrected) song else song.copy(category = corrected)
     }
 }
