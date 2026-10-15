@@ -36,6 +36,9 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
+/** Remote catalog providers queried independently so a slow provider cannot hide quick results. */
+enum class SearchCatalogSource { DEEZER, AUDIUS, JAMENDO }
+
 class MusicRepository(context: Context) {
     private val context = context.applicationContext
     private val database = AppDatabase.getDatabase(context)
@@ -305,6 +308,30 @@ class MusicRepository(context: Context) {
                 _songs.value = (_songs.value + remoteSongs).distinctBy { it.id }
             }
         }
+
+    /** Returns one provider page as soon as it is available; never waits for every catalog. */
+    suspend fun searchRemoteCatalogPageFromSource(
+        query: String,
+        page: Int,
+        source: SearchCatalogSource,
+        pageSize: Int = 50
+    ): Result<List<Song>> {
+        val provider = when (source) {
+            SearchCatalogSource.DEEZER -> deezerCatalogProvider
+            SearchCatalogSource.AUDIUS -> audiusCatalogProvider
+            SearchCatalogSource.JAMENDO -> jamendoCatalogProvider
+        }
+        return provider.searchSongsPage(query, page.coerceAtLeast(0), pageSize)
+            .map { songs ->
+                songs.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }
+                    .distinctBy { it.id }
+            }.onSuccess { songs ->
+                if (songs.isNotEmpty()) {
+                    cacheSongs(songs)
+                    _songs.value = (_songs.value + songs).distinctBy { it.id }
+                }
+            }
+    }
 
     suspend fun searchRemoteCatalog(query: String): Result<List<Song>> =
         searchRemoteCatalogPage(query, 0)
