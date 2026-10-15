@@ -185,6 +185,17 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                         Text(text = "Türlere Göre Keşfet", color = LanuTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Text(text = "Tüm kayıtlar (${allSongs.size})", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { browseAll = true })
                     }
+                    Box(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(LanuDarkSurface)
+                        .clickable(enabled = !isCatalogExpanding) { onExpandCatalog() }
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .testTag("expand_verified_catalog")) {
+                        Text(
+                            text = if (isCatalogExpanding) "İzinli kaynaklar taranıyor…" else "Kataloğu genişlet  ↗",
+                            color = LanuGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
                     LazyVerticalGrid(columns = GridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxSize()) {
                         items(MusicCategory.values()) { category ->
                             Box(modifier = Modifier.fillMaxWidth().height(104.dp).clip(RoundedCornerShape(18.dp)).background(Brush.linearGradient(colors = listOf(category.primaryColor.copy(alpha = 0.30f), LanuDarkSurface))).clickable { browseAll = false; onSelectCategory(category) }.padding(14.dp).testTag("genre_${category.name.lowercase()}")) {
