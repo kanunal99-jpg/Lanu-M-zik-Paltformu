@@ -3,6 +3,7 @@ package com.example.data.catalog
 import com.example.model.Album
 import com.example.model.Artist
 import com.example.model.MusicCategory
+import com.example.model.MusicGenreResolver
 import com.example.model.Song
 import com.example.model.SongSourceType
 import kotlinx.coroutines.Dispatchers
@@ -179,7 +180,7 @@ internal object AudiusSongMapper {
             val genre = item.optStringAny("genre").trim().lowercase()
             val tags = item.optJSONArrayAny("tags").strings().map(String::lowercase)
             val language = inferLanguage(tags)
-            val category = inferCategory(genre, tags, language)
+            val category = MusicGenreResolver.fromMetadata(artist, genre, tags, language)
             val releaseYear = item.optStringAny("releaseDate", "release_date", "releasedate").take(4).toIntOrNull() ?: 0
             val artwork = item.optJSONObject("artwork")
             val coverUrl = artwork?.optStringAny("_480x480", "480x480", "_150x150", "150x150").orEmpty()
