@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.UUID
 
@@ -337,7 +338,27 @@ class MusicRepository(context: Context) {
         searchRemoteCatalogPage(query, 0)
 
 
-    suspend fun searchRemoteArtists(query: String): Result<List<Artist>> = catalogProvider.searchArtists(query)
+    /** Discover providers concurrently; do not wait for a failed catalog before showing an artist. */
+    suspend fun searchRemoteArtists(query: String): Result<List<Artist>> = coroutineScope {
+        val sources = listOf(deezerCatalogProvider, audiusCatalogProvider, jamendoCatalogProvider)
+        val responses = sources.map { provider ->
+            async {
+                withTimeoutOrNull(4_000L) {
+                    runCatching { provider.searchArtists(query) }
+                        .getOrElse { Result.failure(it) }
+                }
+            }
+        }.awaitAll()
+        val merged = linkedMapOf<String, Artist>()
+        responses.forEach { result ->
+            result?.getOrNull()?.forEach { artist -> merged.putIfAbsent(artist.id, artist) }
+        }
+        // Existing indexed music still works while every remote service is unavailable.
+        val normalized = normalizeSearch(query)
+        artists.filter { normalizeSearch(it.name).contains(normalized) }
+            .forEach { artist -> merged.putIfAbsent(artist.id, artist) }
+        Result.success(merged.values.toList())
+    }
 
     /** Resolves an artist's tracks by the provider identity, never by artist-name substring. */
     suspend fun getArtistDiscography(artistId: String): Result<List<Song>> =
