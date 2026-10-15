@@ -104,6 +104,8 @@ dependencies {
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
+  // Android unit tests use the real org.json implementation instead of android.jar mock stubs.
+  testImplementation("org.json:json:20240303")
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
   testImplementation(libs.roborazzi)
