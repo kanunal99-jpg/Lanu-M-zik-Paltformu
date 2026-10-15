@@ -58,35 +58,68 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
         val providerArtistId = artistId.removePrefix("deezer:")
         val verified = linkedMapOf<String, Song>()
-        // Deezer artist 'top' includes singles and featured songs that are not always
-        // represented in the first artist-album response.
+        // Singles and collaborations can be missing from an album-only index.
         request("/artist/$providerArtistId/top", mapOf("limit" to "100"))
             .getOrNull()?.optJSONArray("data")?.let { top ->
                 mapTracks(top).filter { it.artistId == "deezer:$providerArtistId" }
                     .forEach { verified[it.id] = it }
             }
+
         val visitedAlbums = hashSetOf<String>()
-        for (page in 0 until 6) {
+        var albumOffset = 0
+        val albumPageSize = 50
+        // Continue until the provider reaches its real end, not a fixed six-page cap.
+        while (true) {
             val albumsJson = request(
                 "/artist/$providerArtistId/albums",
-                mapOf("limit" to "50", "index" to (page * 50).toString())
+                mapOf("limit" to albumPageSize.toString(), "index" to albumOffset.toString())
             ).getOrElse { error ->
-                if (page == 0 && verified.isEmpty()) throw error
-                break
+                if (albumOffset == 0 && verified.isEmpty()) throw error
+                break // Keep already fetched, verified songs if a later page fails.
             }
             val albums = albumsJson.optJSONArray("data") ?: JSONArray()
             if (albums.length() == 0) break
+            var discovered = 0
             for (i in 0 until albums.length()) {
                 val albumId = albums.optJSONObject(i)?.optString("id").orEmpty()
                 if (albumId.isBlank() || !visitedAlbums.add(albumId)) continue
+                discovered++
                 val albumJson = request("/album/$albumId").getOrNull() ?: continue
-                mapTracks(albumJson.optJSONObject("tracks")?.optJSONArray("data") ?: JSONArray())
-                    .filter { it.artistId == "deezer:$providerArtistId" }
+                fetchAlbumTracks(albumId, albumJson, "deezer:$providerArtistId")
                     .forEach { verified[it.id] = it }
             }
-            if (albums.length() < 50) break
+            albumOffset += albums.length()
+            // Protect against provider responses that repeat the same page forever.
+            if (discovered == 0 || albums.length() < albumPageSize) break
+            if (albumsJson.has("total") && albumOffset >= albumsJson.optInt("total")) break
         }
         verified.values.toList()
+    }
+
+    /** Deezer's embedded album track list can contain only the first page. */
+    private suspend fun fetchAlbumTracks(albumId: String, albumJson: JSONObject, artistId: String): List<Song> {
+        val trackListing = albumJson.optJSONObject("tracks") ?: return emptyList()
+        val firstPage = trackListing.optJSONArray("data") ?: JSONArray()
+        val verified = linkedMapOf<String, Song>()
+        fun addPage(page: JSONArray) {
+            mapTracks(page).filter { it.artistId == artistId }
+                .forEach { verified[it.id] = it }
+        }
+        addPage(firstPage)
+        val total = trackListing.optInt("total", firstPage.length()).coerceAtLeast(0)
+        var offset = firstPage.length()
+        // The offset advances by returned rows, not playable rows: preview-less
+        // recordings must not stall pagination or turn into fabricated audio.
+        while (offset < total) {
+            val nextPage = request(
+                "/album/$albumId/tracks",
+                mapOf("limit" to "100", "index" to offset.toString())
+            ).getOrNull()?.optJSONArray("data") ?: break
+            if (nextPage.length() == 0) break
+            addPage(nextPage)
+            offset += nextPage.length()
+        }
+        return verified.values.toList()
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =
