@@ -61,25 +61,11 @@ import com.example.ui.theme.LanuTextSecondary
 
 @Composable
 fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}, searchIsLoading: Boolean = false, searchHasMore: Boolean = false, searchError: String? = null, onLoadMoreResults: () -> Unit = {}) {
-    var searchMode by remember { mutableStateOf(0) }
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
     var browseAll by remember { mutableStateOf(false) }
     val q = searchQuery.trim().lowercase()
     Column(modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().testTag("search_screen")) {
-        if (searchQuery.isEmpty() && selectedCategory == null) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Genel Arama", "Room Önbellek (Başlık & Sanatçı)").forEachIndexed { index, title ->
-                    val isSelected = searchMode == index
-                    Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (isSelected) LanuGreen else LanuDarkSurface).clickable { searchMode = index }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                        Text(text = title, color = if (isSelected) Color.Black else LanuTextSecondary, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                    }
-                }
-            }
-        }
-        if (searchMode == 1 && selectedCategory == null) {
-            SongSearchBarWithListView(cachedSongs = cachedSongs, onSongClick = onPlaySong, initialQuery = searchQuery, onQueryChange = onQueryChange, modifier = Modifier.fillMaxSize())
-        } else {
-            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = "Ara & Keşfet", color = LanuTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
                 Text(text = "Şarkı, sanatçı veya albüm arayın", color = LanuTextMuted, fontSize = 12.sp)
@@ -118,11 +104,12 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(text = "${searchResults.size} kayıt tarandı (katalog tamamı olmayabilir)", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            Text(text = "${searchResults.size} erişilebilir kayıt • Katalog genişletiliyor", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                             if (selectedScope != SearchFilterScope.ALL) Text(text = "Filtre: ${selectedScope.label}", color = LanuGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
-                            if (searchIsLoading) item { Text("Katalog ve sanatçı diskografisi taranıyor…", color = LanuTextSecondary, fontSize = 12.sp) }
+                            if (searchIsLoading) item { Text("Yeni şarkılar getiriliyor…", color = LanuTextSecondary, fontSize = 12.sp) }
+                            if (searchResults.isEmpty() && !searchIsLoading) item { Text("Bu aramada veya kategoride henüz kayıt yok. Bu, dünyada böyle bir şarkı olmadığı anlamına gelmez.", color = LanuTextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 20.dp)) }
                             if (searchError != null) item { Text(searchError, color = LanuTextSecondary, fontSize = 12.sp) }
                             items(searchResults, key = { it.id }) { song ->
                                 val matchingLyric = if (q.isNotEmpty()) song.lyrics.firstOrNull { it.text.lowercase().contains(q) } else null
@@ -147,7 +134,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                                         .background(LanuGreen.copy(alpha = 0.12f))
                                         .clickable(enabled = !searchIsLoading) { onLoadMoreResults() }
                                         .padding(14.dp).testTag("search_load_more"), contentAlignment = Alignment.Center) {
-                                        Text("Katalogdaki diğer şarkıları getir", color = LanuGreen, fontSize = 13.sp)
+                                        Text("Daha fazla şarkı yükle", color = LanuGreen, fontSize = 13.sp)
                                     }
                                 }
                             }
@@ -195,19 +182,20 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                     }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                        Text(text = "Hepsine Göz At (Kategoriler)", color = LanuTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Tüm Şarkılar (${allSongs.size})", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { browseAll = true })
+                        Text(text = "Türlere Göre Keşfet", color = LanuTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Tüm kayıtlar (${allSongs.size})", color = LanuGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { browseAll = true })
                     }
                     LazyVerticalGrid(columns = GridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxSize()) {
                         items(MusicCategory.values()) { category ->
-                            Box(modifier = Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(colors = listOf(category.primaryColor, category.secondaryColor))).clickable { browseAll = false; onSelectCategory(category) }.padding(12.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth().height(104.dp).clip(RoundedCornerShape(18.dp)).background(Brush.linearGradient(colors = listOf(category.primaryColor.copy(alpha = 0.30f), LanuDarkSurface))).clickable { browseAll = false; onSelectCategory(category) }.padding(14.dp).testTag("genre_${category.name.lowercase()}")) {
                                 Text(text = category.titleTr, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopStart))
+                                val count = allSongs.count { it.category == category }
+                                Text(text = if (count == 0) "Henüz indekslenmedi" else "$count parça", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomStart))
                             }
                         }
                     }
                 }
             }
-        }
     }
 }
 

@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +78,8 @@ fun HomeScreen(
                 monthlyListeners = ""
             )
         }
-    val categories = songs.map { it.category }.distinct()
+    val genreCounts = songs.groupingBy { it.category }.eachCount()
+    val categories = genreCounts.keys.sortedByDescending { genreCounts[it] ?: 0 }
 
     Column(
         modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().verticalScroll(rememberScrollState()).padding(bottom = 120.dp).testTag("home_screen")
@@ -96,16 +98,29 @@ fun HomeScreen(
             }
         }
 
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF164A3C), Color(0xFF172238), LanuDarkSurface)))
+            .padding(22.dp)) {
+            Column {
+                Text("SANA ÖZEL MÜZİK ALANI", color = LanuGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text("Müziğini keşfet", color = LanuTextPrimary, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.height(5.dp))
+                Text("${songs.size} erişilebilir kayıt • ${actualArtists.size} sanatçı", color = LanuTextSecondary, fontSize = 13.sp)
+            }
+        }
+
         if (songs.isEmpty()) {
             EmptyHomeState()
         } else {
-            HomeSectionTitle("Kitaplığındaki Müzikler", "Cihazında veya doğrulanmış yerel katalogda bulunan parçalar")
+            HomeSectionTitle("Keşfe başla", "Cihazındaki ve izinli kaynaklardan indekslenen parçalar")
             LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(songs.take(20), key = { it.id }) { song -> LocalSongCard(song, { onPlaySong(song, songs) }) }
             }
 
             if (categories.isNotEmpty()) {
-                HomeSectionTitle("Kategoriler", "Mevcut parçalarından oluşturulan filtreler")
+                HomeSectionTitle("Müzik türleri", "Türlere ayrılmış mevcut kayıtlar")
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp)
@@ -113,7 +128,7 @@ fun HomeScreen(
                     categories.forEach { category ->
                         Box(
                             modifier = Modifier.clip(RoundedCornerShape(20.dp)).border(1.dp, LanuDarkBorder, RoundedCornerShape(20.dp)).clickable { onCategoryClick(category) }.padding(horizontal = 14.dp, vertical = 9.dp)
-                        ) { Text(category.titleTr, color = LanuTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                        ) { Text("${category.titleTr}  •  ${genreCounts[category] ?: 0}", color = LanuTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                     }
                 }
             }
