@@ -65,7 +65,7 @@ import com.example.ui.theme.LanuTextPrimary
 import com.example.ui.theme.LanuTextSecondary
 
 @Composable
-fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}, searchIsLoading: Boolean = false, searchHasMore: Boolean = false, searchError: String? = null, onLoadMoreResults: () -> Unit = {}) {
+fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}, searchIsLoading: Boolean = false, searchHasMore: Boolean = false, searchError: String? = null, onLoadMoreResults: () -> Unit = {}, onOpenYouTube: () -> Unit = {}) {
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
     var browseAll by remember { mutableStateOf(false) }
     var fullStreamsOnly by remember { mutableStateOf(false) }
@@ -78,7 +78,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                     Text(text = "Ara & Keşfet", color = LanuTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
                     Text(text = "YouTube", color = LanuGreen, fontSize = 13.sp,
-                        modifier = Modifier.clickable { showYouTubeDialog = true }
+                        modifier = Modifier.clickable { onOpenYouTube(); showYouTubeDialog = true }
                             .padding(horizontal = 8.dp, vertical = 8.dp)
                             .testTag("open_youtube_embedded_player"))
                 }
