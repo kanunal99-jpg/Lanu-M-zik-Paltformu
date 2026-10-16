@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.Song
+import com.example.model.playbackBadge
 import com.example.ui.theme.LanuDarkBorder
 import com.example.ui.theme.LanuDarkSurfaceElevated
 import com.example.ui.theme.LanuGreen
@@ -132,6 +133,8 @@ fun MiniPlayer(
                             fontSize = 12.sp,
                             maxLines = 1
                         )
+                        Text(text = song.playbackBadge(), color = LanuTextSecondary, fontSize = 10.sp,
+                            modifier = Modifier.testTag("mini_playback_status"))
                     }
                 }
 

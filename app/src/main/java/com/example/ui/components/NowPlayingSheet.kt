@@ -76,6 +76,9 @@ import coil.compose.AsyncImage
 import com.example.model.AudioQuality
 import com.example.model.Song
 import com.example.model.SongSourceType
+import com.example.model.PlaybackKind
+import com.example.model.playbackKind
+import com.example.model.playbackBadge
 import com.example.data.catalog.CatalogLicensePolicy
 import com.example.service.RepeatMode
 import com.example.ui.theme.LanuCyan
@@ -222,12 +225,12 @@ fun NowPlayingSheet(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { showQualityMenu = true }
+                            .clickable(enabled = song.playbackKind() != PlaybackKind.PREVIEW) { showQualityMenu = true }
                             .border(1.dp, LanuGreen.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = audioQuality.title,
+                            text = if (song.playbackKind() == PlaybackKind.PREVIEW) "30 sn örnek" else audioQuality.title,
                             color = LanuGreen,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -235,7 +238,7 @@ fun NowPlayingSheet(
                     }
 
                     DropdownMenu(
-                        expanded = showQualityMenu,
+                        expanded = showQualityMenu && song.playbackKind() != PlaybackKind.PREVIEW,
                         onDismissRequest = { showQualityMenu = false },
                         modifier = Modifier.background(LanuDarkSurfaceElevated)
                     ) {
@@ -367,6 +370,14 @@ fun NowPlayingSheet(
                     color = LanuTextSecondary,
                     fontSize = 14.sp,
                     maxLines = 1
+                )
+                Text(
+                    text = if (song.playbackKind() == PlaybackKind.PREVIEW)
+                        "Resmî önizleme; tam şarkı erişimi mevcut değil"
+                    else song.playbackBadge(),
+                    color = if (song.playbackKind() == PlaybackKind.FULL) LanuGreen else LanuTextSecondary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.testTag("playback_source_status")
                 )
             }
 
