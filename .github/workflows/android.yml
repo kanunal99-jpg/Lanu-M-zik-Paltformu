@@ -158,3 +158,104 @@ jobs:
           grep -Fxq 'app-debug.apk.sha256' <<<"${assets}"
           echo "Verified release assets:"
           printf '%s\n' "${assets}"
+
+  signed_release:
+    name: Publish optional securely signed release APK
+    needs: [build, release]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      LANU_SIGNING_KEYSTORE_BASE64: ${{ secrets.LANU_SIGNING_KEYSTORE_BASE64 }}
+      LANU_SIGNING_STORE_PASSWORD: ${{ secrets.LANU_SIGNING_STORE_PASSWORD }}
+      LANU_SIGNING_KEY_PASSWORD: ${{ secrets.LANU_SIGNING_KEY_PASSWORD }}
+      LANU_SIGNING_KEY_ALIAS: ${{ secrets.LANU_SIGNING_KEY_ALIAS }}
+    steps:
+      - name: Check signing credentials without exposing secrets
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${LANU_SIGNING_KEYSTORE_BASE64}" &&
+                -n "${LANU_SIGNING_STORE_PASSWORD}" &&
+                -n "${LANU_SIGNING_KEY_PASSWORD}" &&
+                -n "${LANU_SIGNING_KEY_ALIAS}" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Stable signing secrets not configured; only debug preview is published."
+          fi
+      - name: Checkout verified main commit
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+      - name: Install Java for signed build
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Setup Gradle
+        if: steps.signing.outputs.enabled == 'true'
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.3.1'
+      - name: Restore signing key outside repository
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/lanu-release.jks
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "${LANU_SIGNING_KEYSTORE_BASE64}" | base64 --decode > "${KEYSTORE_PATH}"
+          [[ -s "${KEYSTORE_PATH}" ]]
+      - name: Assemble signed release
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/lanu-release.jks
+          STORE_PASSWORD: ${{ secrets.LANU_SIGNING_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.LANU_SIGNING_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LANU_SIGNING_KEY_ALIAS }}
+        run: gradle --no-daemon assembleRelease --stacktrace
+      - name: Verify actual APK signature and hash
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          [[ -s "${apk}" ]]
+          signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          [[ -x "${signer}" ]]
+          "${signer}" verify --verbose --print-certs "${apk}"
+          sha256sum "${apk}" > "${apk}.sha256"
+          unzip -t "${apk}" > /dev/null
+      - name: Attach signed APK only after verification
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: lanu-music-${{ github.run_number }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh release view --repo "${GH_REPO}" "${TAG_NAME}" > /dev/null
+          for attempt in 1 2 3; do
+            if gh release upload --repo "${GH_REPO}" "${TAG_NAME}" \
+              app/build/outputs/apk/release/app-release.apk \
+              app/build/outputs/apk/release/app-release.apk.sha256 --clobber; then
+              break
+            fi
+            if [[ "${attempt}" -eq 3 ]]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
+          assets="$(gh release view --repo "${GH_REPO}" "${TAG_NAME}" --json assets --jq '.assets[].name')"
+          grep -Fxq 'app-release.apk' <<<"${assets}"
+          grep -Fxq 'app-release.apk.sha256' <<<"${assets}"
+      - name: Erase temporary signing key
+        if: always() && steps.signing.outputs.enabled == 'true'
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/lanu-release.jks
+        shell: bash
+        run: rm -f "${KEYSTORE_PATH}"
