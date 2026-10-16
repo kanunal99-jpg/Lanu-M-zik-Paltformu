@@ -132,6 +132,9 @@ class MusicRepository(context: Context) {
     private fun catalogExhaustedKey(query: String): String =
         "catalog_exhausted_${Math.abs(query.trim().lowercase().hashCode()).toString(16)}"
 
+    private fun catalogEmptyStreakKey(query: String): String =
+        "catalog_empty_streak_${Math.abs(query.trim().lowercase().hashCode()).toString(16)}"
+
     private suspend fun collectVerifiedCatalogPages(
         query: String,
         maxPages: Int,
@@ -143,7 +146,9 @@ class MusicRepository(context: Context) {
         if (catalogPreferences.getBoolean(exhaustedKey, false)) return
 
         var page = catalogPreferences.getInt(catalogCursorKey(normalized), 0).coerceAtLeast(0)
-        var consecutiveEmptyPages = 0
+        // Carry empty-page streak across separate refresh/expand calls.
+        var consecutiveEmptyPages =
+            catalogPreferences.getInt(catalogEmptyStreakKey(normalized), 0).coerceIn(0, maxConsecutiveEmptyPages)
         var pagesRead = 0
 
         while (pagesRead < maxPages && !catalogPreferences.getBoolean(exhaustedKey, false)) {
@@ -176,7 +181,10 @@ class MusicRepository(context: Context) {
                 consecutiveEmptyPages = 0
             }
 
-            catalogPreferences.edit().putInt(catalogCursorKey(normalized), page).apply()
+            catalogPreferences.edit()
+                .putInt(catalogCursorKey(normalized), page)
+                .putInt(catalogEmptyStreakKey(normalized), consecutiveEmptyPages)
+                .apply()
 
             // A sparse provider can legally return an empty page before its true end.
             // Require two consecutive empty verified pages before marking this query exhausted.
@@ -244,7 +252,9 @@ class MusicRepository(context: Context) {
             return
         }
 
-        candidates.take(12).forEach { candidate ->
+        // Only advance the cursor past identities that were actually examined.
+        val processedCandidates = candidates.take(12)
+        processedCandidates.forEach { candidate ->
             val resolvedArtist = catalogProvider.searchArtists(candidate.name)
                 .getOrNull()
                 ?.firstOrNull { normalizeSearch(it.name) == normalizeSearch(candidate.name) }
@@ -259,14 +269,15 @@ class MusicRepository(context: Context) {
         }
 
         catalogPreferences.edit()
-            .putInt("musicbrainz_turkish_rap_offset", offset + candidates.size)
+            .putInt("musicbrainz_turkish_rap_offset",
+                MusicBrainzTurkishRapDiscovery.nextCandidateOffset(offset, processedCandidates.size))
             .apply()
 
         Log.i(
             "MusicRepository",
             "Historical Turkish rap discovery processed " + candidates.size +
                 " identities; resolvedSongs=" + fetched.size +
-                "; nextOffset=" + (offset + candidates.size)
+                "; nextOffset=" + MusicBrainzTurkishRapDiscovery.nextCandidateOffset(offset, processedCandidates.size)
         )
     }
 
