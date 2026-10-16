@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.util.UUID
 
@@ -148,7 +149,9 @@ class MusicRepository(context: Context) {
         while (pagesRead < maxPages && !catalogPreferences.getBoolean(exhaustedKey, false)) {
             val result = try {
                 catalogProvider.searchSongsPage(normalized, page, catalogPageSize)
-            } catch (failure: Throwable) {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
                 Log.w("MusicRepository", "Catalog page failed: query=$normalized page=$page", failure)
                 return
             }
