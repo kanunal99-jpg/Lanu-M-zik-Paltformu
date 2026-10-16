@@ -50,6 +50,11 @@ class MusicBrainzTurkishRapDiscovery(
         }
 
     companion object {
+
+        /** Advance by examined artist identities, not the larger fetched page. */
+        fun nextCandidateOffset(currentOffset: Int, processedCount: Int): Int =
+            currentOffset.coerceAtLeast(0) + processedCount.coerceAtLeast(0)
+
         const val USER_AGENT = "LANU-Music/1.0 (https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu)"
 
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()

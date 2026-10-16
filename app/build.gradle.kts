@@ -18,7 +18,8 @@ android {
     val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: System.getenv("LANU_BUILD_NUMBER"))
       ?.toIntOrNull()?.coerceAtLeast(321) ?: 321
     versionCode = buildNumber
-    versionName = "1.1.${buildNumber - 320}-preview"
+    versionName = "1.1.${buildNumber - 320}" +
+      if (System.getenv("KEYSTORE_PATH").isNullOrBlank()) "-preview" else ""
 
     val jamendoClientId = System.getenv("JAMENDO_CLIENT_ID") ?: ""
     val jamendoCommercialLicenseConfirmed =
@@ -34,7 +35,7 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
   }

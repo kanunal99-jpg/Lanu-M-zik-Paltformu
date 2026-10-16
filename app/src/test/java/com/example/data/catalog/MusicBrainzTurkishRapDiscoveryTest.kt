@@ -6,6 +6,15 @@ import org.junit.Test
 
 class MusicBrainzTurkishRapDiscoveryTest {
     @Test
+    fun nextCandidateOffset_neverSkipsUnprocessedArtists() {
+        // Returning 25 results but examining only 12 must advance by exactly 12.
+        assertEquals(12, MusicBrainzTurkishRapDiscovery.nextCandidateOffset(0, 12))
+        assertEquals(24, MusicBrainzTurkishRapDiscovery.nextCandidateOffset(12, 12))
+        assertEquals(29, MusicBrainzTurkishRapDiscovery.nextCandidateOffset(24, 5))
+        assertEquals(24, MusicBrainzTurkishRapDiscovery.nextCandidateOffset(24, 0))
+    }
+
+    @Test
     fun parseArtists_keeps_real_identity_fields_and_drops_invalid_rows() {
         val json = """
             {
