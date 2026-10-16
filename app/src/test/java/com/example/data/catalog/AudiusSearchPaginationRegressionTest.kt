@@ -40,8 +40,8 @@ class AudiusSearchPaginationRegressionTest {
             val url = chain.request().url
             paths.add(url.toString())
             val payload = when {
-                url.encodedPath == "/tracks/search" -> JSONArray().put(track("one"))
-                url.encodedPath == "/users/77/tracks" && repeatHundred -> JSONArray().apply {
+                url.encodedPath.endsWith("/tracks/search") -> JSONArray().put(track("one"))
+                url.encodedPath.endsWith("/users/77/tracks") && repeatHundred -> JSONArray().apply {
                     repeat(100) { put(track("track-" + it)) }
                 }
                 else -> error("Unexpected API request: $url")
