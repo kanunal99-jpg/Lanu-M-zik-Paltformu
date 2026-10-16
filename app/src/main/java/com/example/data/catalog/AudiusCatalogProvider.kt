@@ -6,6 +6,7 @@ import com.example.model.MusicCategory
 import com.example.model.MusicGenreResolver
 import com.example.model.Song
 import com.example.model.SongSourceType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -39,7 +40,9 @@ class AudiusCatalogProvider(
                     if (!response.isSuccessful) error("AUDIUS_HTTP_${response.code}")
                     return@withContext Result.success(JSONObject(response.body?.string().orEmpty()))
                 }
-            } catch (failure: Throwable) {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
                 lastFailure = failure
             }
         }
@@ -52,30 +55,15 @@ class AudiusCatalogProvider(
     override suspend fun searchSongs(query: String): Result<List<Song>> = searchSongsPage(query, 0, DEFAULT_LIMIT)
 
     override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
+        // One search page must not expand whole artist discographies. MainViewModel
+        // already discovers artists separately and merges identity-verified tracks.
         val safePage = page.coerceAtLeast(0)
         val safeSize = pageSize.coerceIn(1, 100)
-        val directResult = requestArray(
+        return requestArray(
             "/tracks/search",
-            mapOf(
-                "query" to query,
-                "limit" to safeSize.toString(),
-                "offset" to (safePage * safeSize).toString()
-            )
+            mapOf("query" to query, "limit" to safeSize.toString(),
+                "offset" to (safePage * safeSize).toString())
         ).map { AudiusSongMapper.mapSongs(it) }
-        if (query.isBlank()) return directResult
-        val directSongs = directResult.getOrElse { return directResult }
-        if (safePage > 0) return Result.success(directSongs)
-        val artistSearch = requestArray("/users/search", mapOf("query" to query, "limit" to "10"))
-            .getOrElse { return Result.success(directSongs) }
-        val normalizedQuery = query.trim().lowercase()
-        val exactArtists = AudiusArtistMapper.mapArtists(artistSearch)
-            .filter { it.name.trim().lowercase() == normalizedQuery }
-            .take(3)
-        if (exactArtists.isEmpty()) return Result.success(directSongs)
-        val artistTracks = buildList {
-            exactArtists.forEach { artist -> getArtistDiscography(artist.id).onSuccess { addAll(it) } }
-        }
-        return Result.success((directSongs + artistTracks).distinctBy { it.id })
     }
 
     override suspend fun searchArtists(query: String): Result<List<Artist>> =
@@ -103,35 +91,46 @@ class AudiusCatalogProvider(
         }
     }
 
-    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
+    override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> {
         val providerArtistId = artistId.removePrefix("audius:")
-
-        val canonical = runCatching {
-            val allSongs = buildList {
-                var offset = 0
-                while (true) {
-                    val page = requestArray(
-                        "/users/$providerArtistId/tracks",
-                        mapOf("limit" to DISCOGRAPHY_PAGE_SIZE.toString(), "offset" to offset.toString())
-                    ).getOrThrow()
-                    addAll(AudiusSongMapper.mapSongs(page).filter { it.artistId == "audius:$providerArtistId" })
-                    if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
-                    offset += DISCOGRAPHY_PAGE_SIZE
+        return try {
+            val verified = linkedMapOf<String, Song>()
+            val seenRawIds = hashSetOf<String>()
+            var offset = 0
+            var pages = 0
+            // Fail safely on repeated pages or a malfunctioning unbounded API.
+            // 100 x 100 is a safety ceiling, not a claimed complete discography.
+            while (pages < 100) {
+                val page = requestArray(
+                    "/users/$providerArtistId/tracks",
+                    mapOf("limit" to DISCOGRAPHY_PAGE_SIZE.toString(), "offset" to offset.toString())
+                ).getOrThrow()
+                if (page.length() == 0) break
+                val rawIds = (0 until page.length()).mapNotNull { index ->
+                    page.optJSONObject(index)?.optString("id")?.takeIf { it.isNotBlank() }
                 }
-            }.distinctBy { it.id }
-            allSongs.takeIf { it.isNotEmpty() }
-        }.getOrNull()
-
-        if (!canonical.isNullOrEmpty()) return@runCatching canonical
-
-        // Audius can return live search results for an artist whose legacy user-tracks
-        // route is no longer resolvable. Keep the chain working by resolving the profile,
-        // searching the live catalog by the verified artist name, and requiring an exact id.
-        val artist = getArtist("audius:$providerArtistId").getOrNull()
-            ?: return@runCatching emptyList()
-        searchSongs(artist.name).getOrElse { emptyList() }
-            .filter { it.artistId == "audius:$providerArtistId" }
-            .distinctBy { it.id }
+                val newIds = rawIds.count { seenRawIds.add(it) }
+                if (rawIds.isNotEmpty() && newIds == 0) break
+                AudiusSongMapper.mapSongs(page)
+                    .filter { it.artistId == "audius:$providerArtistId" }
+                    .forEach { verified[it.id] = it }
+                pages += 1
+                if (page.length() < DISCOGRAPHY_PAGE_SIZE) break
+                offset += page.length()
+            }
+            if (verified.isNotEmpty()) Result.success(verified.values.toList())
+            else {
+                // Never recurse: searchSongsPage is strictly a single remote page.
+                val artist = getArtist("audius:$providerArtistId").getOrNull()
+                val fallback = if (artist == null) emptyList()
+                else searchSongsPage(artist.name, 0, DEFAULT_LIMIT).getOrDefault(emptyList())
+                Result.success(fallback.filter { it.artistId == "audius:$providerArtistId" }.distinctBy { it.id })
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Result.failure(failure)
+        }
     }
 
     override suspend fun getLatestReleases(since: Instant?): Result<List<Song>> =

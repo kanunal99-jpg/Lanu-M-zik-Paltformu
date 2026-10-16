@@ -4,6 +4,7 @@ import com.example.model.Album
 import com.example.model.Artist
 import com.example.model.Song
 import java.time.Instant
+import kotlinx.coroutines.CancellationException
 
 /**
  * Resilient catalog chain. List operations merge all healthy providers so an
@@ -22,7 +23,9 @@ class AlternativeCatalogProvider(
         var hadSuccess = false
 
         fallbacks.forEach { provider ->
-            val result = runCatching { call(provider) }.getOrElse { Result.failure(it) }
+            val result = try { call(provider) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { Result.failure(failure) }
             result.onSuccess { values ->
                 hadSuccess = true
                 values.forEach { value -> merged.putIfAbsent(valueKey(value), value) }
@@ -46,7 +49,9 @@ class AlternativeCatalogProvider(
         var lastError: Throwable? = null
         var hadSuccess = false
         fallbacks.forEach { provider ->
-            val result = runCatching { call(provider) }.getOrElse { Result.failure(it) }
+            val result = try { call(provider) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { Result.failure(failure) }
             result.onSuccess { value ->
                 hadSuccess = true
                 if (value != null) return Result.success(value)

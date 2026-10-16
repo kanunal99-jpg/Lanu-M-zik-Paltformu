@@ -14,8 +14,11 @@ android {
     applicationId = "com.aistudio.lanumusic.kpxzqa"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    // GitHub run numbers are monotonic; local preview builds use a safe baseline.
+    val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: System.getenv("LANU_BUILD_NUMBER"))
+      ?.toIntOrNull()?.coerceAtLeast(321) ?: 321
+    versionCode = buildNumber
+    versionName = "1.1.${buildNumber - 320}-preview"
 
     val jamendoClientId = System.getenv("JAMENDO_CLIENT_ID") ?: ""
     val jamendoCommercialLicenseConfirmed =
