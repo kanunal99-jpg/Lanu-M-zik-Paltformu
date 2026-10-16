@@ -53,6 +53,7 @@ import com.example.model.PlaybackKind
 import com.example.model.playbackKind
 import com.example.model.playbackBadge
 import com.example.model.preferFullStreams
+import com.example.ui.components.LanuYouTubePlayerDialog
 import com.example.ui.components.MusicSearchBar
 import com.example.ui.components.SearchFilterScope
 import com.example.ui.components.SongSearchBarWithListView
@@ -68,12 +69,20 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
     var browseAll by remember { mutableStateOf(false) }
     var fullStreamsOnly by remember { mutableStateOf(false) }
+    var showYouTubeDialog by remember { mutableStateOf(false) }
     val q = searchQuery.trim().lowercase()
+    if (showYouTubeDialog) LanuYouTubePlayerDialog(onDismiss = { showYouTubeDialog = false })
     Column(modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().testTag("search_screen")) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Ara & Keşfet", color = LanuTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                Text(text = "Şarkı, sanatçı veya albüm arayın", color = LanuTextMuted, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = "Ara & Keşfet", color = LanuTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(text = "YouTube", color = LanuGreen, fontSize = 13.sp,
+                        modifier = Modifier.clickable { showYouTubeDialog = true }
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                            .testTag("open_youtube_embedded_player"))
+                }
+                Text(text = "Şarkı, sanatçı veya albüm arayın • ${allSongs.size} indekslenmiş kayıt", color = LanuTextMuted, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(14.dp))
                 MusicSearchBar(query = searchQuery, onQueryChange = onQueryChange, placeholder = "Şarkı, sanatçı veya albüm ara...", selectedScope = selectedScope, onScopeChange = { selectedScope = it }, showScopeFilters = true, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(12.dp))
