@@ -3,6 +3,9 @@ package com.example.ui.components
 import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -122,6 +125,7 @@ fun LanuYouTubePlayerDialog(onDismiss: () -> Unit) {
 @Composable
 private fun VisibleYouTubeEmbed(videoId: String) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val webView = remember(videoId) {
         WebView(context).apply {
             setBackgroundColor(android.graphics.Color.BLACK)
@@ -134,8 +138,18 @@ private fun VisibleYouTubeEmbed(videoId: String) {
             loadUrl("https://www.youtube.com/embed/$videoId?playsinline=1")
         }
     }
-    DisposableEffect(webView) {
+    DisposableEffect(webView, lifecycleOwner) {
+        // YouTube forbids playback when the player is no longer visible.
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                webView.onPause()
+                webView.stopLoading()
+                webView.loadUrl("about:blank")
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
             webView.stopLoading()
             webView.loadUrl("about:blank")
             webView.destroy()
