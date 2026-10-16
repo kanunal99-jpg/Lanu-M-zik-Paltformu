@@ -46,6 +46,10 @@ import coil.compose.AsyncImage
 import com.example.model.Album
 import com.example.model.Artist
 import com.example.model.Song
+import com.example.model.PlaybackKind
+import com.example.model.playbackKind
+import com.example.model.playbackBadge
+import com.example.model.preferFullStreams
 import com.example.ui.theme.LanuCyan
 import com.example.ui.theme.LanuDarkBg
 import com.example.ui.theme.LanuDarkSurface
@@ -63,7 +67,7 @@ fun ArtistDetailSheet(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val verifiedSongs = songs.filter { it.artistId == artist.id }.distinctBy { it.id }
+    val verifiedSongs = songs.filter { it.artistId == artist.id }.distinctBy { it.id }.preferFullStreams()
     val albums = verifiedSongs
         .groupBy { it.album.trim().ifBlank { "Single" } }
         .map { (title, tracks) ->
@@ -106,7 +110,7 @@ fun ArtistDetailSheet(
                     Text("Doğrulanmış Sanatçı", color = LanuCyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Text(artist.name, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                Text("${artist.monthlyListeners} aylık dinleyici • ${artist.genre}", color = LanuTextSecondary, fontSize = 13.sp)
+                Text("${verifiedSongs.count { it.playbackKind() == PlaybackKind.FULL }} tam • ${verifiedSongs.count { it.playbackKind() == PlaybackKind.PREVIEW }} önizleme", color = LanuTextSecondary, fontSize = 13.sp)
             }
         }
 
@@ -120,7 +124,7 @@ fun ArtistDetailSheet(
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Tümünü Çal", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Mevcut kayıtları çal", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -174,6 +178,7 @@ fun ArtistDetailSheet(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(song.title, color = LanuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         Text("${song.album}${song.releaseYear.takeIf { it > 0 }?.let { " ($it)" } ?: ""}", color = LanuTextSecondary, fontSize = 12.sp, maxLines = 1)
+                        Text(song.playbackBadge(), color = LanuTextSecondary, fontSize = 11.sp)
                     }
                     Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.15f), modifier = Modifier.size(32.dp)) {
                         Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) }

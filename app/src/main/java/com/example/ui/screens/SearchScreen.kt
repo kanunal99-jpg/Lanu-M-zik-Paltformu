@@ -49,6 +49,10 @@ import coil.compose.AsyncImage
 import com.example.model.Artist
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.model.PlaybackKind
+import com.example.model.playbackKind
+import com.example.model.playbackBadge
+import com.example.model.preferFullStreams
 import com.example.ui.components.MusicSearchBar
 import com.example.ui.components.SearchFilterScope
 import com.example.ui.components.SongSearchBarWithListView
@@ -63,6 +67,7 @@ import com.example.ui.theme.LanuTextSecondary
 fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}, searchIsLoading: Boolean = false, searchHasMore: Boolean = false, searchError: String? = null, onLoadMoreResults: () -> Unit = {}) {
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
     var browseAll by remember { mutableStateOf(false) }
+    var fullStreamsOnly by remember { mutableStateOf(false) }
     val q = searchQuery.trim().lowercase()
     Column(modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().testTag("search_screen")) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
@@ -84,6 +89,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                         matchesScope && (selectedCategory == null || song.category == selectedCategory)
                     }
                 } else emptyList()
+                val visibleResults = searchResults.filter { !fullStreamsOnly || it.playbackKind() == PlaybackKind.FULL }.preferFullStreams()
                 if (searchQuery.isNotEmpty() || selectedCategory != null) {
                     if (selectedCategory != null) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(LanuGreen.copy(alpha = 0.2f)).clickable { onSelectCategory(null) }.padding(horizontal = 12.dp, vertical = 6.dp)) {
@@ -104,17 +110,31 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text(text = "${visibleResults.size} gösteriliyor • ${searchResults.size} indekslendi", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            Text(
+                                text = if (fullStreamsOnly) "✓ Yalnız tam şarkı" else "Yalnız tam şarkı",
+                                color = LanuGreen,
+                                fontSize = 11.sp,
+                                modifier = Modifier.clickable { fullStreamsOnly = !fullStreamsOnly }
+                                    .padding(start = 6.dp, top = 6.dp, bottom = 6.dp)
+                                    .testTag("full_stream_filter")
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text(text = "Önizlemeler 30 saniyede biter; tam şarkı değildir.", color = LanuTextSecondary, fontSize = 11.sp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                             Text(text = "${searchResults.size} erişilebilir kayıt • Katalog genişletiliyor", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                             if (selectedScope != SearchFilterScope.ALL) Text(text = "Filtre: ${selectedScope.label}", color = LanuGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
                             if (searchIsLoading) item { Text("Yeni şarkılar getiriliyor…", color = LanuTextSecondary, fontSize = 12.sp) }
-                            if (searchResults.isEmpty() && !searchIsLoading) item { Text("Bu aramada veya kategoride henüz kayıt yok. Bu, dünyada böyle bir şarkı olmadığı anlamına gelmez.", color = LanuTextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 20.dp)) }
+                            if (visibleResults.isEmpty() && !searchIsLoading) item { Text(if (fullStreamsOnly) "Bu aramada izinli tam kayıt bulunamadı. 30 sn örnekleri görmek için filtreyi kaldırın." else "Bu aramada veya kategoride henüz kayıt yok. Bu, dünyada böyle bir şarkı olmadığı anlamına gelmez.", color = LanuTextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 20.dp)) }
                             if (searchError != null) item { Text(searchError, color = LanuTextSecondary, fontSize = 12.sp) }
-                            items(searchResults, key = { it.id }) { song ->
+                            items(visibleResults, key = { it.id }) { song ->
                                 val matchingLyric = if (q.isNotEmpty()) song.lyrics.firstOrNull { it.text.lowercase().contains(q) } else null
                                 val isAlbumMatch = q.isNotEmpty() && song.album.lowercase().contains(q)
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, searchResults) }.padding(10.dp).testTag("search_result_${song.id}")) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, visibleResults) }.padding(10.dp).testTag("search_result_${song.id}")) {
                                     AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
@@ -123,6 +143,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                                         if (isAlbumMatch) Text(text = "Albüm: ${song.album}", color = LanuGreen, fontSize = 11.sp, maxLines = 1)
                                         else if (matchingLyric != null) Text(text = "♪ \"${matchingLyric.text}\"", color = LanuGreen, fontSize = 11.sp, maxLines = 1)
                                         else Text(text = "Albüm: ${song.album}", color = LanuTextMuted, fontSize = 11.sp, maxLines = 1)
+                                        Text(text = song.playbackBadge(), color = if (song.playbackKind() == PlaybackKind.FULL) LanuGreen else LanuTextSecondary, fontSize = 11.sp)
                                     }
                                     if (song.lyrics.isNotEmpty()) Icon(imageVector = Icons.Default.Mic, contentDescription = "Sözler", tint = LanuGreen, modifier = Modifier.padding(end = 8.dp).size(16.dp))
                                     Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) { Box(contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) } }
@@ -167,14 +188,14 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                     }
                     Spacer(Modifier.height(8.dp))
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        items(allSongs, key = { it.id }) { song ->
+                        items(allSongs.preferFullStreams(), key = { it.id }) { song ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, allSongs) }.padding(10.dp)) {
                                 AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(song.title, color = LanuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                     Text("${song.artist} • ${song.album}", color = LanuTextSecondary, fontSize = 12.sp, maxLines = 1)
-                                    Text(song.category.titleTr, color = LanuTextMuted, fontSize = 11.sp, maxLines = 1)
+                                    Text("${song.category.titleTr} • ${song.playbackBadge()}", color = LanuTextMuted, fontSize = 11.sp, maxLines = 1)
                                 }
                                 Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) { Box(contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) } }
                             }
