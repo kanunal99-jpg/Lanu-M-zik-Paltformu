@@ -109,23 +109,24 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                                 remoteArtists.take(8).forEach { artist -> ArtistSearchRow(artist = artist, onClick = { onSelectArtist(artist) }) }
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(text = "${visibleResults.size} gösteriliyor • ${searchResults.size} indekslendi", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "${visibleResults.size} kayıt • ${searchResults.size} indekslendi",
+                                color = LanuTextSecondary,
+                                fontSize = 11.sp
+                            )
                             Text(
                                 text = if (fullStreamsOnly) "✓ Yalnız tam şarkı" else "Yalnız tam şarkı",
                                 color = LanuGreen,
                                 fontSize = 11.sp,
                                 modifier = Modifier.clickable { fullStreamsOnly = !fullStreamsOnly }
-                                    .padding(start = 6.dp, top = 6.dp, bottom = 6.dp)
+                                    .padding(horizontal = 4.dp, vertical = 6.dp)
                                     .testTag("full_stream_filter")
                             )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(text = "Önizlemeler 30 saniyede biter; tam şarkı değildir.", color = LanuTextSecondary, fontSize = 11.sp)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(text = "${searchResults.size} erişilebilir kayıt • Katalog genişletiliyor", color = LanuTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
-                            if (selectedScope != SearchFilterScope.ALL) Text(text = "Filtre: ${selectedScope.label}", color = LanuGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
                             if (searchIsLoading) item { Text("Yeni şarkılar getiriliyor…", color = LanuTextSecondary, fontSize = 12.sp) }
