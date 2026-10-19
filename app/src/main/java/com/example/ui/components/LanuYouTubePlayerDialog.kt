@@ -7,6 +7,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -70,47 +78,154 @@ object YouTubeVideoLink {
 }
 
 @Composable
-fun LanuYouTubePlayerDialog(onDismiss: () -> Unit) {
+fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var searchText by remember(initialQuery) { mutableStateOf(initialQuery) }
+    var sessionApiKey by remember { mutableStateOf("") }
+    val configuredKey = com.example.BuildConfig.YOUTUBE_DATA_API_KEY
+    val apiKey = configuredKey.ifBlank { sessionApiKey.trim() }
+    var searchLoading by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var searchedQuery by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<com.example.data.youtube.YouTubeVideo>>(emptyList()) }
+    var nextPageToken by remember { mutableStateOf<String?>(null) }
     var linkText by remember { mutableStateOf("") }
     var videoId by remember { mutableStateOf<String?>(null) }
     var invalid by remember { mutableStateOf(false) }
 
+    fun loadResults(pageToken: String? = null) {
+        if (searchLoading) return
+        val query = if (pageToken == null) searchText.trim() else searchedQuery
+        if (query.length < 2) {
+            searchError = "En az iki karakter girin."
+            return
+        }
+        if (apiKey.isBlank()) {
+            searchError = "YouTube Data API anahtarı gerekli. Aşağıya anahtar girin veya doğrudan video bağlantısı yapıştırın."
+            return
+        }
+        searchLoading = true
+        searchError = null
+        if (pageToken == null) {
+            searchedQuery = query
+            results = emptyList()
+            nextPageToken = null
+        }
+        scope.launch {
+            try {
+                val page = com.example.data.youtube.YouTubeSearchClient.search(query, apiKey, pageToken)
+                results = if (pageToken == null) page.videos else (results + page.videos).distinctBy { it.id }
+                nextPageToken = page.nextPageToken
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                searchError = e.message ?: "Arama başarısız oldu. Tekrar deneyin."
+            } finally {
+                searchLoading = false
+            }
+        }
+    }
+
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Card(modifier = Modifier.fillMaxWidth(0.96f).padding(8.dp)) {
+        Card(modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f).padding(8.dp)) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("YouTube • LANU içinde izle", color = Color.White)
+                Text("YouTube • LANU içinde ara ve oynat", color = Color.White)
                 Text(
-                    "Resmî video oynatıcı görünür kalır. Video sesini ayırma, arka planda gizli çalma veya indirme yapılmaz.",
+                    "YouTube videoları resmî, görünür oynatıcıda açılır. Ses ayırma, YouTube indirme veya ekran kapalıyken gizli çalma yoktur.",
                     color = Color.LightGray
                 )
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = { searchText = it.take(200) },
+                    modifier = Modifier.fillMaxWidth().testTag("youtube_search_input"),
+                    label = { Text("Şarkı veya sanatçı ara") },
+                    singleLine = true
+                )
+                if (configuredKey.isBlank()) {
+                    OutlinedTextField(
+                        value = sessionApiKey,
+                        onValueChange = { sessionApiKey = it.trim().take(256) },
+                        modifier = Modifier.fillMaxWidth().testTag("youtube_api_key_input"),
+                        label = { Text("YouTube Data API v3 anahtarı (bu oturum için)") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    )
+                    Text(
+                        "Anahtar cihazda kaydedilmez. Yayımlanan sürüme anahtar tanımlamak için GitHub Actions YOUTUBE_DATA_API_KEY secret kullanılabilir.",
+                        color = Color.LightGray
+                    )
+                }
+                Button(
+                    onClick = { loadResults() },
+                    enabled = !searchLoading,
+                    modifier = Modifier.fillMaxWidth().testTag("youtube_search_button")
+                ) { Text(if (searchLoading) "YouTube aranıyor…" else "YouTube'da şarkı ara") }
+                if (searchError != null) {
+                    Text(searchError.orEmpty(), color = Color(0xFFFF9A9A), modifier = Modifier.testTag("youtube_search_error"))
+                }
+                val selected = videoId
+                if (selected != null) {
+                    Text("Seçili YouTube videosu", color = Color.White)
+                    key(selected) { VisibleYouTubeEmbed(selected) }
+                    Text(
+                        "Video gömme izni, coğrafi bölge veya yaş kısıtı nedeniyle bazı içerikler oynatılamayabilir.",
+                        color = Color.LightGray
+                    )
+                }
+                if (results.isNotEmpty()) {
+                    Text("YouTube arama sonuçları • " + results.size + " video", color = Color.White)
+                    results.forEach { result ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .clickable { videoId = result.id }
+                                .padding(vertical = 5.dp)
+                                .testTag("youtube_result_" + result.id),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            coil.compose.AsyncImage(
+                                model = result.thumbnailUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(width = 100.dp, height = 62.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    android.text.Html.fromHtml(result.title, android.text.Html.FROM_HTML_MODE_LEGACY).toString(),
+                                    color = Color.White, maxLines = 2
+                                )
+                                Text(result.channel, color = Color.LightGray, maxLines = 1)
+                            }
+                        }
+                    }
+                } else if (searchedQuery.isNotEmpty() && !searchLoading && searchError == null) {
+                    Text("Gömülebilir sonuç bulunamadı. Farklı bir arama deneyin.", color = Color.LightGray)
+                }
+                if (nextPageToken != null) {
+                    Button(
+                        onClick = { loadResults(nextPageToken) },
+                        enabled = !searchLoading,
+                        modifier = Modifier.fillMaxWidth().testTag("youtube_load_more")
+                    ) { Text("Daha fazla YouTube sonucu") }
+                }
+                Text("Veya video bağlantısı yapıştır", color = Color.White)
                 OutlinedTextField(
                     value = linkText,
                     onValueChange = { linkText = it.take(2048); invalid = false },
                     modifier = Modifier.fillMaxWidth().testTag("youtube_url_input"),
-                    label = { Text("YouTube video bağlantısı") },
+                    label = { Text("YouTube bağlantısı veya video ID") },
                     placeholder = { Text("https://www.youtube.com/watch?v=...") },
                     singleLine = true,
                     isError = invalid
                 )
-                if (invalid) Text("Geçerli bir HTTPS YouTube video bağlantısı gir.", color = Color(0xFFFF9A9A))
+                if (invalid) Text("Geçerli bir HTTPS YouTube bağlantısı gir.", color = Color(0xFFFF9A9A))
                 Button(onClick = {
                     val parsed = YouTubeVideoLink.videoId(linkText)
                     invalid = parsed == null
                     if (parsed != null) videoId = parsed
                 }, modifier = Modifier.fillMaxWidth().testTag("youtube_play_embedded")) {
                     Text("LANU içinde videoyu oynat")
-                }
-                val selectedVideo = videoId
-                if (selectedVideo != null) {
-                    key(selectedVideo) {
-                        VisibleYouTubeEmbed(selectedVideo)
-                    }
-                } else {
-                    Spacer(Modifier.height(4.dp))
-                    Text("Bağlantıyı yapıştırıp oynatmayı başlat.", color = Color.LightGray)
                 }
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Kapat")
@@ -135,7 +250,7 @@ private fun VisibleYouTubeEmbed(videoId: String) {
             settings.allowContentAccess = false
             settings.mediaPlaybackRequiresUserGesture = true
             webChromeClient = WebChromeClient()
-            loadUrl("https://www.youtube.com/embed/$videoId?playsinline=1")
+            loadUrl("https://www.youtube.com/embed/$videoId?playsinline=1", mapOf("Referer" to "https://${context.packageName}"))
         }
     }
     DisposableEffect(webView, lifecycleOwner) {
