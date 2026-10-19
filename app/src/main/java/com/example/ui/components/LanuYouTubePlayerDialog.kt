@@ -80,6 +80,7 @@ object YouTubeVideoLink {
 @Composable
 fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val scrollState = rememberScrollState()
     var searchText by remember(initialQuery) { mutableStateOf(initialQuery) }
     var sessionApiKey by remember { mutableStateOf("") }
     val configuredKey = com.example.BuildConfig.YOUTUBE_DATA_API_KEY
@@ -128,7 +129,7 @@ fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f).padding(8.dp)) {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
+                modifier = Modifier.verticalScroll(scrollState).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("YouTube • LANU içinde ara ve oynat", color = Color.White)
@@ -136,6 +137,15 @@ fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
                     "YouTube videoları resmî, görünür oynatıcıda açılır. Ses ayırma, YouTube indirme veya ekran kapalıyken gizli çalma yoktur.",
                     color = Color.LightGray
                 )
+                val selected = videoId
+                if (selected != null) {
+                    Text("Seçili YouTube videosu", color = Color.White)
+                    key(selected) { VisibleYouTubeEmbed(selected) }
+                    Text(
+                        "Video gömme izni, coğrafi bölge veya yaş kısıtı nedeniyle bazı içerikler oynatılamayabilir.",
+                        color = Color.LightGray
+                    )
+                }
                 OutlinedTextField(
                     value = searchText,
                     onValueChange = { searchText = it.take(200) },
@@ -165,21 +175,12 @@ fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
                 if (searchError != null) {
                     Text(searchError.orEmpty(), color = Color(0xFFFF9A9A), modifier = Modifier.testTag("youtube_search_error"))
                 }
-                val selected = videoId
-                if (selected != null) {
-                    Text("Seçili YouTube videosu", color = Color.White)
-                    key(selected) { VisibleYouTubeEmbed(selected) }
-                    Text(
-                        "Video gömme izni, coğrafi bölge veya yaş kısıtı nedeniyle bazı içerikler oynatılamayabilir.",
-                        color = Color.LightGray
-                    )
-                }
                 if (results.isNotEmpty()) {
                     Text("YouTube arama sonuçları • " + results.size + " video", color = Color.White)
                     results.forEach { result ->
                         Row(
                             modifier = Modifier.fillMaxWidth()
-                                .clickable { videoId = result.id }
+                                .clickable { videoId = result.id; scope.launch { scrollState.animateScrollTo(0) } }
                                 .padding(vertical = 5.dp)
                                 .testTag("youtube_result_" + result.id),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
@@ -223,7 +224,7 @@ fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
                 Button(onClick = {
                     val parsed = YouTubeVideoLink.videoId(linkText)
                     invalid = parsed == null
-                    if (parsed != null) videoId = parsed
+                    if (parsed != null) { videoId = parsed; scope.launch { scrollState.animateScrollTo(0) } }
                 }, modifier = Modifier.fillMaxWidth().testTag("youtube_play_embedded")) {
                     Text("LANU içinde videoyu oynat")
                 }
