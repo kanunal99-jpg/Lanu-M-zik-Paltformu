@@ -1,5 +1,9 @@
 package com.example.data.youtube
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -98,13 +102,36 @@ object YouTubeSearchClient {
         }
     }
 
+    /** Android-restricted API keys require the installed app signing identity. */
+    private fun signingSha1(context: Context): String? = runCatching {
+        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+        }
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.signingInfo?.apkContentsSigners
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures
+        }
+        val bytes = signatures?.firstOrNull()?.toByteArray() ?: return@runCatching null
+        MessageDigest.getInstance("SHA-1").digest(bytes)
+            .joinToString("") { "%02X".format(it) }
+    }.getOrNull()
+
     suspend fun search(
+        context: Context,
         query: String,
         apiKey: String,
         pageToken: String? = null
     ): YouTubeSearchPage = withContext(Dispatchers.IO) {
         val url = requestUrl(query, apiKey, pageToken)
-        val request = Request.Builder().url(url).get().build()
+        val builder = Request.Builder().url(url).get()
+            .header("X-Android-Package", context.packageName)
+        signingSha1(context)?.let { builder.header("X-Android-Cert", it) }
+        val request = builder.build()
         try {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
