@@ -71,7 +71,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
     var fullStreamsOnly by remember { mutableStateOf(false) }
     var showYouTubeDialog by remember { mutableStateOf(false) }
     val q = searchQuery.trim().lowercase()
-    if (showYouTubeDialog) LanuYouTubePlayerDialog(onDismiss = { showYouTubeDialog = false })
+    if (showYouTubeDialog) LanuYouTubePlayerDialog(onDismiss = { showYouTubeDialog = false }, initialQuery = searchQuery)
     Column(modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().testTag("search_screen")) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
                 Spacer(modifier = Modifier.height(4.dp))

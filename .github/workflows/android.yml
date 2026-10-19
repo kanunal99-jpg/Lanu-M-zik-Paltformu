@@ -14,6 +14,7 @@ jobs:
     env:
       JAMENDO_CLIENT_ID: ${{ secrets.JAMENDO_CLIENT_ID }}
       JAMENDO_COMMERCIAL_LICENSE_CONFIRMED: ${{ secrets.JAMENDO_COMMERCIAL_LICENSE_CONFIRMED }}
+      YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
