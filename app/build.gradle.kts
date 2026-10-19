@@ -25,6 +25,10 @@ android {
     val jamendoCommercialLicenseConfirmed =
       (System.getenv("JAMENDO_COMMERCIAL_LICENSE_CONFIRMED") ?: "").equals("true", ignoreCase = true)
     buildConfigField("String", "JAMENDO_CLIENT_ID", "\"$jamendoClientId\"")
+    // Data API key is a client credential: restrict it in Google Cloud Console.
+    val youtubeKey = (System.getenv("YOUTUBE_DATA_API_KEY") ?: "").trim()
+    require(youtubeKey.matches(Regex("[A-Za-z0-9_-]*"))) { "Invalid YouTube API key format" }
+    buildConfigField("String", "YOUTUBE_DATA_API_KEY", "\"$youtubeKey\"")
     buildConfigField("Boolean", "JAMENDO_COMMERCIAL_LICENSE_CONFIRMED", jamendoCommercialLicenseConfirmed.toString())
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
