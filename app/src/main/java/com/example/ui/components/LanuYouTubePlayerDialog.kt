@@ -79,6 +79,7 @@ object YouTubeVideoLink {
 
 @Composable
 fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
+    val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val scrollState = rememberScrollState()
     var searchText by remember(initialQuery) { mutableStateOf(initialQuery) }
@@ -114,7 +115,7 @@ fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
         }
         scope.launch {
             try {
-                val page = com.example.data.youtube.YouTubeSearchClient.search(query, apiKey, pageToken)
+                val page = com.example.data.youtube.YouTubeSearchClient.search(context, query, apiKey, pageToken)
                 results = if (pageToken == null) page.videos else (results + page.videos).distinctBy { it.id }
                 nextPageToken = page.nextPageToken
             } catch (e: Exception) {
