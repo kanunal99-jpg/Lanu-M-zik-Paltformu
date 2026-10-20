@@ -2,6 +2,29 @@
 
 Bu belge mevcut ANAYASA.md, docs/ANAYASA.md, AGENTS.md ve proje belgelerini **silmez veya geçersiz kılmaz**; çelişkide daha güvenli/katı kural uygulanır, karar ADR'de belgelenir.
 
+## SON KANIT TABLOSU — 20.10.2026, EŞZAMANLI GELİŞTİRMELER
+
+**Bu bölüm eski tarihsel PR listelerine göre önceliklidir; eski tablolar geçmişi kaydetmek için korunur.**
+
+| Çalışma | Kanıt | Gerçek durum |
+|---|---|---|
+| P0 kullanıcı arşivi/yerel kimlik/veri koruma | [#56](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/56) ve [#57](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/57), başarılı CI #392/#394 | **main'de** |
+| P0 başarısız indirmede eski dosya korunumu | [#59](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/59), başarılı CI #399 | **main'de** |
+| P1 repository yaşam döngüsü | [#58](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/58), başarılı CI #400 | **main'de** |
+| Android API/OEM uyumluluk anayasası ve 24/29/33/35 emülasyon | [#60](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/60), başarılı CI #405 | **main'de**; Samsung/Xiaomi/Huawei fiziksel cihaz onayı YOK |
+| Android medya izni, çevrimdışı güvenli dosya adı | [#61](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/61), CI #407; [#62](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/62), CI #408 | **main'de**, CI başarılı |
+| P0 startup silme yerine offline audit | [#63](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/63), CI #410 | **main'de**; gerçek cihazda dosya koruma smoke ayrıca bekliyor |
+| P1 GMS'siz Android WebView yedeği | [#64](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/64), CI #411 | **main'de**, gerçek Huawei/AOSP test edilmedi |
+| P1 Firebase Crashlytics opsiyonel, varsayılan telemetri kapalı | [#65](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/65), CI #413 | **main'de**, **Firebase dashboard/test crash/mapping ve kullanıcı onayı henüz yok** |
+| P0 OTA oturum sürüm/link/hash tutarlılığı ve kalıcı kayıt | [#66](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/66), CI #418 | **main'de**, fiziksel cihaz silmeden OTA hâlâ bekliyor |
+| P0 aynı şarkı için indirme yarışını önleme | [#67](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/67), CI #420 | **CI/merge kabulü sürüyor**, tamamlandı sayılmaz |
+| P1 Android API24+ HTTPS-only | [#68](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/68), CI #421 | **CI/merge kabulü sürüyor** |
+| P1 farklı OEM MediaStore kolon toleransı | [#69](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/69), CI #423 | **CI/merge kabulü sürüyor** |
+| P2 ilk açılışta gereksiz bildirim izni istememe | [#70](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/70), CI #424 | **CI/merge kabulü sürüyor** |
+
+**Puan kuralı:** Tarihsel 55/100 başlangıç, son **kanıta dayalı yaklaşık 70/100 yazılım/CI mühendislik hazırlığı** ve **92/100 üretim hedefi** farklı ölçümlerdir. Açık PR'lar tamamlanmış kabul edilerek puan yükseltilmez. Üretim alanında hâlâ eksik olanlar: **uyumlu kalıcı signing keystore + kurulu APK SHA-256 sertifika eşleşmesi, signed release APK/hash, farklı Android OEM cihazlarda UYGULAMAYI SİLMEDEN yerel kimlik/Room/favori/playlist/çevrimdışı ses korunumu, gerçek YouTube Data API yetkisi ve Firebase Crashlytics opt-in + dashboard + R8 mapping**. Bu engeller kapanmadan 92/100 veya production-ready etiketi kullanılmaz.
+
+---
 ## GÜNCEL PLATFORM HEDEFİ — 20.10.2026: TÜM ANDROID/APK UYUMLU OEM'LER
 
 **Tek marka hedefi YOK.** Önceki metinlerdeki Samsung Galaxy A55 adı yalnızca tarihsel/test cihazı örneğidir, ürün kapsamını daraltmaz. LANU Müzik, Android/API uyumlu **Samsung, Xiaomi/Redmi/POCO, Huawei Android/EMUI veya APK çalıştırabilen HarmonyOS, Honor, Oppo, Vivo, Realme, OnePlus, Motorola, Google Pixel, HMD/Nokia ve diğer üreticilerin telefon/tablet/katlanabilirlerini** hedefler. **Android APK çalıştırmayan HarmonyOS NEXT/5+** sürümleri bu APK ürününün hedefi değildir; doğal HarmonyOS app ayrıdır.
