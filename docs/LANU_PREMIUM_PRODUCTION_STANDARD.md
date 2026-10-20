@@ -2,6 +2,12 @@
 
 Bu dosya kullanıcı tarafından 20.10.2026 tarihinde paylaşılan **LANU PREMIUM PROFESSIONAL — ANDROID YAZILIM GELİŞTİRME MASTER PROMPT** belgesindeki kabul kriterlerini bu repo için uygulanabilir hale getirir. Kaynak belgenin tüm iddialarının kodda tamamlandığı anlamına gelmez.
 
+## Platform kapsamı (güncel 20.10.2026)
+
+Ürün **Samsung A55'e özel değildir**: Android APK uyumlu tüm üreticiler (Samsung, Xiaomi/Redmi/POCO, Huawei Android/EMUI, Honor, Oppo, Vivo, Realme, OnePlus, Motorola, Pixel ve diğerleri), tablet ve katlanabilir formlar hedeftir. GMS'siz Android'de temel müzik, Room, yerel kimlik, OTA ve arşiv deneyimi korunmalı; Firebase/Google servisleri optional/fallback olmalıdır. HarmonyOS NEXT/5+ gibi Android APK çalıştırmayan platformlar ayrı üründür. Kapsam ve API24–37 matrisinin canlı dokümanı: [Android OEM uyumluluk matrisi](ANDROID_OEM_UYUMLULUK_MATRISI.md).
+
+Her üretici için tamamlandı iddiası ancak test kanıtıyla yazılabilir; Samsung Galaxy A55 adı önceki belgelerde sadece **örnek** cihazdır.
+
 ## Zorunlu prensipler
 
 1. **Mimari:** MVVM veya MVI, Compose/Material 3, ayrıştırılmış UI–domain–data, gerektiğinde Repository Pattern ve Hilt; kontrollü ve geriye uyumlu refactoring.

@@ -93,6 +93,13 @@ jobs:
           else
             echo "Jamendo commercial license gate: DISABLED (safe default); Audius is the default full-stream catalog."
           fi
+      - name: Android OEM compatibility policy and read-only device script validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_android_oem_compatibility.py
+          bash -n scripts/android_device_readonly_smoke.sh
+          bash scripts/android_device_readonly_smoke.sh --help
       - name: Android Lint quality gate
         shell: bash
         run: |
