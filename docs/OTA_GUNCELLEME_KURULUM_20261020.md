@@ -26,3 +26,24 @@
 - https://developer.android.com/google/play/app-updates
 - https://developer.android.com/reference/android/content/pm/PackageManager
 - https://developer.android.com/reference/androidx/core/content/FileProvider
+
+
+## OTA güvenlik güçlendirmesi — 20.10.2026
+- Ana ekran her uygulama açılışında en fazla **6 saatte bir** otomatik kontrol yapar; manuel "Güncellemeleri denetle" her zaman kullanılabilir. İmzalı yeni sürüm varsa alt menüde bildirim noktası çıkar.
+- Kontrol önce resmî GitHub **/releases/latest** endpoint'ini inceler. Eski taslak yayınların liste başını doldurması nedeniyle en yeni yayının kaçırılması engellenir. En son release sadece debug ise, önceki uygun imzalı yayın için geçmiş de incelenir.
+- Android PackageManager, kurulu olmayan APK'nın PackageInfo.signingInfo alanını boş döndürebilir. Android apksig kütüphanesiyle **APK Signature Scheme** doğrudan doğrulanır ve sertifika SHA-256 özetleri kurulu uygulamayla karşılaştırılır. Uyuşmazlıkta kurulum bloklanır.
+- Son kurulum öncesi APK doğrulaması arka plan iş parçacığında yapılır; kullanıcı arayüzü takılmaz ve aynı anda ikinci kurulum başlatılmaz.
+- APK indirmesinde yavaş mobil ağlar için 10 dakikalık işlem sınırı ve yüzde değiştikçe ilerleme güncellemesi bulunur.
+- Hiçbir güvenlik kontrolü kapatılıp Android'in imza kısıtları atlatılmaz.
+
+## Üretim imzalama engeli
+Güncel GitHub Actions çalışmasında üretim imza secret'ları eksikse "Assemble signed release" adımı **skipped** kalır. Bu durumda Release'de görünen app-debug.apk, sabit sertifikalı **OTA sürümü değildir** ve uygulama içinden yüklenmeye uygun gösterilmez.
+
+Bu işin kullanıcı hesabında yalnız bir kez tamamlanması gerekir:
+1. Önceden cihaza kurulmuş APK'nın imza sertifikası belirlenir. Yüklü uygulamayı kaldırmayın.
+2. Aynı imzanın anahtarı yoksa **veri kayıpsız üzerine kurulum** garanti edilemez. Yeni anahtar üretmek bu sorunu çözmez; veri dışa aktarımı/backup planı gerekir.
+3. Anahtar ve şifreler yalnız GitHub Settings → Secrets and variables → Actions alanına kaydedilir; kaynak koda veya sohbete konulmaz.
+4. Sonraki başarılı signed_release işinin hem app-release.apk hem app-release.apk.sha256 dosyalarını yayımladığı kontrol edilir.
+5. Fiziksel Android cihazda sürüm geçişi ve kullanıcı verileri doğrulanır.
+
+**Bitmiş sayılmayan işler:** İmzalı APK'nın gerçek telefonda üzerine kurulması, önceki debug imzasıyla eşleşme ve uygulama verilerinin korunması testi. Bu işler telefondaki yüklü APK ve imza anahtarı olmadan doğrulanamaz.
