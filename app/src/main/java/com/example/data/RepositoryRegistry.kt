@@ -8,4 +8,12 @@ package com.example.data
 object RepositoryRegistry {
     @Volatile
     var repository: MusicRepository? = null
+
+    @Synchronized fun register(owner: MusicRepository) {
+        repository = owner
+    }
+
+    @Synchronized fun clearIfOwner(owner: MusicRepository) {
+        if (repository === owner) repository = null
+    }
 }

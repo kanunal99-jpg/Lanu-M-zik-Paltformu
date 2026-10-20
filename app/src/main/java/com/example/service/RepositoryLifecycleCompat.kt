@@ -4,6 +4,6 @@ import com.example.data.MusicRepository
 
 /**
  * Compatibility lifecycle hook for the media-session service.
- * MusicRepository currently owns application-scoped resources and does not expose a close operation.
+ * Closing cancels the owned repository scope and does not close the shared Room database.
  */
-fun MusicRepository.close() = Unit
+fun MusicRepository.close() = shutdown()
