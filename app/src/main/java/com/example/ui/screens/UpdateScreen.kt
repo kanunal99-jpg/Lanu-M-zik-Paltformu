@@ -107,11 +107,22 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
                 )
                 Text("APK indirildikten sonra SHA-256, paket kimliği, sürüm ve imza denetlenecek.",
                     color = LanuTextMuted, fontSize = 12.sp)
+                Text("Bağlantı kesilirse indirme daha sonra güvenli biçimde devam edebilir.",
+                    color = LanuTextMuted, fontSize = 12.sp)
+                OutlinedButton(
+                    onClick = updates::cancelDownload,
+                    modifier = Modifier.fillMaxWidth().testTag("cancel_ota_download")
+                ) { Text("İndirmeyi durdur") }
             }
             UpdateScreenState.VerifyingInstaller -> {
                 CircularProgressIndicator(color = LanuGreen)
                 Text("APK imzası ve kurulum güvenliği yeniden doğrulanıyor…",
                     color = LanuTextPrimary, modifier = Modifier.testTag("ota_verifying_install"))
+            }
+            is UpdateScreenState.Cancelling -> {
+                CircularProgressIndicator(color = LanuGreen)
+                Text("İndirme güvenli şekilde durduruluyor…", color = LanuTextPrimary,
+                    modifier = Modifier.testTag("update_cancelling"))
             }
             is UpdateScreenState.ReadyToInstall -> {
                 Text("Güncelleme indirildi ve doğrulandı.", color = LanuGreen,
@@ -133,7 +144,7 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
         }
         OutlinedButton(
             onClick = updates::checkForUpdates,
-            enabled = state !is UpdateScreenState.Checking && state !is UpdateScreenState.Downloading && state !is UpdateScreenState.VerifyingInstaller,
+            enabled = state !is UpdateScreenState.Checking && state !is UpdateScreenState.Downloading && state !is UpdateScreenState.Cancelling && state !is UpdateScreenState.VerifyingInstaller,
             modifier = Modifier.fillMaxWidth().testTag("check_updates")
         ) { Text("Güncellemeleri denetle") }
 
