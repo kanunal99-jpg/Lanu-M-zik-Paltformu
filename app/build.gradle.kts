@@ -75,6 +75,10 @@ if (file("google-services.json").isFile) {
   apply(plugin = "com.google.gms.google-services")
 }
 
+ksp {
+  arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
