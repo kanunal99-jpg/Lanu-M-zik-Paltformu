@@ -146,12 +146,14 @@ class UpdateViewModel @Inject constructor(application: Application) : AndroidVie
         val ready = _screen.value as? UpdateScreenState.ReadyToInstall ?: return
         _screen.value = UpdateScreenState.VerifyingInstaller
         viewModelScope.launch {
+            var cryptographicVerificationPassed = false
             try {
                 if (!ready.file.isFile)
                     throw java.io.IOException("İndirilen APK bulunamadı. Yeniden denetleyin.")
                 withContext(Dispatchers.IO) {
                     updater.verifyForInstall(ready.file, ready.release.versionCode, ready.expectedSha256)
                 }
+                cryptographicVerificationPassed = true
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                     !context.packageManager.canRequestPackageInstalls()
                 ) {
@@ -174,7 +176,12 @@ class UpdateViewModel @Inject constructor(application: Application) : AndroidVie
                 )
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                sessions.clear()
+                // A missing installer app / permission settings activity is NOT
+                // cryptographic corruption. Keep the verified resume hint so
+                // an interrupted OEM-specific flow can safely retry later.
+                if (InstallerFailurePolicy.shouldDiscardCachedVerification(cryptographicVerificationPassed)) {
+                    sessions.clear()
+                }
                 _screen.value = UpdateScreenState.Failed(
                     "Android kurulumu başlatılamadı: " + (e.message ?: "Bilinmeyen hata.")
                 )
