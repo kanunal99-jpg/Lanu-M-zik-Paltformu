@@ -61,7 +61,14 @@ class LocalMusicScannerFailureTest {
         )
         val error = runCatching { scanner.scanLocalMusic() }.exceptionOrNull()
         assertTrue("Expected IOException from incomplete OEM cursor, got: $error", error is IOException)
-        assertTrue("Expected original provider failure as cause, got: ${error?.cause}", error?.cause is IllegalStateException)
+        // Coroutines can copy IOException while recovering stack traces on a
+        // dispatcher boundary, nesting the original IOException as its cause.
+        // Verify the root failure without weakening the fail-closed contract.
+        val rootCause = error?.let { generateSequence(it) { failure -> failure.cause }.last() }
+        assertTrue(
+            "Expected original OEM provider failure at the root, got: $rootCause",
+            rootCause is IllegalStateException && rootCause.message == "OEM provider failed halfway"
+        )
         assertTrue(error?.message.orEmpty().contains("korundu"))
         assertEquals("First song was mapped before the second-row error", 2, processed)
     }
