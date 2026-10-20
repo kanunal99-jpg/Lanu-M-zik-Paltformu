@@ -1,5 +1,9 @@
 package com.example.ui.components
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -243,17 +247,38 @@ fun LanuYouTubePlayerDialog(onDismiss: () -> Unit, initialQuery: String = "") {
 private fun VisibleYouTubeEmbed(videoId: String) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // WebView can be absent/disabled on some de-Googled Android and OEM builds.
+    // A missing provider must not crash the entire music application.
     val webView = remember(videoId) {
-        WebView(context).apply {
-            setBackgroundColor(android.graphics.Color.BLACK)
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            settings.mediaPlaybackRequiresUserGesture = true
-            webChromeClient = WebChromeClient()
-            loadUrl("https://www.youtube.com/embed/$videoId?playsinline=1", mapOf("Referer" to "https://${context.packageName}"))
+        runCatching {
+            WebView(context).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.mediaPlaybackRequiresUserGesture = true
+                webChromeClient = WebChromeClient()
+                loadUrl(
+                    "https://www.youtube.com/embed/$videoId?playsinline=1",
+                    mapOf("Referer" to "https://${context.packageName}")
+                )
+            }
+        }.getOrNull()
+    }
+    if (webView == null) {
+        Column {
+            Text(stringResource(R.string.youtube_webview_unavailable))
+            TextButton(onClick = {
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(YouTubeBrowserFallback.url(videoId)))
+                            .addCategory(Intent.CATEGORY_BROWSABLE)
+                    )
+                }
+            }) { Text(stringResource(R.string.youtube_browser_fallback)) }
         }
+        return
     }
     DisposableEffect(webView, lifecycleOwner) {
         // YouTube forbids playback when the player is no longer visible.
@@ -276,4 +301,14 @@ private fun VisibleYouTubeEmbed(videoId: String) {
         factory = { webView },
         modifier = Modifier.fillMaxWidth().height(230.dp).testTag("visible_youtube_embed")
     )
+}
+
+/** Explicit browser fallback, only for an already verified public YouTube video ID. */
+internal object YouTubeBrowserFallback {
+    private val videoIdPattern = Regex("[A-Za-z0-9_-]{11}")
+
+    fun url(videoId: String): String {
+        require(videoIdPattern.matches(videoId)) { "Invalid YouTube video ID" }
+        return "https://www.youtube.com/watch?v=$videoId"
+    }
 }
