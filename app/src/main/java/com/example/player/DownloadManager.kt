@@ -56,6 +56,20 @@ internal class InFlightDownloadRegistry {
     }
 }
 
+/** Hard limit protects Android storage against a corrupt ContentResolver source. */
+internal object OfflineTransferSizePolicy {
+    const val MAX_BYTES: Long = 512L * 1024L * 1024L
+
+    fun requireExpectedSize(contentLength: Long) {
+        if (contentLength > MAX_BYTES) throw IllegalStateException("OFFLINE_AUDIO_TOO_LARGE")
+    }
+
+    fun requireNextChunk(totalWritten: Long, chunkBytes: Int) {
+        if (chunkBytes < 0 || totalWritten < 0 || chunkBytes.toLong() > MAX_BYTES - totalWritten)
+            throw IllegalStateException("OFFLINE_AUDIO_TOO_LARGE")
+    }
+}
+
 enum class DownloadStatus { QUEUED, DOWNLOADING, COMPLETED, FAILED, CANCELLED }
 
 data class DownloadProgress(
@@ -96,6 +110,7 @@ class DownloadManager(private val context: Context) {
                 val source = openSource(uri)
                 source.stream.use { stream ->
                     val total = source.contentLength
+                    OfflineTransferSizePolicy.requireExpectedSize(total)
                     updateState(song.id, DownloadStatus.DOWNLOADING, 0f, 0L, total)
                     var copied = 0L
                     temp!!.outputStream().use { out ->
@@ -104,6 +119,7 @@ class DownloadManager(private val context: Context) {
                             ensureActive()
                             val read = stream.read(buffer)
                             if (read < 0) break
+                            OfflineTransferSizePolicy.requireNextChunk(copied, read)
                             out.write(buffer, 0, read)
                             copied += read
                             val progress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else 0f
