@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
@@ -35,7 +37,8 @@ sealed interface UpdateScreenState {
     data class Failed(val reason: String) : UpdateScreenState
 }
 
-class UpdateViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class UpdateViewModel @Inject constructor(application: Application) : AndroidViewModel(application) {
     private val updater = GithubUpdateClient(application)
     private val sessions = OtaSessionStore(application)
     private var activeDownload: Job? = null
