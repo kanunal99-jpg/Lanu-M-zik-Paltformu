@@ -26,4 +26,11 @@
     <string name="ota_channel">Yayın kanalı: %1$s</string>
     <string name="lanu_open_friends_preview">Arkadaşlar (yerel önizleme)</string>
     <string name="lanu_friends_back">Hesabıma dön</string>
+    <string name="ota_installed_certificate_title">Kurulu uygulamanın imza sertifikası</string>
+    <string name="ota_installed_certificate_sha256">SHA-256: %1$s</string>
+    <string name="ota_installed_certificate_sha1">SHA-1: %1$s</string>
+    <string name="ota_installed_certificate_unavailable">Kurulu uygulamanın sertifikası okunamadı. Kontrol için uygulamayı kaldırmayın.</string>
+    <string name="ota_copy_certificate_sha256">SHA-256 parmak izini kopyala</string>
+    <string name="ota_copy_certificate_sha1">SHA-1 parmak izini kopyala</string>
+    <string name="ota_certificate_notice">SHA-256, OTA kontrolü için kurulu sertifikayı tanımlar. SHA-1, Android kısıtlı Google API anahtarı kurulumunda kullanılabilir. Bu değerler imza anahtarı değildir ve yeni APK'nın kurulabileceğini tek başına kanıtlamaz.</string>
 </resources>
