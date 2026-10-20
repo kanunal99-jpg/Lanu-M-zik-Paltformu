@@ -21,6 +21,11 @@ class LanuDeepLinkTest {
     }
 
     @Test
+    fun `library deep link maps to library route`() {
+        assertEquals(LanuDeepLink.Library, LanuDeepLink.parse("lanumusic://library"))
+    }
+
+    @Test
     fun `unknown scheme is ignored`() {
         assertNull(LanuDeepLink.parse("https://example.com/track/song-42"))
     }
