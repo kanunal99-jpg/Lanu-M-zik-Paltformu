@@ -343,7 +343,7 @@ class GithubUpdateClient(private val context: Context) {
                         if (!partial.renameTo(finalApk))
                             throw IOException("Doğrulanan APK kaydedilemedi.")
                         onProgress(100)
-                        return@withContext finalApk
+                        return@withContext VerifiedDownload(finalApk, expected)
                     } catch (e: Exception) {
                         partial.delete() // Never retain an invalidly signed candidate
                         throw e
