@@ -17,15 +17,32 @@ class OtaSessionStore(private val context: Context) {
     private val shaPattern = Regex("[a-fA-F0-9]{64}")
 
     fun save(release: VerifiedRelease, expectedSha256: String) {
-        require(tagPattern.matches(release.tag))
-        require(shaPattern.matches(expectedSha256))
-        prefs.edit()
+        // Session state is a resume hint, but it must be internally coherent
+        // before reaching disk. Never accept an unrelated release or asset URL.
+        val code = tagPattern.matchEntire(release.tag)
+            ?.groupValues?.get(1)?.toIntOrNull()
+        require(code != null && code == release.versionCode) { "OTA sürüm kimliği uyuşmuyor." }
+        require(shaPattern.matches(expectedSha256)) { "OTA SHA-256 geçersiz." }
+        require(release.sizeBytes in 1L..(200L * 1024L * 1024L)) {
+            "OTA APK boyutu geçersiz."
+        }
+        require(release.githubDigest == null || shaPattern.matches(release.githubDigest)) {
+            "OTA GitHub özeti geçersiz."
+        }
+        val releases = "https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases"
+        val prefix = releases + "/download/" + release.tag + "/"
+        require(release.pageUrl == releases + "/tag/" + release.tag &&
+            release.apkUrl == prefix + "app-release.apk" &&
+            release.sha256Url == prefix + "app-release.apk.sha256"
+        ) { "OTA kaynak bağlantısı güvenilir değil." }
+        val saved = prefs.edit()
             .putString("tag", release.tag)
             .putInt("code", release.versionCode)
             .putString("sha256", expectedSha256)
             .putLong("size", release.sizeBytes)
             .putString("github_digest", release.githubDigest)
-            .apply()
+            .commit()
+        if (!saved) throw java.io.IOException("OTA durumu diske kaydedilemedi.")
     }
 
     fun restore(installedCode: Int): RestorableUpdate? {
@@ -50,6 +67,6 @@ class OtaSessionStore(private val context: Context) {
     }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        prefs.edit().clear().commit()
     }
 }
