@@ -32,5 +32,5 @@
     <string name="ota_installed_certificate_unavailable">Kurulu uygulamanın sertifikası okunamadı. Kontrol için uygulamayı kaldırmayın.</string>
     <string name="ota_copy_certificate_sha256">SHA-256 parmak izini kopyala</string>
     <string name="ota_copy_certificate_sha1">SHA-1 parmak izini kopyala</string>
-    <string name="ota_certificate_notice">SHA-256, OTA kontrolü için kurulu sertifikayı tanımlar. SHA-1, Android kısıtlı Google API anahtarı kurulumunda kullanılabilir. Bu değerler imza anahtarı değildir ve yeni APK'nın kurulabileceğini tek başına kanıtlamaz.</string>
+    <string name="ota_certificate_notice">SHA-256, OTA kontrolü için kurulu sertifikayı tanımlar. SHA-1, Android kısıtlı Google API anahtarı kurulumunda kullanılabilir. Bu değerler imza anahtarı değildir ve yeni bir APK dosyasının kurulabileceğini tek başına kanıtlamaz.</string>
 </resources>
