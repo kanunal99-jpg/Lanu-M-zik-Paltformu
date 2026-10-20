@@ -140,6 +140,37 @@ class UpdateReleasePolicyTest {
         assertEquals(null, chosen.release.githubDigest)
     }
 
+    @Test fun checksumParserBindsHashToExactReleaseApkFilename() {
+        val hash = "d".repeat(64)
+        assertEquals(hash, UpdateReleasePolicy.parseExpectedSha256(
+            hash + "  app/build/outputs/apk/release/app-release.apk\n"))
+        assertEquals(hash, UpdateReleasePolicy.parseExpectedSha256(hash + " *app-release.apk"))
+        for (payload in listOf(
+            hash + "  app-debug.apk",
+            hash + "  evil.apk",
+            hash + "  app-release.apk\n" + hash + "  app-release.apk",
+            hash + "  app-release.apk.attacker",
+            "sha256:" + hash,
+            hash + "  app-release.apk\u0000"
+        )) assertTrue(
+            "Expected rejection: " + payload.takeLast(40),
+            runCatching { UpdateReleasePolicy.parseExpectedSha256(payload) }.isFailure
+        )
+    }
+
+    @Test fun redirectsMustUseHttpsAndRealGithubDomains() {
+        for (host in listOf("github.com", "api.github.com",
+            "release-assets.githubusercontent.com", "objects.githubusercontent.com")) {
+            assertTrue(OtaNetworkPolicy.accepts("https", host))
+            assertTrue(!OtaNetworkPolicy.accepts("http", host))
+        }
+        for (host in listOf("github.com.attacker.net", "fakegithub.com",
+            "githubusercontent.com.evil.org", "evil.githubusercontent.com.attacker.net",
+            "rawgithubusercontent.com", "example.com", "")) {
+            assertTrue(!OtaNetworkPolicy.accepts("https", host))
+        }
+    }
+
     @Test fun emptyReleasesDoNotCreatePhantomUpdate() {
         assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose("[]", 341))
     }
