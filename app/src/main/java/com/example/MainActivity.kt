@@ -141,7 +141,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
     LaunchedEffect(deepLink) {
         when (val target = deepLink) {
             LanuDeepLink.Home -> viewModel.setTab(MainTab.HOME)
-            LanuDeepLink.Library -> viewModel.setTab(MainTab.HOME)
+            LanuDeepLink.Library -> viewModel.setTab(MainTab.LIBRARY)
             is LanuDeepLink.Search -> { viewModel.updateSearchQuery(target.query); viewModel.setTab(MainTab.SEARCH) }
             is LanuDeepLink.PlayerAction -> when (target.action) {
                 LanuDeepLink.Action.PLAY_PAUSE -> viewModel.togglePlayPause()
