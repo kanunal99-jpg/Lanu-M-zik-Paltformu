@@ -28,19 +28,24 @@ class LocalMusicScannerFailureTest {
 
     @Test fun brokenOEMCursorMustNotReturnPartiallyScannedSongs() = runBlocking {
         val cols = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE)
-        val rows = object : MatrixCursor(cols) {
-            override fun getLong(column: Int): Long {
-                if (position >= 1) throw IllegalStateException("OEM provider failed halfway")
-                return super.getLong(column)
-            }
-        }
+        val rows = MatrixCursor(cols)
         rows.addRow(arrayOf<Any>(100L, "First track"))
         rows.addRow(arrayOf<Any>(101L, "Second track"))
-        val scanner = LocalMusicScanner(context) { _, _, _ -> rows }
+        var processed = 0
+        val scanner = LocalMusicScanner(
+            context,
+            mapRow = { cursor ->
+                processed++
+                if (processed == 2) throw IllegalStateException("OEM provider failed halfway")
+                LocalMediaRowMapper.from(cursor)
+            },
+            audioQuery = { _, _, _ -> rows }
+        )
         val error = runCatching { scanner.scanLocalMusic() }.exceptionOrNull()
         assertTrue("Expected IOException from incomplete OEM cursor, got: $error", error is IOException)
         assertTrue("Expected original provider failure as cause, got: ${error?.cause}", error?.cause is IllegalStateException)
         assertTrue(error?.message.orEmpty().contains("korundu"))
+        assertEquals("First song was mapped before the second-row error", 2, processed)
     }
 
     @Test fun validOEMCursorStillReturnsAllReadableLocalTracks() = runBlocking {
