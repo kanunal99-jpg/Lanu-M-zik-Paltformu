@@ -3,6 +3,7 @@ plugins {
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.roborazzi)
+  id("com.google.dagger.hilt.android") version "2.60.1"
   alias(libs.plugins.secrets)
 }
 
@@ -97,6 +98,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
+  implementation("com.google.dagger:hilt-android:2.60.1")
   // Verify APK signatures directly: archive PackageInfo.signingInfo can be null on devices.
   implementation("com.android.tools.build:apksig:8.13.0")
   implementation(libs.androidx.lifecycle.runtime.compose)
@@ -138,5 +140,6 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
+  "ksp"("com.google.dagger:hilt-compiler:2.60.1")
   "ksp"(libs.moshi.kotlin.codegen)
 }

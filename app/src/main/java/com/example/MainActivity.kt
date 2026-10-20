@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import dagger.hilt.android.AndroidEntryPoint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,7 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +78,7 @@ import com.example.ui.theme.LanuGreen
 import com.example.ui.theme.LanuTextMuted
 import com.example.ui.theme.MyApplicationTheme
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); enableEdgeToEdge(); setContent { MyApplicationTheme { MainAppScreen() } } }
     override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); setIntent(intent); recreate() }
@@ -84,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewModel = viewModel()) {
-    val updateState by updates.screen.collectAsState()
+    val updateState by updates.screen.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { updates.checkOnAppLaunch() }
     val context = LocalContext.current
     val incomingUri = remember(context) { (context as? Activity)?.intent?.data }
@@ -100,41 +102,41 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
         permissionsLauncher.launch(permissionsToRequest.toTypedArray())
     }
 
-    val currentTab by viewModel.currentTab.collectAsState()
-    val isNowPlayingExpanded by viewModel.isNowPlayingExpanded.collectAsState()
-    val showLyricsInNowPlaying by viewModel.showLyricsInNowPlaying.collectAsState()
-    val currentSong by viewModel.currentSong.collectAsState()
-    val isPlaying by viewModel.isPlaying.collectAsState()
-    val currentPositionMs by viewModel.currentPositionMs.collectAsState()
-    val durationMs by viewModel.durationMs.collectAsState()
-    val isShuffle by viewModel.isShuffle.collectAsState()
-    val repeatMode by viewModel.repeatMode.collectAsState()
-    val equalizerState by viewModel.equalizerState.collectAsState()
-    val audioQuality by viewModel.audioQuality.collectAsState()
-    val allSongs by viewModel.allSongs.collectAsState()
+    val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
+    val isNowPlayingExpanded by viewModel.isNowPlayingExpanded.collectAsStateWithLifecycle()
+    val showLyricsInNowPlaying by viewModel.showLyricsInNowPlaying.collectAsStateWithLifecycle()
+    val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
+    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    val currentPositionMs by viewModel.currentPositionMs.collectAsStateWithLifecycle()
+    val durationMs by viewModel.durationMs.collectAsStateWithLifecycle()
+    val isShuffle by viewModel.isShuffle.collectAsStateWithLifecycle()
+    val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
+    val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
+    val audioQuality by viewModel.audioQuality.collectAsStateWithLifecycle()
+    val allSongs by viewModel.allSongs.collectAsStateWithLifecycle()
     // Reclassify only the displayed catalog; never delete or migrate user libraries.
     val categorizedSongs = remember(allSongs) { allSongs.map(MusicGenreResolver::resolve) }
-    val cachedSongs by viewModel.cachedSongs.collectAsState()
-    val favoriteIds by viewModel.favoriteSongIds.collectAsState()
-    val downloadedEntities by viewModel.downloadedSongs.collectAsState()
-    val downloadedSongIds by viewModel.downloadedSongIds.collectAsState()
-    val playlists by viewModel.playlists.collectAsState()
-    val friendActivities by viewModel.friendActivities.collectAsState()
-    val newReleaseAlert by viewModel.newReleaseNotification.collectAsState()
-    val session by viewModel.session.collectAsState()
-    val history by viewModel.history.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
-    val remoteArtistResults by viewModel.remoteArtistResults.collectAsState()
-    val searchIsLoading by viewModel.searchIsLoading.collectAsState()
-    val searchHasMore by viewModel.searchHasMore.collectAsState()
-    val searchError by viewModel.searchError.collectAsState()
-    val selectedArtist by viewModel.selectedArtist.collectAsState()
-    val selectedPlaylist by viewModel.selectedPlaylist.collectAsState()
-    val showCreatePlaylistDialog by viewModel.showCreatePlaylistDialog.collectAsState()
-    val songToAddToPlaylist by viewModel.songToAddToPlaylist.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val isCatalogExpanding by viewModel.isCatalogExpanding.collectAsState()
+    val cachedSongs by viewModel.cachedSongs.collectAsStateWithLifecycle()
+    val favoriteIds by viewModel.favoriteSongIds.collectAsStateWithLifecycle()
+    val downloadedEntities by viewModel.downloadedSongs.collectAsStateWithLifecycle()
+    val downloadedSongIds by viewModel.downloadedSongIds.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val friendActivities by viewModel.friendActivities.collectAsStateWithLifecycle()
+    val newReleaseAlert by viewModel.newReleaseNotification.collectAsStateWithLifecycle()
+    val session by viewModel.session.collectAsStateWithLifecycle()
+    val history by viewModel.history.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
+    val remoteArtistResults by viewModel.remoteArtistResults.collectAsStateWithLifecycle()
+    val searchIsLoading by viewModel.searchIsLoading.collectAsStateWithLifecycle()
+    val searchHasMore by viewModel.searchHasMore.collectAsStateWithLifecycle()
+    val searchError by viewModel.searchError.collectAsStateWithLifecycle()
+    val selectedArtist by viewModel.selectedArtist.collectAsStateWithLifecycle()
+    val selectedPlaylist by viewModel.selectedPlaylist.collectAsStateWithLifecycle()
+    val showCreatePlaylistDialog by viewModel.showCreatePlaylistDialog.collectAsStateWithLifecycle()
+    val songToAddToPlaylist by viewModel.songToAddToPlaylist.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isCatalogExpanding by viewModel.isCatalogExpanding.collectAsStateWithLifecycle()
 
     LaunchedEffect(deepLink) {
         when (val target = deepLink) {
@@ -221,7 +223,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
             )
         }
         selectedPlaylist?.let { playlist ->
-            val playlistSongsFlow = viewModel.getSongsForPlaylist(playlist.id).collectAsState(initial = emptyList())
+            val playlistSongsFlow = viewModel.getSongsForPlaylist(playlist.id).collectAsStateWithLifecycle(initialValue = emptyList())
             PlaylistDetailSheet(playlist = playlist, songs = playlistSongsFlow.value, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onRemoveSong = { songId -> viewModel.removeSongFromPlaylist(playlist.id, songId) }, onSharePlaylist = { viewModel.sharePlaylist(context, playlist) }, onDeletePlaylist = { viewModel.deletePlaylist(playlist.id) }, onBack = { viewModel.selectPlaylist(null) })
         }
     }
