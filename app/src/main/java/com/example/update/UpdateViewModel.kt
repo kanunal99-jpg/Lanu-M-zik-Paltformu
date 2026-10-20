@@ -41,6 +41,16 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     val installedVersion: String get() = BuildConfig.VERSION_NAME
     val installedCode: Int get() = BuildConfig.VERSION_CODE
 
+    /** Background-safe launch check at most every six hours; manual checks remain unlimited. */
+    fun checkOnAppLaunch() {
+        val prefs = getApplication<Application>()
+            .getSharedPreferences("lanu_ota_check", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val last = prefs.getLong("last_successful_check", 0L)
+        if (last > 0L && now >= last && now - last < 6L * 60L * 60L * 1000L) return
+        checkForUpdates()
+    }
+
     fun checkForUpdates() {
         if (_screen.value is UpdateScreenState.Checking || _screen.value is UpdateScreenState.Downloading || _screen.value is UpdateScreenState.VerifyingInstaller) return
         viewModelScope.launch {
@@ -51,6 +61,9 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     UpdateAvailability.UpToDate -> UpdateScreenState.UpToDate
                     UpdateAvailability.AwaitingSignedRelease -> UpdateScreenState.WaitingForSignedApk
                 }
+                getApplication<Application>()
+                    .getSharedPreferences("lanu_ota_check", Context.MODE_PRIVATE)
+                    .edit().putLong("last_successful_check", System.currentTimeMillis()).apply()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 _screen.value = UpdateScreenState.Failed(
