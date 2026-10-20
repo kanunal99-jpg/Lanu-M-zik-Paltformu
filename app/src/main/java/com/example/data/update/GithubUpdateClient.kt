@@ -7,6 +7,7 @@ import com.android.apksig.ApkVerifier
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -14,13 +15,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.Locale
-import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
+
+data class VerifiedDownload(val file: File, val sha256: String)
 
 data class VerifiedRelease(
     val versionCode: Int,
@@ -87,14 +88,24 @@ object UpdateReleasePolicy {
         }
     }
 
+    /** GitHub Actions sha256sum output: <hex>  app/build/outputs/apk/release/app-release.apk */
     fun parseExpectedSha256(value: String): String {
-        val hash = value.trim().split(Regex("""\s+""")).firstOrNull().orEmpty()
-        if (!Regex("[a-fA-F0-9]{64}").matches(hash))
-            throw IOException("Güncelleme dosyasının SHA-256 bilgisi geçersiz.")
-        return hash.lowercase(Locale.ROOT)
+        val match = Regex("""^([a-fA-F0-9]{64})[ \t]+\*?(?:[A-Za-z0-9_./-]*/)?app-release\.apk\s*$""")
+            .matchEntire(value.trim())
+            ?: throw IOException("SHA-256 dosyası app-release.apk için geçerli bir özet içermiyor.")
+        return match.groupValues[1].lowercase(Locale.ROOT)
     }
 }
 
+
+/** Reject dangerous redirect destinations, including lookalike hostnames. */
+internal object OtaNetworkPolicy {
+    fun accepts(scheme: String, host: String): Boolean =
+        scheme == "https" && (
+            host == "github.com" || host == "api.github.com" ||
+                host == "githubusercontent.com" || host.endsWith(".githubusercontent.com")
+            )
+}
 
 /** Testable resume-range guard: never append if the server returned the wrong byte range. */
 internal object OtaTransferPolicy {
@@ -110,23 +121,36 @@ internal object OtaTransferPolicy {
 }
 
 class GithubUpdateClient(private val context: Context) {
-    private val client = OkHttpClient.Builder()
+    /**
+     * Only HTTPS traffic to official GitHub API / asset CDN hosts.
+     * This network interceptor also checks *each* redirect destination.
+     */
+    private val metadataClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        // Slow mobile networks need enough time to download a verified APK.
+        .readTimeout(20, TimeUnit.SECONDS)
+        .callTimeout(30, TimeUnit.SECONDS)
+        .followSslRedirects(false)
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val host = request.url.host
+            if (!OtaNetworkPolicy.accepts(request.url.scheme, host))
+                throw IOException("Güvenilmeyen OTA sunucusu. İstek engellendi.")
+            chain.proceed(request)
+        }
+        .build()
+    private val transferClient = metadataClient.newBuilder()
         .callTimeout(10, TimeUnit.MINUTES)
+        .readTimeout(45, TimeUnit.SECONDS)
         .build()
 
     private fun get(url: String, startByte: Long? = null): okhttp3.Response {
+        val asset = url.contains("/releases/download/")
         val builder = Request.Builder().url(url)
             .header("User-Agent", "LANU-Music-Android-Updater")
-            .header("Accept", if (url.contains("/releases/download/"))
-                "application/octet-stream" else "application/vnd.github+json")
+            .header("Accept", if (asset) "application/octet-stream" else "application/vnd.github+json")
             .header("Cache-Control", "no-cache")
-        if (startByte != null && startByte > 0) {
-            builder.header("Range", "bytes=" + startByte + "-")
-        }
-        return client.newCall(builder.build()).execute()
+        if (startByte != null && startByte > 0) builder.header("Range", "bytes=" + startByte + "-")
+        return (if (asset) transferClient else metadataClient).newCall(builder.build()).execute()
     }
 
     /** Bound JSON/sha256 response sizes to avoid excessive memory use. */
@@ -174,7 +198,7 @@ class GithubUpdateClient(private val context: Context) {
         // Previous signed stable builds may remain installable even when newest
         // publish only has a debug preview. Best effort; do not discard /latest
         // if listing is temporarily rate limited.
-        val combined = runCatching {
+        val historyResult = runCatching {
             get(root + "/releases?per_page=100").use { response ->
                 val history = JSONArray(responseBody(response))
                 val result = JSONArray()
@@ -182,8 +206,12 @@ class GithubUpdateClient(private val context: Context) {
                 for (i in 0 until history.length()) result.put(history.getJSONObject(i))
                 UpdateReleasePolicy.choose(result.toString(), installedCode)
             }
-        }.getOrDefault(latestResult)
-        combined
+        }
+        // Never report "up to date" if neither endpoint returned trustworthy data.
+        historyResult.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) throw error
+        }
+        if (latest == null) historyResult.getOrThrow() else historyResult.getOrDefault(latestResult)
     }
 
     /** Resume interrupted downloads using HTTP Range, never without checking Content-Range. */
@@ -280,7 +308,7 @@ class GithubUpdateClient(private val context: Context) {
         }
     }
 
-    suspend fun downloadAndVerify(release: VerifiedRelease, onProgress: (Int) -> Unit): File =
+    suspend fun downloadAndVerify(release: VerifiedRelease, onProgress: (Int) -> Unit): VerifiedDownload =
         withContext(Dispatchers.IO) {
             val folder = File(context.cacheDir, "lanu_updates")
             if (!folder.exists() && !folder.mkdirs())
@@ -303,14 +331,18 @@ class GithubUpdateClient(private val context: Context) {
             // A previously fully verified download can be reused after process death,
             // but ONLY if the freshly fetched SHA-256 still matches.
             if (finalApk.isFile) {
-                val cached = runCatching {
+                val cached = try {
                     finalApk.length() == release.sizeBytes &&
                         sha256Of(finalApk).equals(expected, ignoreCase = true)
-                }.getOrDefault(false)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: IOException) {
+                    false
+                }
                 if (cached) {
                     verifyApk(finalApk, release.versionCode)
                     onProgress(100)
-                    return@withContext finalApk
+                    return@withContext VerifiedDownload(finalApk, expected)
                 }
                 finalApk.delete()
             }
@@ -327,7 +359,7 @@ class GithubUpdateClient(private val context: Context) {
                         if (!partial.renameTo(finalApk))
                             throw IOException("Doğrulanan APK kaydedilemedi.")
                         onProgress(100)
-                        return@withContext finalApk
+                        return@withContext VerifiedDownload(finalApk, expected)
                     } catch (e: Exception) {
                         partial.delete() // Never retain an invalidly signed candidate
                         throw e
@@ -336,6 +368,21 @@ class GithubUpdateClient(private val context: Context) {
             }
             partial.delete()
             throw IOException("APK SHA-256 doğrulaması başarısız. Kurulum engellendi.")
+        }
+
+    /**
+     * Close the download -> install TOCTOU gap: re-hash the exact private-cache
+     * APK directly before invoking Android's installer (offline capable).
+     */
+    suspend fun verifyForInstall(file: File, versionCode: Int, expectedSha256: String) =
+        withContext(Dispatchers.IO) {
+            val expectedFile = File(context.cacheDir, "lanu_updates/lanu-" + versionCode + ".apk")
+            if (file.canonicalPath != expectedFile.canonicalPath || !file.isFile)
+                throw IOException("APK dosya yolu güvenilir değil. Kurulum engellendi.")
+            if (!Regex("[a-fA-F0-9]{64}").matches(expectedSha256) ||
+                !sha256Of(file).equals(expectedSha256, ignoreCase = true))
+                throw IOException("APK kurulum öncesinde değişmiş. SHA-256 doğrulaması başarısız.")
+            verifyApk(file, versionCode)
         }
 
     private fun signatureDigests(packageInfo: PackageInfo): Set<String> {

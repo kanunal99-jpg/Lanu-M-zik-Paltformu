@@ -30,13 +30,14 @@ sealed interface UpdateScreenState {
     data class Available(val release: VerifiedRelease) : UpdateScreenState
     data class Downloading(val release: VerifiedRelease, val progress: Int) : UpdateScreenState
     data class Cancelling(val release: VerifiedRelease) : UpdateScreenState
-    data class ReadyToInstall(val release: VerifiedRelease, val file: File, val permissionsNeeded: Boolean = false) : UpdateScreenState
+    data class ReadyToInstall(val release: VerifiedRelease, val file: File, val expectedSha256: String, val permissionsNeeded: Boolean = false) : UpdateScreenState
     data object VerifyingInstaller : UpdateScreenState
     data class Failed(val reason: String) : UpdateScreenState
 }
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
     private val updater = GithubUpdateClient(application)
+    private val sessions = OtaSessionStore(application)
     private var activeDownload: Job? = null
     private val _screen = MutableStateFlow<UpdateScreenState>(UpdateScreenState.Idle)
     val screen: StateFlow<UpdateScreenState> = _screen
@@ -44,8 +45,27 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     val installedVersion: String get() = BuildConfig.VERSION_NAME
     val installedCode: Int get() = BuildConfig.VERSION_CODE
 
-    /** Background-safe launch check at most every six hours; manual checks remain unlimited. */
+    /** Crash/reboot recovery performs real cryptographic re-verification, never trusts SharedPreferences alone. */
     fun checkOnAppLaunch() {
+        if (_screen.value !is UpdateScreenState.Idle) return
+        val stored = sessions.restore(installedCode)
+        if (stored != null) {
+            _screen.value = UpdateScreenState.VerifyingInstaller
+            viewModelScope.launch {
+                try {
+                    updater.verifyForInstall(stored.apk, stored.release.versionCode, stored.expectedSha256)
+                    _screen.value = UpdateScreenState.ReadyToInstall(
+                        stored.release, stored.apk, stored.expectedSha256
+                    )
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    sessions.clear()
+                    _screen.value = UpdateScreenState.Idle
+                    checkForUpdates()
+                }
+            }
+            return
+        }
         val prefs = getApplication<Application>()
             .getSharedPreferences("lanu_ota_check", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
@@ -87,7 +107,8 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
                 if (_screen.value is UpdateScreenState.Downloading) {
-                    _screen.value = UpdateScreenState.ReadyToInstall(available.release, downloaded)
+                    sessions.save(available.release, downloaded.sha256)
+                    _screen.value = UpdateScreenState.ReadyToInstall(available.release, downloaded.file, downloaded.sha256)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -126,7 +147,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 if (!ready.file.isFile)
                     throw java.io.IOException("İndirilen APK bulunamadı. Yeniden denetleyin.")
                 withContext(Dispatchers.IO) {
-                    updater.verifyApk(ready.file, ready.release.versionCode)
+                    updater.verifyForInstall(ready.file, ready.release.versionCode, ready.expectedSha256)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                     !context.packageManager.canRequestPackageInstalls()
@@ -150,6 +171,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 )
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                sessions.clear()
                 _screen.value = UpdateScreenState.Failed(
                     "Android kurulumu başlatılamadı: " + (e.message ?: "Bilinmeyen hata.")
                 )
