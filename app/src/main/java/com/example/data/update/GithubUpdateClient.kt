@@ -115,7 +115,7 @@ class GithubUpdateClient(private val context: Context) {
             val folder = File(context.cacheDir, "lanu_updates")
             if (!folder.exists() && !folder.mkdirs()) throw IOException("Güncelleme klasörü oluşturulamadı.")
             val finalApk = File(folder, "lanu-" + release.versionCode + ".apk")
-            val temporary = File(folder, "lanu-" + release.versionCode + ".apk.part")
+            val temporary = File(folder, "lanu-" + release.versionCode + ".download.apk")
             val prefix = "https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/download/" + release.tag + "/"
             if (release.apkUrl != prefix + "app-release.apk" ||
                 release.sha256Url != prefix + "app-release.apk.sha256")
