@@ -42,7 +42,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-enum class MainTab(val titleTr: String) { HOME("Ana Sayfa"), SEARCH("Keşfet"), LIBRARY("Kitaplığım"), FRIENDS("Arkadaşlar"), EQUALIZER("Ekolayzır"), ACCOUNT("Hesabım") }
+enum class MainTab(val titleTr: String) { HOME("Ana Sayfa"), SEARCH("Keşfet"), LIBRARY("Kitaplığım"), FRIENDS("Arkadaşlar"), EQUALIZER("Ekolayzır"), ACCOUNT("Hesabım"), UPDATE("Güncelleme Kontrol") }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = MusicRepository(application)
