@@ -134,7 +134,21 @@ object YouTubeSearchClient {
         val request = builder.build()
         try {
             client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
+                val maxResponseBytes = 1024 * 1024
+                val input = response.body?.byteStream()
+                    ?: throw YouTubeSearchException("YouTube boş yanıt döndürdü.")
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                input.use { stream ->
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        if (output.size() + count > maxResponseBytes)
+                            throw YouTubeSearchException("YouTube yanıtı güvenli boyut sınırını aştı.")
+                        output.write(buffer, 0, count)
+                    }
+                }
+                val body = output.toString(Charsets.UTF_8.name())
                 if (!response.isSuccessful) throw YouTubeSearchException(errorMessage(response.code, body))
                 try {
                     parseResponse(body)
