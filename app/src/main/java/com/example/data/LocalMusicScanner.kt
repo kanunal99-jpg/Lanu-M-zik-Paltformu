@@ -15,6 +15,9 @@ import kotlinx.coroutines.withContext
 
 class LocalMusicScanner(
     private val context: Context,
+    // Row transformation is injectable for deterministic partial-cursor tests;
+    // the actual production mapper is unchanged across Android manufacturers.
+    private val mapRow: (Cursor) -> Song? = LocalMediaRowMapper::from,
     // Injectable query for reproducible OEM cursor-failure regressions.
     private val audioQuery: (Array<String>, String, String) -> Cursor? =
         { columns, filter, order ->
@@ -46,7 +49,7 @@ class LocalMusicScanner(
                     currentCoroutineContext().ensureActive()
                     // Some OEM MediaStore implementations omit optional metadata
                     // columns even when requested. Still expose the readable audio.
-                    LocalMediaRowMapper.from(c)?.let(localSongs::add)
+                    mapRow(c)?.let(localSongs::add)
                 }
             }
         } catch (cancelled: CancellationException) {
