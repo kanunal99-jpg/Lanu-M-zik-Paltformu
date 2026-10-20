@@ -26,4 +26,9 @@
     <string name="ota_channel">Release channel: %1$s</string>
     <string name="lanu_open_friends_preview">Friends (local preview)</string>
     <string name="lanu_friends_back">Back to account</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_search">Explore</string>
+    <string name="nav_library">My Library</string>
+    <string name="nav_account">Account</string>
+    <string name="nav_updates">Check for Updates</string>
 </resources>

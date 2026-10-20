@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -169,7 +170,13 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
             Column(Modifier.navigationBarsPadding()) {
                 if (!isNowPlayingExpanded) PlayerBottomAppBar(song = currentSong, isPlaying = isPlaying, currentPositionMs = currentPositionMs, durationMs = durationMs, isFavorite = currentSong?.let { favoriteIds.contains(it.id) } ?: false, isShuffle = isShuffle, repeatMode = repeatMode, onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it.id) } }, onTogglePlayPause = { viewModel.togglePlayPause() }, onPrevious = { viewModel.prevSong() }, onNext = { viewModel.nextSong() }, onToggleShuffle = { viewModel.toggleShuffle() }, onToggleRepeat = { viewModel.toggleRepeat() }, onExpand = { viewModel.openNowPlaying() }, onSeekTo = { viewModel.seekTo(it) })
                 NavigationBar(containerColor = LanuDarkSurface, tonalElevation = 8.dp, modifier = Modifier.testTag("bottom_navigation_bar")) {
-                    val tabs = listOf(Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home), Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search), Triple(MainTab.LIBRARY, "Kitaplığım", Icons.Default.LibraryMusic), Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person), Triple(MainTab.UPDATE, "Güncelleme Kontrol", Icons.Default.SystemUpdate))
+                    val tabs = listOf(
+                        Triple(MainTab.HOME, stringResource(R.string.nav_home), Icons.Default.Home),
+                        Triple(MainTab.SEARCH, stringResource(R.string.nav_search), Icons.Default.Search),
+                        Triple(MainTab.LIBRARY, stringResource(R.string.nav_library), Icons.Default.LibraryMusic),
+                        Triple(MainTab.ACCOUNT, stringResource(R.string.nav_account), Icons.Default.Person),
+                        Triple(MainTab.UPDATE, stringResource(R.string.nav_updates), Icons.Default.SystemUpdate)
+                    )
                     tabs.forEach { (tab, label, icon) ->
                         val isSelected = currentTab == tab
                         NavigationBarItem(selected = isSelected, onClick = { if (currentTab != tab) viewModel.setTab(tab) }, icon = {
