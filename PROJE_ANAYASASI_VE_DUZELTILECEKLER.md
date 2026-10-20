@@ -2,6 +2,72 @@
 
 Bu belge mevcut ANAYASA.md, docs/ANAYASA.md, AGENTS.md ve proje belgelerini **silmez veya geçersiz kılmaz**; çelişkide daha güvenli/katı kural uygulanır, karar ADR'de belgelenir.
 
+## 20 Ekim 2026 — CANLI DURUM, TAMAMLANANLAR, AÇIK İŞLER VE HEDEF PUANLAMA
+
+> Bu tarihli bölüm **güncel durumun tek özetidir**; alttaki 15 Ekim tarihli denetim bulguları tarihsel kayıt olarak korunur. PR açılması = kod yazıldı; CI yeşil = sadece kapsanan kontroller geçti; fiziksel cihaz doğrulaması olmadan üretim kabulü yoktur. Her yeni denetimde bu tablonun tarihini, kanıt URL'lerini ve durumunu güncelleyin.
+
+### Değişmez ürün hedefi ve güvenlik anayasası
+- LANU Müzik: Android (Samsung Galaxy A55 dahil) için güvenli, gerçek katalog/izinli ses kullanan, Compose + MVVM/MVI + Hilt ile geliştirilen, çevrimdışı müziği ve oynatma listelerini koruyan profesyonel müzik uygulaması.
+- **Mevcut kurulu APK'yı otomatik veya talimatla kaldırma yok.** Aynı paket adı (`com.aistudio.lanumusic.kpxzqa`), doğrulanmış mevcut imza, artan versionCode, SHA-256 ve Android sistem kurulumu sağlanmadan "veri kayıpsız OTA hazır" demeyin. Debug APK yalnızca test/önizlemedir.
+- YouTube: resmî Data API arama + görünür gömülü oynatıcı; indirme, ses ayıklama, DRM veya arka plan yasağını aşmak yasak. Kullanıcıya sunulan API anahtarı gizli kabul edilmez; anahtar sınırı/kota uygulanır.
+- İndirme/OTA önbelleği temizliği **hiçbir** Room veritabanını, favoriyi, yerel kimliği, playlisti veya MediaStore dosyasını silemez.
+- Üretim güvenliği: sessiz kurulum, sırların repoya yazılması, lisanssız ses ve test sonucu olmadan "tamamlandı" iddiası yasak.
+- İş sırası: Araştır → kök neden → küçük dal/PR → otomatik test/lint/R8 → bağımsız regresyon → gerekli dış erişimler → fiziksel cihaz → yayın ve indirilebilirlik → kanıtlı kapatma. P0 tamamlanmadan production-ready etiketi kullanılmaz.
+
+### Yapılanlar (kanıtlı durum)
+| Kimlik | Değişiklik | GitHub kanıtı | 20.10.2026 durumu |
+|---|---|---|---|
+| P0-01 | Android yedek/aktar kuralları için müzik DB, yerel kimlik ve tercihlere izin listesi; Room JSON şema çıktısı ve regresyon testleri | [PR #44](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/44) | MAIN'E BİRLEŞTİ; gerçek cihaz/migration matrisi açık |
+| P1-01 | Hilt DI başlangıcı, UpdateViewModel, yaşam döngüsüne duyarlı StateFlow tüketimi | [PR #46](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/46) | MAIN'E BİRLEŞTİ; tam MainViewModel geçişi açık |
+| P2-01 | Kitaplığım gerçek arşive bağlı, Arkadaşlar ekranına erişim, küçük ekran ve OTA anonsları | [PR #45](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/45) | MAIN'E BİRLEŞTİ; arkadaşlar henüz yerel önizleme |
+| QA-01 | Üç paketin birleşik ana dal CI doğrulaması | [#366 BAŞARILI](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39411353619) | BAŞARILI CI; fiziksel cihaz sonucu değildir |
+| P0-02 | YouTube Data API yanıtı için üst bellek sınırı | [PR #47](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/47), [CI #369](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39414638340) | PR AÇIK, CI SONUCU HENÜZ DOĞRULANMADI; main'e dahil değil |
+| P0-08 | Mevcut Room v3→4→5 SQL yükseltmesinin eski favori, playlist/üyelik, cache ve varsayılan metadata alanlarını koruduğu Robolectric smoke testleri | [PR #49](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/49), [CI #371](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39414966585) | PR AÇIK; CI BEKLİYOR, tarihsel tam şema fixture ve telefon yükseltmesi ayrıca açık |
+| REL-01 | [Build 366](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/tag/lanu-music-366-08589306085723ff731f2110d6f857d681b7590d) GitHub Release'te app-debug.apk ve SHA dosyası | Release asset kaydı | YAYIMLANMIŞ DEBUG; imzalı production OTA değildir |
+
+**Tarihsel düzeltme:** Alttaki 15.10.2026 "82 testten 1 başarısız" bulgusu o tarihin snapshot'ıdır; 20.10.2026 birleşik main #366 CI başarılıdır. "Son Build 348/364" eski gözlemlerini yeni Build 366 doğrulaması geçersiz kılar. Önceki raporlar silinmez.
+
+### Açık kabul kapıları ve hedef işler
+| ID | Öncelik | Geliştirme / kök risk | Bitti sayılma kanıtı | Durum |
+|---|---|---|---|---|
+| P0-03 | P0 | Kurulu APK sertifikası ve kalıcı signing secrets + SHA-256 fingerprint pinleme | Kurulu cihaz fingerprint'iyle eşleşen app-release.apk; GitHub asset/digest; secrets asla repoda yok | BLOKER — cihaz + yetkili anahtar gerekli |
+| P0-04 | P0 | Veri kayıpsız OTA ve Room eski DB sürümlerinden geçiş | Aynı cihazda silmeden upgrade, eski playlist/favori/yerel kimlik korunması, migration ve rollback test kayıtları | BLOKER — fiziksel cihaz testi |
+| P0-05 | P0 | YouTube Data API anahtarı/Android paket-sertifika yetkisi | Gerçek cihazda arama + sayfalama + kota/izin/offline ve gömülü oynatma smoke | BLOKER — harici Google yetkisi |
+| P0-06 | P0 | Firebase Crashlytics, mapping, PII güvenliği | Gerçek Firebase proje erişimi, kimlik bilgisi sızdırmadan Gradle bağlantısı, test crash ve dashboard kanıtı | BLOKER — proje erişimi |
+| P0-07 | P0 | PR #47 güvenilirlik + regresyon | 1 MiB sınır / taşma / boş gövde testleri, ilgili CI başarı, kontrollü merge | DEVAM EDİYOR |
+| P1-02 | P1 | MainViewModel ve repo/singleton sınırlarının Hilt ve Clean Architecture'a ayrılması | Küçük PR'lar, DI testleri, regressionsız CI | AÇIK |
+| P1-03 | P1 | Gerçek hesap + senkronizasyon / kullanıcı izolasyonu | Auth güvenlik modeli, çatışma senaryoları, hesap değişimi ve offline testleri | AÇIK; yerel önizleme gerçek sosyal hesap değildir |
+| P2-02 | P2 | Uygulama çapında TR/EN, light/dark, büyük yazı, TalkBack | Resource taraması, Compose UI/accessibility screenshot testleri | AÇIK |
+| P2-03 | P2 | Başlatma, RAM, akış, düşük ağ ve Android 24–36 uyumu | Tanımlı performans bütçesi + ölçüm, emülatör ve cihaz smoke | AÇIK |
+| REL-02 | P0 | Yayın kabulü: sadece debug değil kalıcı imzalı release | Signed production APK + SHA, indirilebilir GitHub Release, gerçek cihaz yükseltme sonucu | BLOKER |
+
+### İlerleme puanı: kanıta dayalı tahmini mühendislik değerlendirmesi
+Bu rakamlar ölçülmüş son-kullanıcı memnuniyeti veya yüzde tamamlanma değildir. **Ağırlıklı risk/üretim hazırlığı puanıdır; kısmi kod ve CI kanıtı vardır, cihaz/servis kanıtı olmayan alt kriterlerde puan kırılır.** Çıktı 20.10.2026 tarihli main #366'ya dayanır; PR #47 henüz sayılmaz.
+
+| Boyut | Azami | Mevcut | 90+ hedefi | Düşük puanın nedeni |
+|---|---:|---:|---:|---|
+| P0 veri, yedek, OTA güvenliği | 25 | 13 | 24 | Kurulu APK sertifikası ve göç testi kanıtsız |
+| P1 mimari ve DI | 20 | 11 | 18 | Hilt başlangıç; tam ayrım yok |
+| Özellikler, katalog ve P2 UX | 20 | 12 | 18 | Tam TR/EN, erişilebilirlik ve gerçek servis doğrulaması yok |
+| CI, test, dayanıklılık | 20 | 16 | 19 | CI başarılı ama cihaz/migration testleri eksik |
+| Yayın, Firebase, gerçek cihaz | 15 | 3 | 13 | Debug-only APK; kalıcı release/Crashlytics/device kabulü yok |
+| **Toplam** | **100** | **55/100** | **92/100** | **Hedef şartları yerine gelmeden 90+ denmez** |
+
+**Menzil:** Şimdi 55/100 (ihtiyatlı, tahmini); önce 70+ için test ve yazılım sertleştirme, sonra **90–92/100** için P0 imza+veri+YouTube+Firebase ve gerçek cihaz kabulü. Puan otomatik yükseltilmez; her satırın CI, gerçek cihaz veya servis kanıtlarıyla güncellenmesi zorunludur.
+
+### Sıradaki işlem sırası
+1. Bu durum kaydı ayrı PR ile ana dala alınır; CI/inceleme kanıtı toplanır.
+2. PR #47'deki YouTube bellek güvenilirliği için ölçülebilir sınır/regresyon testlerini tamamla ve CI başarılıysa birleştir.
+3. Room v3→4→5 veri kayıpsız migrasyon + şema fixture testleri; gerçek cihazda mevcut imzayı çıkartma sürecini belgele.
+4. Hilt/MainViewModel taşımasını sorumluluk bazlı küçük PR'larla tamamla.
+5. TR/EN/açık tema/accessibility/performance ölçümlerini ekran ekran kapat.
+6. Yetkili insanın sağlayacağı Google/Firebase ve mevcut imza bilgileri geldikten sonra gerçek cihaz OTA/Crashlytics/YouTube kabulünü tamamla; production release ve smoke kanıtını kaydet.
+
+**Kapanış disiplini:** ID + ilgili dosya + risk + PR/commit + CI linki + cihaz/API kanıtı + yayın linki + tarih olmadan hiç bir satır "BİTTİ" olarak işaretlenmez. Güncel takip: [Premium Issue #34](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/issues/34).
+
+---
+
+
 ## Değişmez çalışma kuralları
 1. Her proje için dört faz: **Faz 1 Envanter/Araştırma; Faz 2 Kök neden/Düzeltme; Faz 3 Uygulama/Build/Test; Faz 4 Doğrulama/Yayın/Üretim smoke**. Her fazda Araştır → Düzelt → Uygula → Test/Doğrula → Yayınla kapısı tamamlanır; başarısızsa yayın yapılmaz.
 2. Kritik her zincir: **Ana servis → Alternatif → Çalışan fallback → Hata yönetimi → Güvenli varsayılan → Log/izleme → Otomatik smoke testi**. AI, üçüncü taraf API, veritabanı, ödeme/kota, dosya, görsel, kimlik doğrulama, frontend/backend, APK/backend ve üretim özel kapsamdır.

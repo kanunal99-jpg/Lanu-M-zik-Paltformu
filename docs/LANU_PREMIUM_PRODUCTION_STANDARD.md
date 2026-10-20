@@ -22,12 +22,12 @@ Bu dosya kullanıcı tarafından 20.10.2026 tarihinde paylaşılan **LANU PREMIU
 | Kontrol | Durum | Kabul kanıtı |
 |---|---|---|
 | Compose ve MVVM | Kısmen mevcut | Compose UI, MainViewModel var; tam clean architecture ve Hilt geçişi denetlenmeli |
-| Hilt DI | Bekliyor | Gradle bağımlılığı ve Android application/entrypoint dönüşümü yok |
-| OTA signed release doğrulaması | Kod var, son cihaz kabulü bekliyor | GitHub API + APK SHA/signature kontrolü; kalıcı signing secrets yok |
+| Hilt DI | Kısmen entegre | PR #46 ile AGP9 uyumlu Hilt application/activity/OTA ViewModel ve temel provider kayıtları eklendi; tam MainViewModel constructor ve repository ayrımı açık |
+| OTA signed release doğrulaması | Kod var; üretim engelli | GitHub API + APK SHA-256 ve imza kontrolü var; son Release Build 366 yalnız app-debug.apk. Kurulu cihaz fingerprint, kalıcı signing secrets ve silmeden yükseltme kabulü eksik |
 | R8 + kaynak küçültme | Bu pakette etkin | CI release smoke ve mapping çıktısı başarılı olmadan kabul yok |
-| TR/EN OTA metinleri | Bu pakette eklendi | values ve values-tr; tam uygulama çevirisi ayrıca yapılmalı |
+| TR/EN OTA metinleri | OTA ekranında var, uygulamada kısmi | PR #45 OTA erişilebilirliği ve gezinme iyileştirmeleri; tam UI çevirisi ayrıca yapılmalı |
 | Sürüm notları | Bu pakette eklendi | GitHub release body üzerinden gösterilir |
-| Lint + birim testleri | CI kalite kapısı | Lint/Gradle/Robolectric işinin başarıyla tamamlanması gerekir |
+| Lint + birim testleri | Birleşik main CI #366 başarılı | https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39411353619; fiziksel cihaz ve canlı YouTube yetkisi kanıtı değildir |
 | Crashlytics | Eksik entegrasyon/kurulum incelemesi | google-services.json ve güvenli Firebase setup gerekir |
 | Android fiziksel cihaz testi | Bekliyor | Debug ile release imzalı APK geçişi, yükleme ve uygulama verisi gözlenmeli |
 | Play/AAB uyumluluğu | Yayından önce doğrulanmalı | Şimdi Play'de yayın yapılmaz |
@@ -46,3 +46,7 @@ Bu dosya kullanıcı tarafından 20.10.2026 tarihinde paylaşılan **LANU PREMIU
 * Tüm UI ekranlarının TR/EN kaynak dosyalarına taşınması ve accessibility taraması.
 * Room migration/device instrumentation/Compose UI testleri.
 * Sabit signing key ve önceki kurulu APK sertifika uyumluluğu: tamamlanıncaya kadar OTA production bloke kalır.
+
+## Güncel ilerleme defteri
+
+P0/P1/P2 PR ve release durumları, açık kabul engelleri ve 55/100 mevcut → 92/100 koşullu hedef puanlaması **[PROJE_ANAYASASI_VE_DUZELTILECEKLER.md](../PROJE_ANAYASASI_VE_DUZELTILECEKLER.md)** içinde 20.10.2026 tarihli bölümde takip edilir. Tarihsel tablolar tamamlanma kanıtı değildir.
