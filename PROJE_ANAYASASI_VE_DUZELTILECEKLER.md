@@ -2,18 +2,30 @@
 
 Bu belge mevcut ANAYASA.md, docs/ANAYASA.md, AGENTS.md ve proje belgelerini **silmez veya geçersiz kılmaz**; çelişkide daha güvenli/katı kural uygulanır, karar ADR'de belgelenir.
 
+## GÜNCEL PLATFORM HEDEFİ — 20.10.2026: TÜM ANDROID/APK UYUMLU OEM'LER
+
+**Tek marka hedefi YOK.** Önceki metinlerdeki Samsung Galaxy A55 adı yalnızca tarihsel/test cihazı örneğidir, ürün kapsamını daraltmaz. LANU Müzik, Android/API uyumlu **Samsung, Xiaomi/Redmi/POCO, Huawei Android/EMUI veya APK çalıştırabilen HarmonyOS, Honor, Oppo, Vivo, Realme, OnePlus, Motorola, Google Pixel, HMD/Nokia ve diğer üreticilerin telefon/tablet/katlanabilirlerini** hedefler. **Android APK çalıştırmayan HarmonyOS NEXT/5+** sürümleri bu APK ürününün hedefi değildir; doğal HarmonyOS app ayrıdır.
+
+- Mevcut `minSdk 24` (Android 7+), `targetSdk 36`, `compileSdk 36.1`. Android 17/API37 ileriye dönük çalışma, tablet 600dp+, ekran döndürme, çok pencere, erişilebilirlik, pil ve GMS olmayan Android testleri **kabul kapısıdır**, henüz hepsinde geçildi denmez.
+- Her değişiklik Android platform API ve özellik kontrolü üzerinden tasarlanır; `Build.MANUFACTURER` ile marka ayırarak kullanıcıya daha kötü davranış sunulmaz. Google Mobile Services zorunlu tutulmaz; yerel kullanıcı kimliği/çalma listesi/MediaStore/Media3/Room, GMS bulunmadığında da çalışmalı; Firebase/YouTube erişilemiyorsa güvenli düşüş gerekir. Gerçek cihaz testleri henüz gerekli.
+- Üretim veri-kayıpsız OTA, farklı üretici örnekleri + GMS'siz Android + tablet matrisinde sınanır. **Hiçbir cihazda uygulama silerek yükseltme yok**; imza/sertifika uyuşmazsa bloke edilir.
+- Kabul matrisi, salt okunur ADB tanılama ve CI üretici bağımsız manifest kontrolü: **[docs/ANDROID_OEM_UYUMLULUK_MATRISI.md](docs/ANDROID_OEM_UYUMLULUK_MATRISI.md)**.
+- Test dışı tüm üretici/modeller için **doğrulanmış destek iddiası yoktur**. Tek test cihazıyla 92/100 üretim puanı verilmez.
+
+---
+
 ## EK DURUM 20.10.2026 — PR #54, #55 birleştirme ve P0 #56 veri bütünlüğü
 
 Bu bölüm üstündeki eski snapshot tablolarını günceller. **PR açılması ve kod oluşturulması üretim kabulü değildir**; CI, gerçek cihaz ve servis koşulları ayrı ayrı kanıtlanır.
 
 | İş | Otomatik kanıt ve mevcut durum | Hâlâ açık sınırlar |
 |---|---|---|
-| P0 imza sertifikası parmak izi ekranı | [PR #54](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/54) main'e **birleştirildi**, [CI #387 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39419003322) | SHA-1/SHA-256 görüntülenmesi keystore özel anahtarı değildir; A55 cihaz sertifikası ve kalıcı signing key eşleştirme gerekli |
+| P0 imza sertifikası parmak izi ekranı | [PR #54](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/54) main'e **birleştirildi**, [CI #387 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39419003322) | SHA-1/SHA-256 görüntülenmesi keystore özel anahtarı değildir; Android OEM test cihazlarında sertifika ve kalıcı signing key eşleştirme gerekli |
 | P1 bozuk Room tür alanı | [PR #55](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/55) main'e **birleştirildi**, [CI #388 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39419355673) | Yalnızca okuma sırasındaki tür fallback'i; tablo/veri silinmedi |
 | P0 yerel kullanıcı arşivi yarış/veri korunması | [PR #56](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/56): uygulama içindeki farklı LocalUserLibraryBackend örneklerine ortak işlem kilidi, diske yazma onayı, bozuk JSON'u hata göstererek koruma; paralel favori/playlist ve bozuk kayıt regresyonları | **CI ve gerçek cihaz kabulü bekleniyor.** İşlem kilidi tek Android süreç kapsamındadır; bu PR kalıcı çoklu süreç / bulut senkronizasyonu garantisi değildir |
 | En son birleşik anayasa güncellemesi | [PR #53](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/53) main'e birleştirildi, [CI #380 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39417286720) | Tarihsel tablolardaki önceki PR açık/CI bekliyor satırları bu güncel kanıtlara göre değerlendirilir |
 
-**Sert üretim engelleri değişmedi:** Mevcut cihazdaki APK **kaldırılmaz**. Aynı paket adı + imza sertifikası, kalıcı yetkili keystore, GitHub signed `app-release.apk` + SHA-256, artan versionCode ve fiziksel A55 üzerinde yükleme sırasında yerel kimlik/favori/playlist/Room bütünlüğü doğrulanmadan OTA yayına hazır sayılamaz. Google YouTube Data API gerçek anahtar/kota/gömülü oynatma ve Firebase Crashlytics proje erişimi de doğrulanmalı. Debug Build, imzalı production OTA değildir.
+**Sert üretim engelleri değişmedi:** Mevcut cihazdaki APK **kaldırılmaz**. Aynı paket adı + imza sertifikası, kalıcı yetkili keystore, GitHub signed `app-release.apk` + SHA-256, artan versionCode ve seçilmiş Samsung/Xiaomi/Huawei Android/EMUI dahil fiziksel Android cihazlarda yükleme sırasında yerel kimlik/favori/playlist/Room bütünlüğü doğrulanmadan OTA yayına hazır sayılamaz. Google YouTube Data API gerçek anahtar/kota/gömülü oynatma ve Firebase Crashlytics proje erişimi de doğrulanmalı. Debug Build, imzalı production OTA değildir.
 
 **Puan etiketi:** Önceki **55/100** ihtiyatlı temel notu ayrı bir kanıtlı yeniden değerlendirme yapılıncaya kadar korunur; **92/100** hedef ve 90+ etiketi üretim engelleri kalkana kadar sadece hedef olarak tutulur.
 
@@ -24,7 +36,7 @@ Bu bölüm üstündeki eski snapshot tablolarını günceller. **PR açılması 
 > Bu tarihli bölüm **güncel durumun tek özetidir**; alttaki 15 Ekim tarihli denetim bulguları tarihsel kayıt olarak korunur. PR açılması = kod yazıldı; CI yeşil = sadece kapsanan kontroller geçti; fiziksel cihaz doğrulaması olmadan üretim kabulü yoktur. Her yeni denetimde bu tablonun tarihini, kanıt URL'lerini ve durumunu güncelleyin.
 
 ### Değişmez ürün hedefi ve güvenlik anayasası
-- LANU Müzik: Android (Samsung Galaxy A55 dahil) için güvenli, gerçek katalog/izinli ses kullanan, Compose + MVVM/MVI + Hilt ile geliştirilen, çevrimdışı müziği ve oynatma listelerini koruyan profesyonel müzik uygulaması.
+- LANU Müzik: Android uyumlu OEM telefon, tablet ve katlanabilirler için güvenli, gerçek katalog/izinli ses kullanan, Compose + MVVM/MVI + Hilt ile geliştirilen, çevrimdışı müziği ve oynatma listelerini koruyan profesyonel müzik uygulaması.
 - **Mevcut kurulu APK'yı otomatik veya talimatla kaldırma yok.** Aynı paket adı (`com.aistudio.lanumusic.kpxzqa`), doğrulanmış mevcut imza, artan versionCode, SHA-256 ve Android sistem kurulumu sağlanmadan "veri kayıpsız OTA hazır" demeyin. Debug APK yalnızca test/önizlemedir.
 - YouTube: resmî Data API arama + görünür gömülü oynatıcı; indirme, ses ayıklama, DRM veya arka plan yasağını aşmak yasak. Kullanıcıya sunulan API anahtarı gizli kabul edilmez; anahtar sınırı/kota uygulanır.
 - İndirme/OTA önbelleği temizliği **hiçbir** Room veritabanını, favoriyi, yerel kimliği, playlisti veya MediaStore dosyasını silemez.
@@ -93,7 +105,7 @@ Aşağıdaki kayıt üstteki ilk 20.10.2026 snapshot'ının **sonradan gerçekle
 |---|---|---|
 | P0 YouTube API bellek güvenliği | [PR #47](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/47), [CI #369](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39414638340), [birleşik main CI #374](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416149260) | BİRLEŞTİ, CI BAŞARILI; gerçek cihaz arama/API yetkisi ayrıca açık |
 | Anayasa/üretim puan matrisi | [PR #48](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/48), [CI #372](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39415046897) | BİRLEŞTİ, CI BAŞARILI |
-| P0 Room v3→4→5 SQL data-retention smoke | [PR #49](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/49), [CI #371](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39414966585) | BİRLEŞTİ, CI BAŞARILI; eski gerçek schema fixture ve A55 migration smoke AÇIK |
+| P0 Room v3→4→5 SQL data-retention smoke | [PR #49](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/49), [CI #371](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39414966585) | BİRLEŞTİ, CI BAŞARILI; eski gerçek schema fixture ve çok üreticili Android migration smoke AÇIK |
 | P1 MainViewModel Hilt constructor injection | [PR #50](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/50), [ilk CI #373](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416105739) | İlk CI'de runtime annotation introspection test tasarımı hatalıydı; düzeltme commit'i mevcut, [yeniden CI #378](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416992088) henüz kabul edilmedi |
 | P2 Kitaplığım deep-link yönlendirmesi | [PR #51](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/51), [CI #375](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416301638) | Kod ve test PR'da; CI ve cihaz kabulü açık |
 | P2 alt menü TR/EN yerelleştirme | [PR #52](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/52), [CI #377](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416875623) | Kod ve iki dil testi PR'da; CI açık |
