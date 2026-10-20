@@ -109,6 +109,49 @@ class UserLibraryServiceTest {
         assertTrue(service.addFavorite("unauthorized") is AuthResult.Failure)
     }
 
+
+    @Test
+    fun accountSwitchDoesNotPublishNewIdentityWithPreviousUsersFavorites() = runTest {
+        val auth = object : AuthBackend {
+            var current: AuthSession? = null
+            var index = 0
+            override suspend fun currentSession(): AuthSession? = current
+            override suspend fun signIn(identifier: String, secret: String): AuthResult {
+                val identity = AuthSession("user-${++index}", identifier, null, AuthProvider.LOCAL, 1L)
+                current = identity
+                return AuthResult.Success(identity)
+            }
+            override suspend fun signOut(): AuthResult {
+                val old = current ?: return AuthResult.Failure(AuthFailure.UNKNOWN, "none")
+                current = null
+                return AuthResult.Success(old)
+            }
+        }
+        val delegate = InMemoryLibraryBackend()
+        val started = CompletableDeferred<Unit>()
+        val unblock = CompletableDeferred<Unit>()
+        val blocked = object : com.example.data.UserLibraryBackend by delegate {
+            override suspend fun snapshot(userId: String): com.example.data.UserLibrarySnapshot {
+                if (userId == "user-2") {
+                    started.complete(Unit)
+                    unblock.await()
+                }
+                return delegate.snapshot(userId)
+            }
+        }
+        val service = UserLibraryService(auth, blocked)
+        assertTrue(service.signIn("first", "secret") is AuthResult.Success)
+        assertTrue(service.addFavorite("private-first") is AuthResult.Success)
+        val switching = async { service.signIn("second", "secret") }
+        started.await()
+        assertEquals("user-1", service.session.value?.userId)
+        assertEquals(listOf("private-first"), service.snapshot.value?.favorites?.map { it.songId })
+        unblock.complete(Unit)
+        assertTrue(switching.await() is AuthResult.Success)
+        assertEquals("user-2", service.session.value?.userId)
+        assertTrue(service.snapshot.value?.favorites.orEmpty().isEmpty())
+    }
+
     private open class LocalUserLibraryBackendForTest : com.example.data.UserLibraryBackend {
         private val delegate = InMemoryLibraryBackend()
         override suspend fun snapshot(userId: String) = delegate.snapshot(userId)
