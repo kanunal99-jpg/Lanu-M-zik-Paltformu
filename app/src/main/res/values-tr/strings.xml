@@ -26,6 +26,11 @@
     <string name="ota_channel">Yayın kanalı: %1$s</string>
     <string name="lanu_open_friends_preview">Arkadaşlar (yerel önizleme)</string>
     <string name="lanu_friends_back">Hesabıma dön</string>
+    <string name="nav_home">Ana Sayfa</string>
+    <string name="nav_search">Keşfet</string>
+    <string name="nav_library">Kitaplığım</string>
+    <string name="nav_account">Hesabım</string>
+    <string name="nav_updates">Güncelleme Kontrol</string>
     <string name="ota_installed_certificate_title">Kurulu uygulamanın imza sertifikası</string>
     <string name="ota_installed_certificate_sha256">SHA-256: %1$s</string>
     <string name="ota_installed_certificate_sha1">SHA-1: %1$s</string>
