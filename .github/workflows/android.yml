@@ -7,6 +7,14 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+# Avoid wasting CI on stale PR commits, but NEVER cancel published builds.
+concurrency:
+  group: lanu-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build, Test & Package Android App
@@ -85,10 +93,39 @@ jobs:
           else
             echo "Jamendo commercial license gate: DISABLED (safe default); Audius is the default full-stream catalog."
           fi
+      - name: Android Lint quality gate
+        run: gradle lintDebug --stacktrace
       - name: Run Unit & Robolectric Tests
         run: gradle testDebugUnitTest --stacktrace
       - name: Assemble Debug APK
         run: gradle assembleDebug --stacktrace
+      - name: Release R8, resource shrinking and signature smoke build
+        shell: bash
+        run: |
+          set -euo pipefail
+          temporary="$(mktemp -d "${RUNNER_TEMP}/lanu-r8-smoke-XXXXXX")"
+          trap 'rm -rf "${temporary}"' EXIT
+          keytool -genkeypair -noprompt \
+            -alias ci-smoke -keyalg RSA -keysize 3072 -validity 2 \
+            -dname "CN=LANU CI smoke only" \
+            -keystore "${temporary}/lanu-ci.jks" \
+            -storepass "temporary-ci-smoke-2026" -keypass "temporary-ci-smoke-2026"
+          KEYSTORE_PATH="${temporary}/lanu-ci.jks" \
+          STORE_PASSWORD="temporary-ci-smoke-2026" \
+          KEY_PASSWORD="temporary-ci-smoke-2026" \
+          KEY_ALIAS="ci-smoke" \
+          gradle --no-daemon assembleRelease --stacktrace
+          apk="app/build/outputs/apk/release/app-release.apk"
+          mapping="app/build/outputs/mapping/release/mapping.txt"
+          [[ -s "${apk}" && -s "${mapping}" ]]
+          signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          "${signer}" verify --verbose "${apk}"
+          aapt="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          package="$("${aapt}" dump badging "${apk}" | grep "^package: " | head -n 1)"
+          [[ "${package}" == *"name='com.aistudio.lanumusic.kpxzqa'"* ]]
+          [[ "${package}" == *"versionCode='${GITHUB_RUN_NUMBER}'"* ]]
+          echo "R8, shrinking, APK signing and version identity smoke checks passed."
+
       - name: Generate APK SHA-256
         shell: bash
         run: sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
