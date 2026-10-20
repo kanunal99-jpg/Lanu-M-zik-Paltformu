@@ -39,13 +39,25 @@ class InFlightDownloadRegistryTest {
         assertTrue(registry.release("song", newer))
     }
 
-    @Test fun differentSongsCanDownloadConcurrently() {
+    @Test fun cancelKeepsGlobalOwnershipUntilCoroutineFinishesCleanup() {
         val registry = InFlightDownloadRegistry()
-        assertTrue(registry.register("one", Job()))
-        assertTrue(registry.register("two", Job()))
+        val first = Job()
+        val second = Job()
+        assertTrue(registry.register("one", first))
+        assertTrue(registry.register("two", second))
         registry.cancelAll()
-        assertTrue(registry.register("one", Job()))
-        assertTrue(registry.register("two", Job()))
+        assertTrue(first.isCancelled)
+        assertTrue(second.isCancelled)
+        // A cancelled coroutine can still be finishing its disk cleanup.
+        assertFalse(registry.register("one", Job()))
+        assertTrue(registry.release("one", first))
+        assertTrue(registry.release("two", second))
+        val retryOne = Job()
+        val retryTwo = Job()
+        assertTrue(registry.register("one", retryOne))
+        assertTrue(registry.register("two", retryTwo))
+        assertTrue(registry.release("one", retryOne))
+        assertTrue(registry.release("two", retryTwo))
     }
 
     @Test fun separateDownloadManagersStillCannotOverwriteTheSameOfflineTrack() {
