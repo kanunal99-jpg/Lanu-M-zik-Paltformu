@@ -351,8 +351,8 @@ interface MusicDao {
 fun CachedSongEntity.toSong(): Song {
     val cat = try {
         MusicCategory.valueOf(categoryName)
-    } catch (e: Exception) {
-        MusicCategory.TURKCE_POP
+    } catch (_: IllegalArgumentException) {
+        MusicCategory.OTHER
     }
     return Song(
         id = id,
@@ -428,8 +428,8 @@ fun Song.toLocalEntity(
 fun LocalSongEntity.toSong(): Song {
     val cat = try {
         MusicCategory.valueOf(categoryName)
-    } catch (e: Exception) {
-        MusicCategory.TURKCE_POP
+    } catch (_: IllegalArgumentException) {
+        MusicCategory.OTHER
     }
     return Song(
         id = id,
