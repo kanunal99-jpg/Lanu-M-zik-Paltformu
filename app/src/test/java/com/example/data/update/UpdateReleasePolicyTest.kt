@@ -1,5 +1,7 @@
 package com.example.data.update
 
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -8,50 +10,62 @@ import java.io.IOException
 class UpdateReleasePolicyTest {
     private val sha = "a".repeat(40)
     private val base = "https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases"
-    private fun entry(version: Int, signed: Boolean = true, malicious: Boolean = false): String {
+
+    private fun entry(version: Int, signed: Boolean = true, malicious: Boolean = false): JSONObject {
         val tag = "lanu-music-" + version + "-" + sha
         val prefix = if (malicious) "https://evil.example/download/" else base + "/download/" + tag + "/"
-        val assets = if (signed) {
-            """[{"name":"app-release.apk","browser_download_url":"""" +
-                prefix + """app-release.apk","size":25000000},{"name":"app-release.apk.sha256","browser_download_url":"""" +
-                prefix + """app-release.apk.sha256","size":100}]"""
+        fun asset(name: String, bytes: Long) = JSONObject()
+            .put("name", name)
+            .put("browser_download_url", prefix + name)
+            .put("size", bytes)
+        val assets = JSONArray()
+        if (signed) {
+            assets.put(asset("app-release.apk", 25000000))
+            assets.put(asset("app-release.apk.sha256", 100))
         } else {
-            """[{"name":"app-debug.apk","browser_download_url":"""" +
-                prefix + """app-debug.apk","size":25000000}]"""
+            assets.put(asset("app-debug.apk", 25000000))
         }
-        return """{"tag_name":"""" + tag + """","html_url":"""" + base + "/tag/" + tag +
-            """","draft":false,"prerelease":false,"assets":""" + assets + "}"
+        return JSONObject()
+            .put("tag_name", tag)
+            .put("html_url", base + "/tag/" + tag)
+            .put("draft", false)
+            .put("prerelease", false)
+            .put("assets", assets)
     }
 
+    private fun list(vararg releases: JSONObject) = JSONArray().apply {
+        releases.forEach { put(it) }
+    }.toString()
+
     @Test fun newerSignedReleaseIsAvailable() {
-        val result = UpdateReleasePolicy.choose("[" + entry(340) + "]", 339)
+        val result = UpdateReleasePolicy.choose(list(entry(340)), 339)
         assertTrue(result is UpdateAvailability.Available)
         assertEquals(340, (result as UpdateAvailability.Available).release.versionCode)
     }
 
     @Test fun neverInstallsDebugOrPreviewAsOta() {
         assertEquals(UpdateAvailability.AwaitingSignedRelease,
-            UpdateReleasePolicy.choose("[" + entry(345, signed = false) + "]", 339))
+            UpdateReleasePolicy.choose(list(entry(345, signed = false)), 339))
     }
 
     @Test fun olderReleaseDoesNotTriggerUpdate() {
-        assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose("[" + entry(339) + "]", 339))
-        assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose("[" + entry(338) + "]", 339))
+        assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose(list(entry(339)), 339))
+        assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose(list(entry(338)), 339))
     }
 
     @Test fun maliciousUrlIsRejectedEvenWithRealTag() {
         assertEquals(UpdateAvailability.AwaitingSignedRelease,
-            UpdateReleasePolicy.choose("[" + entry(350, malicious = true) + "]", 339))
+            UpdateReleasePolicy.choose(list(entry(350, malicious = true)), 339))
     }
 
     @Test fun choosesNewestAvailableSignedReleaseRatherThanDebugBuild() {
-        val releases = "[" + entry(345, signed = false) + "," + entry(344) + "," + entry(343) + "]"
+        val releases = list(entry(345, signed = false), entry(344), entry(343))
         val result = UpdateReleasePolicy.choose(releases, 340) as UpdateAvailability.Available
         assertEquals(344, result.release.versionCode)
     }
 
     @Test fun malformedTagsAreNeverConsidered() {
-        val invalid = """[{"tag_name":"v999","html_url":"https://example.com","assets":[]}]"""
+        val invalid = JSONArray().put(JSONObject().put("tag_name", "v999").put("assets", JSONArray())).toString()
         assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose(invalid, 340))
     }
 
