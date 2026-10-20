@@ -2,6 +2,9 @@ package com.example.data
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
@@ -37,6 +40,21 @@ class RepositoryOwnershipLifecycleTest {
         } finally {
             older.shutdown()
         }
+        assertNull(RepositoryRegistry.repository)
+    }
+
+    @Test fun shutdownCancelsRepositoryOwnedCoroutineJob() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = MusicRepository(context)
+        val scopeField = MusicRepository::class.java.getDeclaredField("scope").apply { isAccessible = true }
+        val scope = scopeField.get(repo) as CoroutineScope
+        val job = checkNotNull(scope.coroutineContext[Job])
+        try {
+            assertTrue(job.isActive)
+        } finally {
+            repo.shutdown()
+        }
+        assertTrue(job.isCancelled)
         assertNull(RepositoryRegistry.repository)
     }
 }
