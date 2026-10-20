@@ -81,4 +81,43 @@ class OtaSessionStoreTest {
         prefs.edit().putString("sha256", "not-a-sha256").commit()
         assertNull(sessions.restore(344))
     }
+
+    @Test fun rejectsMismatchedTagVersionWithoutOverwritingLastVerifiedSession() {
+        val valid = release(345)
+        sessions.save(valid, "c".repeat(64))
+        val mismatched = valid.copy(versionCode = 346)
+        org.junit.Assert.assertTrue(
+            runCatching { sessions.save(mismatched, "d".repeat(64)) }.isFailure
+        )
+        assertEquals(345, sessions.restore(344)?.release?.versionCode)
+        assertEquals("c".repeat(64), sessions.restore(344)?.expectedSha256)
+    }
+
+    @Test fun refusesUntrustedUrlsOversizeAndInvalidGitHubDigestBeforeWriting() {
+        val valid = release(345)
+        sessions.save(valid, "c".repeat(64))
+        val tampered = listOf(
+            valid.copy(apkUrl = "https://evil.example/app-release.apk"),
+            valid.copy(sha256Url = "https://evil.example/app-release.apk.sha256"),
+            valid.copy(pageUrl = "https://evil.example/releases"),
+            valid.copy(sizeBytes = 0L),
+            valid.copy(sizeBytes = 201L * 1024L * 1024L),
+            valid.copy(githubDigest = "invalid")
+        )
+        for (candidate in tampered) {
+            org.junit.Assert.assertTrue(candidate.toString(),
+                runCatching { sessions.save(candidate, "d".repeat(64)) }.isFailure)
+        }
+        val restored = sessions.restore(344)
+        assertEquals(valid, restored?.release)
+        assertEquals("c".repeat(64), restored?.expectedSha256)
+    }
+
+    @Test fun invalidExpectedShaDoesNotClobberPreviousResumeHint() {
+        sessions.save(release(345), "c".repeat(64))
+        org.junit.Assert.assertTrue(
+            runCatching { sessions.save(release(346), "not-a-hash") }.isFailure
+        )
+        assertEquals(345, sessions.restore(344)?.release?.versionCode)
+    }
 }
