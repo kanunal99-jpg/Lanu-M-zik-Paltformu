@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Logout
@@ -29,6 +30,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +60,7 @@ fun AccountHistoryScreen(
     allSongs: List<Song>,
     onPlaySong: (Song, List<Song>) -> Unit,
     onSignOut: () -> Unit,
+    onOpenFriends: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val songsById = allSongs.associateBy { it.id }
@@ -103,6 +107,15 @@ fun AccountHistoryScreen(
                     }
                 }
             }
+        }
+
+        Button(
+            onClick = onOpenFriends,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.lanu_open_friends_preview))
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
