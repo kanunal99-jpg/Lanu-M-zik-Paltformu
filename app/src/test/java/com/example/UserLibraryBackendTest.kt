@@ -4,6 +4,11 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.LocalUserLibraryBackend
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -133,5 +138,68 @@ class UserLibraryBackendTest {
 
         assertTrue(backend.snapshot("user-a").history.isEmpty())
         assertEquals(listOf("song-b"), backend.snapshot("user-b").history.map { it.songId })
+    }
+
+    @Test
+    fun `concurrent favorites from multiple backend instances retain every item`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val instances = List(3) { LocalUserLibraryBackend(context) }
+        coroutineScope {
+            (0 until 32).map { index ->
+                async(Dispatchers.Default) {
+                    instances[index % instances.size].addFavorite("user-a", "song-$index", nowMs = index.toLong())
+                }
+            }.awaitAll()
+        }
+        val observed = LocalUserLibraryBackend(context).snapshot("user-a")
+        assertEquals(32, observed.favorites.size)
+        assertEquals((0 until 32).map { "song-$it" }.toSet(), observed.favorites.map { it.songId }.toSet())
+    }
+
+    @Test
+    fun `simultaneous playlist insertions do not lose each other`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val first = LocalUserLibraryBackend(context)
+        val second = LocalUserLibraryBackend(context)
+        val playlist = first.createPlaylist("user-a", "Kayıpsız Liste", nowMs = 4L)
+        coroutineScope {
+            (0 until 18).map { index ->
+                async(Dispatchers.Default) {
+                    (if (index % 2 == 0) first else second).addSongToPlaylist(
+                        "user-a", playlist.id, "song-$index", nowMs = (index + 10).toLong()
+                    )
+                }
+            }.awaitAll()
+        }
+        val saved = LocalUserLibraryBackend(context).snapshot("user-a").playlists.single()
+        assertEquals(18, saved.songIds.size)
+        assertEquals((0 until 18).map { "song-$it" }.toSet(), saved.songIds.toSet())
+    }
+
+    @Test
+    fun `corrupt favorites fail closed and never overwrite original preference`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("lanu_user_library", Context.MODE_PRIVATE)
+        val original = "{broken favorites JSON"
+        assertTrue(prefs.edit().putString("favorites::user-a", original).commit())
+        val error = runCatching { backend.addFavorite("user-a", "new-song") }.exceptionOrNull()
+        assertTrue(error is IOException)
+        assertEquals(original, prefs.getString("favorites::user-a", null))
+        // A broken account's data cannot silently erase another user's records.
+        backend.addFavorite("user-b", "safe-song")
+        assertEquals(listOf("safe-song"), backend.snapshot("user-b").favorites.map { it.songId })
+    }
+
+    @Test
+    fun `corrupt playlists or history never become an empty saved library`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("lanu_user_library", Context.MODE_PRIVATE)
+        val invalid = "invalid JSON"
+        assertTrue(prefs.edit().putString("playlists::user-a", invalid).commit())
+        assertTrue(runCatching { backend.createPlaylist("user-a", "Yeni") }.exceptionOrNull() is IOException)
+        assertEquals(invalid, prefs.getString("playlists::user-a", null))
+        assertTrue(prefs.edit().remove("playlists::user-a").putString("history::user-a", invalid).commit())
+        assertTrue(runCatching { backend.recordPlay("user-a", "song-1") }.exceptionOrNull() is IOException)
+        assertEquals(invalid, prefs.getString("history::user-a", null))
     }
 }
