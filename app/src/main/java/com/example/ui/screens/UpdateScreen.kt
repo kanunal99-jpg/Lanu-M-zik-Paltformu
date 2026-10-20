@@ -46,7 +46,9 @@ import com.example.update.UpdateViewModel
 fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
     val context = LocalContext.current
     val state by updates.screen.collectAsState()
-    LaunchedEffect(Unit) { updates.checkForUpdates() }
+    LaunchedEffect(Unit) {
+        if (updates.screen.value is UpdateScreenState.Idle) updates.checkForUpdates()
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().background(LanuDarkBg)
