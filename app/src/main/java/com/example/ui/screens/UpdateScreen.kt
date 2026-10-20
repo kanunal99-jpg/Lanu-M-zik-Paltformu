@@ -23,7 +23,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +47,7 @@ import com.example.update.UpdateViewModel
 @Composable
 fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
     val context = LocalContext.current
-    val state by updates.screen.collectAsState()
+    val state by updates.screen.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         if (updates.screen.value is UpdateScreenState.Idle) updates.checkForUpdates()
     }
@@ -57,86 +59,90 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
             .testTag("update_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Güncelleme Kontrol", color = LanuTextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
+        Text(stringResource(R.string.ota_title), color = LanuTextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
         Card(
             colors = CardDefaults.cardColors(containerColor = LanuDarkSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = LanuGreen)
-                Text("LANU Müzik", color = LanuTextPrimary, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text("Yüklü sürüm: " + updates.installedVersion + " (" + updates.installedCode + ")",
+                Text(stringResource(R.string.app_name), color = LanuTextPrimary, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(stringResource(R.string.ota_installed_version, updates.installedVersion, updates.installedCode),
                     color = LanuTextMuted, fontSize = 13.sp, modifier = Modifier.testTag("installed_version"))
-                Text("Güncellemeler resmî LANU GitHub Releases kanalından denetlenir.",
+                Text(stringResource(R.string.ota_release_source),
                     color = LanuTextMuted, fontSize = 12.sp)
             }
         }
         when (val current = state) {
             UpdateScreenState.Idle, UpdateScreenState.Checking -> {
                 CircularProgressIndicator(color = LanuGreen)
-                Text("Yeni sürüm denetleniyor…", color = LanuTextPrimary, modifier = Modifier.testTag("update_checking"))
+                Text(stringResource(R.string.ota_checking), color = LanuTextPrimary, modifier = Modifier.testTag("update_checking"))
             }
             UpdateScreenState.UpToDate -> {
-                Text("Yüklü sürüm için daha yeni yayın bulunamadı.", color = LanuTextPrimary,
+                Text(stringResource(R.string.ota_up_to_date), color = LanuTextPrimary,
                     modifier = Modifier.testTag("update_up_to_date"))
             }
             UpdateScreenState.WaitingForSignedApk -> {
-                Text("Yeni sürüm kaydı var ancak güvenli, imzalı güncelleme APK'sı henüz yayımlanmadı.",
+                Text(stringResource(R.string.ota_waiting_signed),
                     color = LanuTextPrimary, modifier = Modifier.testTag("update_no_signed_apk"))
-                Text("Önizleme/debug APK dosyalarını otomatik güncelleme olarak kurmuyoruz. " +
-                    "Kişisel verilerin korunması için aynı imzayla üretilmiş yayın gerekir.",
+                Text(stringResource(R.string.ota_waiting_signed_detail),
                     color = LanuTextMuted, fontSize = 13.sp)
             }
             is UpdateScreenState.Available -> {
-                Text("Yeni sürüm bulundu: Build " + current.release.versionCode,
+                Text(stringResource(R.string.ota_update_available, current.release.versionCode),
                     color = LanuGreen, fontWeight = FontWeight.Bold,
                     modifier = Modifier.testTag("update_available"))
-                Text("Dosya boyutu: " + (current.release.sizeBytes / (1024 * 1024)) + " MB",
+                Text(stringResource(R.string.ota_size_mb, current.release.sizeBytes / (1024 * 1024)),
                     color = LanuTextMuted)
+                if (current.release.notes.isNotBlank()) {
+                    Text(stringResource(R.string.ota_release_notes), color = LanuTextPrimary,
+                        fontWeight = FontWeight.SemiBold)
+                    Text(current.release.notes, color = LanuTextMuted, fontSize = 12.sp)
+                }
                 Button(
                     onClick = updates::downloadUpdate,
                     modifier = Modifier.fillMaxWidth().testTag("download_update")
-                ) { Text("Güncellemeyi indir ve doğrula") }
+                ) { Text(stringResource(R.string.ota_download_verify)) }
             }
             is UpdateScreenState.Downloading -> {
-                Text("Güncelleme indiriliyor: %" + current.progress, color = LanuTextPrimary)
+                Text(stringResource(R.string.ota_downloading, current.progress), color = LanuTextPrimary)
                 LinearProgressIndicator(
                     progress = { current.progress / 100f },
                     modifier = Modifier.fillMaxWidth().testTag("update_progress"),
                     color = LanuGreen
                 )
-                Text("APK indirildikten sonra SHA-256, paket kimliği, sürüm ve imza denetlenecek.",
+                Text(stringResource(R.string.ota_verify_description),
                     color = LanuTextMuted, fontSize = 12.sp)
-                Text("Bağlantı kesilirse indirme daha sonra güvenli biçimde devam edebilir.",
+                Text(stringResource(R.string.ota_resume_hint),
                     color = LanuTextMuted, fontSize = 12.sp)
                 OutlinedButton(
                     onClick = updates::cancelDownload,
                     modifier = Modifier.fillMaxWidth().testTag("cancel_ota_download")
-                ) { Text("İndirmeyi durdur") }
+                ) { Text(stringResource(R.string.ota_cancel)) }
             }
             UpdateScreenState.VerifyingInstaller -> {
                 CircularProgressIndicator(color = LanuGreen)
-                Text("APK imzası ve kurulum güvenliği yeniden doğrulanıyor…",
+                Text(stringResource(R.string.ota_verifying_install),
                     color = LanuTextPrimary, modifier = Modifier.testTag("ota_verifying_install"))
             }
             is UpdateScreenState.Cancelling -> {
                 CircularProgressIndicator(color = LanuGreen)
-                Text("İndirme güvenli şekilde durduruluyor…", color = LanuTextPrimary,
+                Text(stringResource(R.string.ota_cancelling), color = LanuTextPrimary,
                     modifier = Modifier.testTag("update_cancelling"))
             }
             is UpdateScreenState.ReadyToInstall -> {
-                Text("Güncelleme indirildi ve doğrulandı.", color = LanuGreen,
+                Text(stringResource(R.string.ota_verified), color = LanuGreen,
                     fontWeight = FontWeight.Bold, modifier = Modifier.testTag("update_verified"))
                 Text(
                     if (current.permissionsNeeded)
-                        "Android'in 'Bu kaynaktan yüklemeye izin ver' ayarını açıp buraya dönün."
-                    else "Kurulum için Android'in onay ekranı açılacak. Mevcut uygulamayı kaldırmayın.",
+                        stringResource(R.string.ota_permission_needed)
+                    else stringResource(R.string.ota_install_confirm),
                     color = LanuTextPrimary
                 )
                 Button(
                     onClick = { updates.requestInstall(context) },
                     modifier = Modifier.fillMaxWidth().testTag("install_verified_update")
-                ) { Text("Güncellemeyi yükle") }
+                ) { Text(stringResource(R.string.ota_install)) }
             }
             is UpdateScreenState.Failed -> {
                 Text(current.reason, color = LanuTextPrimary, modifier = Modifier.testTag("update_error"))
@@ -146,17 +152,16 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
             onClick = updates::checkForUpdates,
             enabled = state !is UpdateScreenState.Checking && state !is UpdateScreenState.Downloading && state !is UpdateScreenState.Cancelling && state !is UpdateScreenState.VerifyingInstaller,
             modifier = Modifier.fillMaxWidth().testTag("check_updates")
-        ) { Text("Güncellemeleri denetle") }
+        ) { Text(stringResource(R.string.ota_check_button)) }
 
         Spacer(Modifier.height(4.dp))
         Icon(Icons.Default.Security, contentDescription = null, tint = LanuGreen)
         Text(
-            "LANU hiçbir zaman uygulamayı sessizce kaldırmaz. Android'in kurulum onayı ve " +
-                "aynı imza zorunludur. Debug/önizleme sürümleri farklı imzalıysa veri kaybını önlemek için güncelleme engellenir.",
+            stringResource(R.string.ota_legal_description),
             color = LanuTextMuted, fontSize = 12.sp
         )
         Text(
-            "Yayın kanalı: " + UpdateReleasePolicy.releasesPage,
+            stringResource(R.string.ota_channel, UpdateReleasePolicy.releasesPage),
             color = LanuTextMuted, fontSize = 11.sp
         )
     }
