@@ -1,6 +1,12 @@
 package com.example.data
 
 import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.IOException
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -68,7 +74,17 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         Context.MODE_PRIVATE
     )
 
-    override suspend fun snapshot(userId: String): UserLibrarySnapshot {
+    // Process-wide because UI/service can construct separate backend instances for the
+    // SAME named preferences. Each read-modify-write must be atomic.
+    private suspend fun <T> transaction(block: () -> T): T =
+        withContext(Dispatchers.IO) { libraryWriteMutex.withLock { block() } }
+
+    // Do not acknowledge user data saves before Android confirms persistence.
+    private fun SharedPreferences.Editor.persist() {
+        if (!commit()) throw IOException("Yerel müzik arşivi diske kaydedilemedi.")
+    }
+
+    override suspend fun snapshot(userId: String): UserLibrarySnapshot = transaction {
         requireValidUserId(userId)
         return UserLibrarySnapshot(
             userId = userId,
@@ -78,14 +94,14 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         )
     }
 
-    override suspend fun addFavorite(userId: String, songId: String, nowMs: Long) {
+    override suspend fun addFavorite(userId: String, songId: String, nowMs: Long) = transaction {
         requireValidUserId(userId)
         require(songId.isNotBlank()) { "songId boş olamaz" }
         val favorites = readFavorites(userId).filterNot { it.songId == songId } + FavoriteRecord(songId, nowMs)
         writeFavorites(userId, favorites.sortedByDescending { it.addedAtMs })
     }
 
-    override suspend fun removeFavorite(userId: String, songId: String) {
+    override suspend fun removeFavorite(userId: String, songId: String) = transaction {
         requireValidUserId(userId)
         writeFavorites(userId, readFavorites(userId).filterNot { it.songId == songId })
     }
@@ -95,7 +111,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         name: String,
         description: String,
         nowMs: Long
-    ): PlaylistRecord {
+    ): PlaylistRecord = transaction {
         requireValidUserId(userId)
         require(name.isNotBlank()) { "Playlist adı boş olamaz" }
         val playlist = PlaylistRecord(
@@ -107,10 +123,10 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
             songIds = emptyList()
         )
         writePlaylists(userId, readPlaylists(userId) + playlist)
-        return playlist
+        return@transaction playlist
     }
 
-    override suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long) {
+    override suspend fun renamePlaylist(userId: String, playlistId: String, name: String, nowMs: Long) = transaction {
         requireValidUserId(userId)
         require(name.isNotBlank()) { "Playlist adı boş olamaz" }
         val playlists = readPlaylists(userId)
@@ -124,15 +140,15 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         )
     }
 
-    override suspend fun reorderPlaylist(userId: String, playlistId: String, fromIndex: Int, toIndex: Int, nowMs: Long) {
+    override suspend fun reorderPlaylist(userId: String, playlistId: String, fromIndex: Int, toIndex: Int, nowMs: Long) = transaction {
         requireValidUserId(userId)
         val playlists = readPlaylists(userId)
         val target = playlists.firstOrNull { it.id == playlistId }
             ?: error("Playlist bulunamadı: $playlistId")
-        if (target.songIds.isEmpty()) return
+        if (target.songIds.isEmpty()) return@transaction
         require(fromIndex in target.songIds.indices) { "fromIndex geçersiz" }
         require(toIndex in target.songIds.indices) { "toIndex geçersiz" }
-        if (fromIndex == toIndex) return
+        if (fromIndex == toIndex) return@transaction
         val reorderedSongs = target.songIds.toMutableList().apply {
             add(toIndex, removeAt(fromIndex))
         }
@@ -140,12 +156,12 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         writePlaylists(userId, playlists.map { if (it.id == playlistId) updated else it })
     }
 
-    override suspend fun deletePlaylist(userId: String, playlistId: String) {
+    override suspend fun deletePlaylist(userId: String, playlistId: String) = transaction {
         requireValidUserId(userId)
         writePlaylists(userId, readPlaylists(userId).filterNot { it.id == playlistId })
     }
 
-    override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) {
+    override suspend fun addSongToPlaylist(userId: String, playlistId: String, songId: String, nowMs: Long) = transaction {
         requireValidUserId(userId)
         require(songId.isNotBlank()) { "songId boş olamaz" }
         val playlists = readPlaylists(userId)
@@ -158,7 +174,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         writePlaylists(userId, playlists.map { if (it.id == playlistId) updated else it })
     }
 
-    override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) {
+    override suspend fun removeSongFromPlaylist(userId: String, playlistId: String, songId: String) = transaction {
         requireValidUserId(userId)
         val playlists = readPlaylists(userId)
         writePlaylists(
@@ -172,21 +188,21 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         )
     }
 
-    override suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long) {
+    override suspend fun recordPlay(userId: String, songId: String, playedAtMs: Long) = transaction {
         requireValidUserId(userId)
         require(songId.isNotBlank()) { "songId boş olamaz" }
         val history = listOf(HistoryRecord(songId, playedAtMs)) + readHistory(userId).filterNot { it.songId == songId }
         writeHistory(userId, history.take(MAX_HISTORY_ITEMS))
     }
 
-    override suspend fun clearHistory(userId: String) {
+    override suspend fun clearHistory(userId: String) = transaction {
         requireValidUserId(userId)
-        preferences.edit().remove(historyKey(userId)).apply()
+        preferences.edit().remove(historyKey(userId)).persist()
     }
 
-    override suspend fun clearUser(userId: String) {
+    override suspend fun clearUser(userId: String) = transaction {
         requireValidUserId(userId)
-        preferences.edit().remove(favoritesKey(userId)).remove(playlistsKey(userId)).remove(historyKey(userId)).apply()
+        preferences.edit().remove(favoritesKey(userId)).remove(playlistsKey(userId)).remove(historyKey(userId)).persist()
     }
 
     private fun readFavorites(userId: String): List<FavoriteRecord> = runCatching {
@@ -202,7 +218,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         favorites.forEach {
             array.put(JSONObject().put("songId", it.songId).put("addedAtMs", it.addedAtMs))
         }
-        preferences.edit().putString(favoritesKey(userId), array.toString()).apply()
+        preferences.edit().putString(favoritesKey(userId), array.toString()).persist()
     }
 
     private fun readPlaylists(userId: String): List<PlaylistRecord> = runCatching {
@@ -235,7 +251,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
                     .put("songIds", songArray)
             )
         }
-        preferences.edit().putString(playlistsKey(userId), array.toString()).apply()
+        preferences.edit().putString(playlistsKey(userId), array.toString()).persist()
     }
 
     private fun readHistory(userId: String): List<HistoryRecord> = runCatching {
@@ -251,7 +267,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         history.take(MAX_HISTORY_ITEMS).forEach {
             array.put(JSONObject().put("songId", it.songId).put("playedAtMs", it.playedAtMs))
         }
-        preferences.edit().putString(historyKey(userId), array.toString()).apply()
+        preferences.edit().putString(historyKey(userId), array.toString()).persist()
     }
 
     private fun requireValidUserId(userId: String) {
@@ -263,6 +279,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
     private fun historyKey(userId: String) = "history::$userId"
 
     private companion object {
+        private val libraryWriteMutex = Mutex()
         const val MAX_HISTORY_ITEMS = 50
     }
 }
