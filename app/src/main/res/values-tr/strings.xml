@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">LANU Müzik</string>
+    <string name="ota_title">Güncelleme Kontrol</string>
+    <string name="ota_installed_version">Yüklü sürüm: %1$s (%2$d)</string>
+    <string name="ota_release_source">Güncellemeler resmî LANU GitHub Releases kanalından denetlenir.</string>
+    <string name="ota_checking">Yeni sürüm denetleniyor…</string>
+    <string name="ota_up_to_date">Yüklü sürüm için daha yeni yayın bulunamadı.</string>
+    <string name="ota_waiting_signed">Yeni sürüm kaydı var ancak güvenli, imzalı güncelleme APK\'sı henüz yayımlanmadı.</string>
+    <string name="ota_waiting_signed_detail">Önizleme/debug APK dosyalarını otomatik güncelleme olarak kurmuyoruz. Kişisel verilerin korunması için aynı imzayla üretilmiş yayın gerekir.</string>
+    <string name="ota_update_available">Yeni sürüm bulundu: Build %1$d</string>
+    <string name="ota_size_mb">Dosya boyutu: %1$d MB</string>
+    <string name="ota_release_notes">Yenilikler</string>
+    <string name="ota_download_verify">Güncellemeyi indir ve doğrula</string>
+    <string name="ota_downloading">Güncelleme indiriliyor: %1$d%%</string>
+    <string name="ota_verify_description">APK indirildikten sonra SHA-256, paket kimliği, sürüm ve imza denetlenecek.</string>
+    <string name="ota_resume_hint">Bağlantı kesilirse indirme daha sonra güvenli biçimde devam edebilir.</string>
+    <string name="ota_cancel">İndirmeyi durdur</string>
+    <string name="ota_verifying_install">APK imzası ve kurulum güvenliği yeniden doğrulanıyor…</string>
+    <string name="ota_cancelling">İndirme güvenli şekilde durduruluyor…</string>
+    <string name="ota_verified">Güncelleme indirildi ve doğrulandı.</string>
+    <string name="ota_permission_needed">Android\'in \'Bu kaynaktan yüklemeye izin ver\' ayarını açıp buraya dönün.</string>
+    <string name="ota_install_confirm">Kurulum için Android\'in onay ekranı açılacak. Mevcut uygulamayı kaldırmayın.</string>
+    <string name="ota_install">Güncellemeyi yükle</string>
+    <string name="ota_check_button">Güncellemeleri denetle</string>
+    <string name="ota_legal_description">LANU hiçbir zaman uygulamayı sessizce kaldırmaz. Android\'in kurulum onayı ve aynı imza zorunludur. Debug/önizleme sürümleri farklı imzalıysa veri kaybını önlemek için güncelleme engellenir.</string>
+    <string name="ota_channel">Yayın kanalı: %1$s</string>
+</resources>
