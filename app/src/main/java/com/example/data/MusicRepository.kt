@@ -110,7 +110,7 @@ class MusicRepository(context: Context) {
     val userSession = userLibraryService.session
 
     init {
-        RepositoryRegistry.repository = this
+        RepositoryRegistry.register(this)
         scope.launch {
             runCatching {
                 localAuthBackend.ensureLocalSession()
@@ -512,5 +512,9 @@ class MusicRepository(context: Context) {
     fun shareRecommendationToFriends(friendName: String, song: Song, note: String) { val newActivity = FriendActivity("act_${UUID.randomUUID().toString().take(6)}", friendName, "", song, "Şimdi paylaştı", false, note, 1); _friendActivities.value = listOf(newActivity) + _friendActivities.value }
     fun pushSimulatedNewRelease() {}
     fun dismissNewReleaseNotification() { _newReleaseNotification.value = null }
-    fun shutdown() { scope.cancel() }
+    /** Cancels this instance's background tasks; never closes the shared Room database. */
+    fun shutdown() {
+        scope.cancel()
+        RepositoryRegistry.clearIfOwner(this)
+    }
 }
