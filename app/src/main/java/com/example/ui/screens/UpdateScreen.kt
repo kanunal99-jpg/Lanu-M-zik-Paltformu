@@ -22,6 +22,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.runtime.remember
+import com.example.update.InstalledSigningIdentity
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.stringResource
@@ -74,6 +79,45 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
                     color = LanuTextMuted, fontSize = 13.sp, modifier = Modifier.testTag("installed_version"))
                 Text(stringResource(R.string.ota_release_source),
                     color = LanuTextMuted, fontSize = 12.sp)
+                val certificates = remember(context) { InstalledSigningIdentity.read(context) }
+                val clipboard = remember(context) {
+                    context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                }
+                Text(stringResource(R.string.ota_installed_certificate_title),
+                    color = LanuTextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                if (certificates.isEmpty()) {
+                    Text(stringResource(R.string.ota_installed_certificate_unavailable),
+                        color = LanuTextMuted, fontSize = 12.sp)
+                } else {
+                    certificates.forEach { certificate ->
+                        Text(stringResource(R.string.ota_installed_certificate_sha256, certificate.sha256),
+                            color = LanuTextMuted, fontSize = 11.sp,
+                            modifier = Modifier.testTag("ota_certificate_sha256"))
+                        OutlinedButton(
+                            onClick = {
+                                clipboard?.setPrimaryClip(
+                                    ClipData.newPlainText("LANU installed certificate SHA-256", certificate.sha256)
+                                )
+                            },
+                            enabled = clipboard != null,
+                            modifier = Modifier.testTag("copy_ota_certificate_sha256")
+                        ) { Text(stringResource(R.string.ota_copy_certificate_sha256)) }
+                        Text(stringResource(R.string.ota_installed_certificate_sha1, certificate.sha1),
+                            color = LanuTextMuted, fontSize = 11.sp,
+                            modifier = Modifier.testTag("ota_certificate_sha1"))
+                        OutlinedButton(
+                            onClick = {
+                                clipboard?.setPrimaryClip(
+                                    ClipData.newPlainText("LANU installed certificate SHA-1", certificate.sha1)
+                                )
+                            },
+                            enabled = clipboard != null,
+                            modifier = Modifier.testTag("copy_ota_certificate_sha1")
+                        ) { Text(stringResource(R.string.ota_copy_certificate_sha1)) }
+                    }
+                    Text(stringResource(R.string.ota_certificate_notice),
+                        color = LanuTextMuted, fontSize = 11.sp)
+                }
             }
         }
         when (val current = state) {
