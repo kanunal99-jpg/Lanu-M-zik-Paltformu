@@ -97,6 +97,15 @@ object UpdateReleasePolicy {
 }
 
 
+/** Reject dangerous redirect destinations, including lookalike hostnames. */
+internal object OtaNetworkPolicy {
+    fun accepts(scheme: String, host: String): Boolean =
+        scheme == "https" && (
+            host == "github.com" || host == "api.github.com" ||
+                host == "githubusercontent.com" || host.endsWith(".githubusercontent.com")
+            )
+}
+
 /** Testable resume-range guard: never append if the server returned the wrong byte range. */
 internal object OtaTransferPolicy {
     private val contentRange = Regex("""bytes (\d+)-(\d+)/(\d+)""")
@@ -123,10 +132,8 @@ class GithubUpdateClient(private val context: Context) {
         .addNetworkInterceptor { chain ->
             val request = chain.request()
             val host = request.url.host
-            if (request.url.scheme != "https" ||
-                !(host == "github.com" || host == "api.github.com" ||
-                    host == "githubusercontent.com" || host.endsWith(".githubusercontent.com"))
-            ) throw IOException("Güvenilmeyen OTA sunucusu. İstek engellendi.")
+            if (!OtaNetworkPolicy.accepts(request.url.scheme, host))
+                throw IOException("Güvenilmeyen OTA sunucusu. İstek engellendi.")
             chain.proceed(request)
         }
         .build()
