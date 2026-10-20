@@ -37,3 +37,11 @@ Mevcut çalışan kod gereksiz yere bozulmayacak, her eklenen modül `compile_ap
 
 ## 12. LANU PREMIUM PROFESSIONAL STANDARTLARI
 Bu repo için ayrıntılı kalite ve üretim kabul listesi **docs/LANU_PREMIUM_PRODUCTION_STANDARD.md** dosyasında tutulur. Mevcut kullanıcı master promptu, üretim güvenliğinde önceliklidir. Yeni modüller için Compose, MVVM/MVI, lifecycle-safe Coroutine/Flow, kaynaklardan yerelleştirme, uygun testler, R8 release ve güvenli OTA doğrulaması esastır. Mevcut fonksiyonları bir seferde riskli büyük refactor ile değiştirmeyin; geriye uyumlu, test edilmiş küçük paketlerle iyileştirin. Kurulu APK sertifikası veya yayın anahtarları olmadan veri kayıpsız OTA hazır raporlanamaz.
+
+## 13. ANDROID ÜRETİCİ BAĞIMSIZ ÜRÜN KAPSAMI (20.10.2026)
+
+**LANU Müzik belirli bir telefon markasına veya modele özel geliştirilmeyecek.** Samsung Galaxy A55 sadece örnek cihazdır. Resmî hedef tüm **Android APK uyumlu** Samsung, Xiaomi/Redmi/POCO, Huawei Android/EMUI veya APK uyumlu eski HarmonyOS, Honor, Oppo, Vivo, Realme, OnePlus, Motorola, Pixel, AOSP ve diğer üreticilerin telefon, tablet ve katlanabilir cihazlarıdır. APK kabul etmeyen HarmonyOS NEXT/5+ gibi sistemler Android APK ile uyumlu sayılmaz.
+
+- Her geliştirme platform API sınırlarına, MediaStore/Media3/Room/Compose ve Android standart kurulum iznine göre yapılır; OEM/Google servisleri zorunlu hale getirilemez. GMS'siz cihazlarda temel yerel müzik ve arşiv açılabilmeli; servis özellikleri güvenli fallback vermelidir.
+- `minSdk 24` korunur; Android 17 / API37 dahil sürüm matrisi, yatay/tablet/katlanır, GMS'siz AOSP ve çok üreticili gerçek cihaz smoke ayrı kabul şartıdır.
+- Kaynak: [Android OEM Uyumluluk Matrisi](docs/ANDROID_OEM_UYUMLULUK_MATRISI.md). CI statik denetimi ile cihazda çalıştı kanıtı karıştırılmaz. Üretim yayınından önce kalıcı APK signing, **silmeden OTA** ve gerçek cihazlarda kimlik/favori/playlist korunumu şarttır.
