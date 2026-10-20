@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,18 +83,18 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
             }
             UpdateScreenState.UpToDate -> {
                 Text(stringResource(R.string.ota_up_to_date), color = LanuTextPrimary,
-                    modifier = Modifier.testTag("update_up_to_date"))
+                    modifier = Modifier.testTag("update_up_to_date").semantics { liveRegion = LiveRegionMode.Polite })
             }
             UpdateScreenState.WaitingForSignedApk -> {
                 Text(stringResource(R.string.ota_waiting_signed),
-                    color = LanuTextPrimary, modifier = Modifier.testTag("update_no_signed_apk"))
+                    color = LanuTextPrimary, modifier = Modifier.testTag("update_no_signed_apk").semantics { liveRegion = LiveRegionMode.Polite })
                 Text(stringResource(R.string.ota_waiting_signed_detail),
                     color = LanuTextMuted, fontSize = 13.sp)
             }
             is UpdateScreenState.Available -> {
                 Text(stringResource(R.string.ota_update_available, current.release.versionCode),
                     color = LanuGreen, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.testTag("update_available"))
+                    modifier = Modifier.testTag("update_available").semantics { liveRegion = LiveRegionMode.Polite })
                 Text(stringResource(R.string.ota_size_mb, current.release.sizeBytes / (1024 * 1024)),
                     color = LanuTextMuted)
                 if (current.release.notes.isNotBlank()) {
@@ -123,16 +126,16 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
             UpdateScreenState.VerifyingInstaller -> {
                 CircularProgressIndicator(color = LanuGreen)
                 Text(stringResource(R.string.ota_verifying_install),
-                    color = LanuTextPrimary, modifier = Modifier.testTag("ota_verifying_install"))
+                    color = LanuTextPrimary, modifier = Modifier.testTag("ota_verifying_install").semantics { liveRegion = LiveRegionMode.Polite })
             }
             is UpdateScreenState.Cancelling -> {
                 CircularProgressIndicator(color = LanuGreen)
                 Text(stringResource(R.string.ota_cancelling), color = LanuTextPrimary,
-                    modifier = Modifier.testTag("update_cancelling"))
+                    modifier = Modifier.testTag("update_cancelling").semantics { liveRegion = LiveRegionMode.Polite })
             }
             is UpdateScreenState.ReadyToInstall -> {
                 Text(stringResource(R.string.ota_verified), color = LanuGreen,
-                    fontWeight = FontWeight.Bold, modifier = Modifier.testTag("update_verified"))
+                    fontWeight = FontWeight.Bold, modifier = Modifier.testTag("update_verified").semantics { liveRegion = LiveRegionMode.Polite })
                 Text(
                     if (current.permissionsNeeded)
                         stringResource(R.string.ota_permission_needed)
@@ -145,7 +148,7 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
                 ) { Text(stringResource(R.string.ota_install)) }
             }
             is UpdateScreenState.Failed -> {
-                Text(current.reason, color = LanuTextPrimary, modifier = Modifier.testTag("update_error"))
+                Text(current.reason, color = LanuTextPrimary, modifier = Modifier.testTag("update_error").semantics { liveRegion = LiveRegionMode.Polite })
             }
         }
         OutlinedButton(
