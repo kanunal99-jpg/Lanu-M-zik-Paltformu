@@ -6,6 +6,9 @@ import androidx.compose.ui.res.stringResource
 import com.example.R
 import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebViewClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -257,6 +260,17 @@ private fun VisibleYouTubeEmbed(videoId: String) {
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
+                // No mixed-content subresources on older Android releases.
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                settings.setSupportMultipleWindows(false)
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?, request: WebResourceRequest?
+                    ): Boolean {
+                        if (request == null || !request.isForMainFrame) return false
+                        return !YouTubeEmbedNavigationPolicy.isAllowedMainFrame(request.url.toString())
+                    }
+                }
                 settings.mediaPlaybackRequiresUserGesture = true
                 webChromeClient = WebChromeClient()
                 loadUrl(
@@ -310,5 +324,21 @@ internal object YouTubeBrowserFallback {
     fun url(videoId: String): String {
         require(videoIdPattern.matches(videoId)) { "Invalid YouTube video ID" }
         return "https://www.youtube.com/watch?v=$videoId"
+    }
+}
+
+/**
+ * Prevent an embedded YouTube iframe from navigating the main WebView to an
+ * unrelated web origin, file/content URI or cleartext URL.
+ * Subresources loaded inside YouTube use the platform's HTTPS-only policy.
+ */
+internal object YouTubeEmbedNavigationPolicy {
+    fun isAllowedMainFrame(url: String): Boolean {
+        if (url == "about:blank") return true // Explicit lifecycle cleanup
+        val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
+        if (uri.scheme != "https" || uri.userInfo != null || uri.port != -1) return false
+        val host = uri.host?.lowercase(java.util.Locale.ROOT) ?: return false
+        return host == "youtube.com" || host.endsWith(".youtube.com") ||
+            host == "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com")
     }
 }
