@@ -89,7 +89,7 @@ object UpdateReleasePolicy {
 
     /** GitHub Actions sha256sum output: <hex>  app/build/outputs/apk/release/app-release.apk */
     fun parseExpectedSha256(value: String): String {
-        val match = Regex("""^([a-fA-F0-9]{64})[ \t]+\\*?(?:[A-Za-z0-9_./-]*/)?app-release\\.apk\\s*$""")
+        val match = Regex("""^([a-fA-F0-9]{64})[ \t]+\*?(?:[A-Za-z0-9_./-]*/)?app-release\.apk\s*$""")
             .matchEntire(value.trim())
             ?: throw IOException("SHA-256 dosyası app-release.apk için geçerli bir özet içermiyor.")
         return match.groupValues[1].lowercase(Locale.ROOT)
