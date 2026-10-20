@@ -30,7 +30,7 @@ sealed interface UpdateScreenState {
     data class Available(val release: VerifiedRelease) : UpdateScreenState
     data class Downloading(val release: VerifiedRelease, val progress: Int) : UpdateScreenState
     data class Cancelling(val release: VerifiedRelease) : UpdateScreenState
-    data class ReadyToInstall(val release: VerifiedRelease, val file: File, val permissionsNeeded: Boolean = false) : UpdateScreenState
+    data class ReadyToInstall(val release: VerifiedRelease, val file: File, val expectedSha256: String, val permissionsNeeded: Boolean = false) : UpdateScreenState
     data object VerifyingInstaller : UpdateScreenState
     data class Failed(val reason: String) : UpdateScreenState
 }
@@ -87,7 +87,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
                 if (_screen.value is UpdateScreenState.Downloading) {
-                    _screen.value = UpdateScreenState.ReadyToInstall(available.release, downloaded)
+                    _screen.value = UpdateScreenState.ReadyToInstall(available.release, downloaded.file, downloaded.sha256)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -126,7 +126,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 if (!ready.file.isFile)
                     throw java.io.IOException("İndirilen APK bulunamadı. Yeniden denetleyin.")
                 withContext(Dispatchers.IO) {
-                    updater.verifyApk(ready.file, ready.release.versionCode)
+                    updater.verifyForInstall(ready.file, ready.release.versionCode, ready.expectedSha256)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                     !context.packageManager.canRequestPackageInstalls()
