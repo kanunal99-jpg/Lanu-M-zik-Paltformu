@@ -68,6 +68,25 @@ Bu rakamlar ölçülmüş son-kullanıcı memnuniyeti veya yüzde tamamlanma de�
 ---
 
 
+## 20.10.2026 — İlerleme ek kaydı: PR #47, #48 ve #49 sonrası
+
+Aşağıdaki kayıt üstteki ilk 20.10.2026 snapshot'ının **sonradan gerçekleşen değişikliklerle düzeltilmesidir**. Tarihsel tablo silinmez; bu bölüm güncel durumu gösterir.
+
+| Kayıt | Son geçerli kanıt | Durum |
+|---|---|---|
+| P0 YouTube API bellek güvenliği | [PR #47](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/47), [CI #369](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39414638340), [birleşik main CI #374](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416149260) | BİRLEŞTİ, CI BAŞARILI; gerçek cihaz arama/API yetkisi ayrıca açık |
+| Anayasa/üretim puan matrisi | [PR #48](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/48), [CI #372](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39415046897) | BİRLEŞTİ, CI BAŞARILI |
+| P0 Room v3→4→5 SQL data-retention smoke | [PR #49](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/49), [CI #371](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39414966585) | BİRLEŞTİ, CI BAŞARILI; eski gerçek schema fixture ve A55 migration smoke AÇIK |
+| P1 MainViewModel Hilt constructor injection | [PR #50](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/50), [ilk CI #373](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416105739) | İlk CI'de runtime annotation introspection test tasarımı hatalıydı; düzeltme commit'i mevcut, [yeniden CI #378](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416992088) henüz kabul edilmedi |
+| P2 Kitaplığım deep-link yönlendirmesi | [PR #51](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/51), [CI #375](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416301638) | Kod ve test PR'da; CI ve cihaz kabulü açık |
+| P2 alt menü TR/EN yerelleştirme | [PR #52](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/52), [CI #377](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39416875623) | Kod ve iki dil testi PR'da; CI açık |
+
+**Puanlama disiplini:** İlk 55/100, cihaz ve üretim kanıtları tamamlanmadan yapay biçimde 90+ yapılmaz. Hedef 92/100 **koşulludur**. Kod/CI iyileştirmeleri yapılan boyutların kanıt gücünü yükseltir, fakat kalıcı imza, veri kayıpsız OTA, Firebase, gerçek YouTube API ve tam cihaz kabulü eksikliği devam eder.
+
+**Sonraki kabul adımları:** PR #50/#51/#52 CI ve regresyon; gerçek 3/4/5 Room fixture; mevcut kurulu APK imza fingerprint ile sabit release keystore karşılaştırması; silmeden Android OTA; YouTube gerçek anahtar + sertifika; Firebase Crashlytics ve R8 mapping; cihaz performans/erişilebilirlik testleri.
+
+---
+
 ## Değişmez çalışma kuralları
 1. Her proje için dört faz: **Faz 1 Envanter/Araştırma; Faz 2 Kök neden/Düzeltme; Faz 3 Uygulama/Build/Test; Faz 4 Doğrulama/Yayın/Üretim smoke**. Her fazda Araştır → Düzelt → Uygula → Test/Doğrula → Yayınla kapısı tamamlanır; başarısızsa yayın yapılmaz.
 2. Kritik her zincir: **Ana servis → Alternatif → Çalışan fallback → Hata yönetimi → Güvenli varsayılan → Log/izleme → Otomatik smoke testi**. AI, üçüncü taraf API, veritabanı, ödeme/kota, dosya, görsel, kimlik doğrulama, frontend/backend, APK/backend ve üretim özel kapsamdır.
