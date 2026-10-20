@@ -72,4 +72,31 @@ class YouTubeSearchClientTest {
         assertTrue(invalid.contains("anahtarı"))
         assertFalse(quota.contains("test_key"))
     }
+
+    @Test
+    fun boundedBodyAcceptsExactByteLimitAndTurkishUtf8() {
+        val text = "Şarkı — İyi"
+        val encoded = text.toByteArray(Charsets.UTF_8)
+        assertEquals(text, YouTubeResponseBodyPolicy.readUtf8(
+            java.io.ByteArrayInputStream(encoded), encoded.size))
+    }
+
+    @Test
+    fun oversizedBodyIsRejectedWithFriendlyError() {
+        val input = java.io.ByteArrayInputStream(ByteArray(1024 * 1024 + 1) { 65 })
+        val thrown = runCatching { YouTubeResponseBodyPolicy.readUtf8(input) }.exceptionOrNull()
+        assertTrue(thrown is YouTubeSearchException)
+        assertTrue(thrown?.message.orEmpty().contains("sınırını aştı"))
+    }
+
+    @Test
+    fun missingBodyAndInvalidLimitsFailClosed() {
+        assertTrue(runCatching { YouTubeResponseBodyPolicy.readUtf8(null) }.exceptionOrNull()
+            is YouTubeSearchException)
+        assertTrue(runCatching {
+            YouTubeResponseBodyPolicy.readUtf8(java.io.ByteArrayInputStream(byteArrayOf(1)), 0)
+        }.isFailure)
+        assertEquals("", YouTubeResponseBodyPolicy.readUtf8(
+            java.io.ByteArrayInputStream(byteArrayOf()), 16))
+    }
 }

@@ -25,6 +25,29 @@ data class YouTubeSearchPage(val videos: List<YouTubeVideo>, val nextPageToken: 
 
 class YouTubeSearchException(message: String) : IOException(message)
 
+/** Limits both success and error response bodies before JSON parsing. */
+internal object YouTubeResponseBodyPolicy {
+    const val MAX_BYTES = 1024 * 1024
+
+    fun readUtf8(input: java.io.InputStream?, maxBytes: Int = MAX_BYTES): String {
+        require(maxBytes in 1..MAX_BYTES)
+        val stream = input ?: throw YouTubeSearchException("YouTube boş yanıt döndürdü.")
+        val output = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        stream.use { source ->
+            while (true) {
+                val count = source.read(buffer)
+                if (count < 0) break
+                if (count > maxBytes - output.size()) {
+                    throw YouTubeSearchException("YouTube yanıtı güvenli boyut sınırını aştı.")
+                }
+                output.write(buffer, 0, count)
+            }
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+}
+
 /** Uses the official YouTube Data API v3 search endpoint. */
 object YouTubeSearchClient {
     private val videoIdPattern = Regex("[A-Za-z0-9_-]{11}")
@@ -134,7 +157,7 @@ object YouTubeSearchClient {
         val request = builder.build()
         try {
             client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
+                val body = YouTubeResponseBodyPolicy.readUtf8(response.body?.byteStream())
                 if (!response.isSuccessful) throw YouTubeSearchException(errorMessage(response.code, body))
                 try {
                     parseResponse(body)
