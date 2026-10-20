@@ -34,3 +34,6 @@ Network hatası, metadata API çökmesi veya Gemini hatası durumlarında uygula
 
 ## 11. GITHUB & TEST STANDARTLARI
 Mevcut çalışan kod gereksiz yere bozulmayacak, her eklenen modül `compile_applet` ile derlenecek ve mümkünse Robolectric ile testleri eklenecektir. "Yapıldı" denmeden önce özelliklerin çalıştığı mutlaka teyit edilecektir.
+
+## 12. LANU PREMIUM PROFESSIONAL STANDARTLARI
+Bu repo için ayrıntılı kalite ve üretim kabul listesi **docs/LANU_PREMIUM_PRODUCTION_STANDARD.md** dosyasında tutulur. Mevcut kullanıcı master promptu, üretim güvenliğinde önceliklidir. Yeni modüller için Compose, MVVM/MVI, lifecycle-safe Coroutine/Flow, kaynaklardan yerelleştirme, uygun testler, R8 release ve güvenli OTA doğrulaması esastır. Mevcut fonksiyonları bir seferde riskli büyük refactor ile değiştirmeyin; geriye uyumlu, test edilmiş küçük paketlerle iyileştirin. Kurulu APK sertifikası veya yayın anahtarları olmadan veri kayıpsız OTA hazır raporlanamaz.

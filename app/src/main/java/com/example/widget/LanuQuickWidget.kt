@@ -2,7 +2,6 @@ package com.example.widget
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.unit.dp
@@ -52,10 +51,10 @@ private fun LanuQuickWidgetContent(snapshot: PlayerStateStore.Snapshot) {
             .padding(14.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
-        Text("LANU Müzik", style = TextStyle(color = ColorProvider(Color.WHITE), fontSize = 16.sp))
+        Text("LANU Müzik", style = TextStyle(color = ColorProvider(ComposeColor.White), fontSize = 16.sp))
         Spacer(GlanceModifier.padding(top = 6.dp))
-        Text(title, style = TextStyle(color = ColorProvider(Color.WHITE), fontSize = 14.sp))
-        Text(artist, style = TextStyle(color = ColorProvider(Color.LTGRAY), fontSize = 11.sp))
+        Text(title, style = TextStyle(color = ColorProvider(ComposeColor.White), fontSize = 14.sp))
+        Text(artist, style = TextStyle(color = ColorProvider(ComposeColor.LightGray), fontSize = 11.sp))
         Row(horizontalAlignment = Alignment.Horizontal.CenterHorizontally, modifier = GlanceModifier.padding(top = 10.dp)) {
             androidx.glance.Button(text = "Önceki", onClick = playerAction("previous"))
             Spacer(modifier = GlanceModifier.width(6.dp))

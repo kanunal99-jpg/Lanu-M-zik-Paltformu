@@ -113,6 +113,7 @@ class AudioPlayerController(private val context: Context) {
                 }
             }
 
+            @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 audioEffects?.release()
                 audioEffects = null
