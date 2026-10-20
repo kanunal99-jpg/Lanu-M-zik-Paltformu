@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.auth.AuthResult
 import com.example.auth.LocalAuthBackend
+import com.example.data.LocalUserLibraryBackend
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -71,5 +72,20 @@ class LocalAuthConcurrencyTest {
         }
         assertEquals(1, results.toSet().size)
         assertEquals(results.first(), LocalAuthBackend(context).currentSession()?.userId)
+    }
+
+    @Test fun logoutAndReopenPreservesUserLibraryUnderSameIdentity() = runBlocking {
+        val firstId = backend.ensureLocalSession().userId
+        val library = LocalUserLibraryBackend(context)
+        library.addFavorite(firstId, "first-song", nowMs = 5L)
+        val playlist = library.createPlaylist(firstId, "Korunan Liste", nowMs = 6L)
+        library.addSongToPlaylist(firstId, playlist.id, "first-song", nowMs = 7L)
+
+        assertTrue(backend.signOut() is AuthResult.Success)
+        val restoredId = LocalAuthBackend(context).ensureLocalSession().userId
+        assertEquals(firstId, restoredId)
+        val restored = LocalUserLibraryBackend(context).snapshot(restoredId)
+        assertEquals(listOf("first-song"), restored.favorites.map { it.songId })
+        assertEquals(listOf("first-song"), restored.playlists.single().songIds)
     }
 }
