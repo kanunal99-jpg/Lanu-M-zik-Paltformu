@@ -56,7 +56,7 @@ class LocalAuthBackend(context: Context) : AuthBackend {
             .putString(KEY_DISPLAY_NAME, "LANU Kullanıcısı")
             .putLong(KEY_CREATED_AT, createdAt)
             .persist()
-        return AuthSession(
+        AuthSession(
             userId = userId,
             displayName = "LANU Kullanıcısı",
             provider = AuthProvider.LOCAL,
