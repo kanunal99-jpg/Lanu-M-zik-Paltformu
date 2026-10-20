@@ -95,12 +95,36 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
     var handledResourceRoute by remember(incomingUri) { mutableStateOf<LanuDeepLink?>(null) }
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
 
-    val permissionsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.scanLocalMusic() }
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        // Notification access is optional; a denied audio permission must never
+        // trigger an unauthorized MediaStore scan on any Android OEM.
+        val audioPermission = LocalMediaPermissionPolicy.mediaPermission(Build.VERSION.SDK_INT)
+        if (results[audioPermission] == true ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, audioPermission
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) viewModel.scanLocalMusic()
+    }
     LaunchedEffect(Unit) {
-        val permissionsToRequest = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS); permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO) }
-        else permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        permissionsLauncher.launch(permissionsToRequest.toTypedArray())
+        val audioPermission = LocalMediaPermissionPolicy.mediaPermission(Build.VERSION.SDK_INT)
+        val hasAudioAccess = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, audioPermission
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (hasAudioAccess) viewModel.scanLocalMusic()
+        val pendingPermissions = mutableListOf<String>()
+        if (!hasAudioAccess) pendingPermissions += audioPermission
+        LocalMediaPermissionPolicy.notificationPermission(Build.VERSION.SDK_INT)?.let { permission ->
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                context, permission
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingPermissions += permission
+            }
+        }
+        if (pendingPermissions.isNotEmpty()) {
+            permissionsLauncher.launch(pendingPermissions.toTypedArray())
+        }
     }
 
     val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
