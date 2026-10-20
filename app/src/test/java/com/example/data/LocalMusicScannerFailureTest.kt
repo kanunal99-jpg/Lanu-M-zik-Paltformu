@@ -3,6 +3,9 @@ package com.example.data
 import android.content.Context
 import android.database.MatrixCursor
 import android.provider.MediaStore
+import com.example.model.MusicCategory
+import com.example.model.Song
+import com.example.model.SongSourceType
 import androidx.test.core.app.ApplicationProvider
 import java.io.IOException
 import kotlinx.coroutines.runBlocking
@@ -34,10 +37,25 @@ class LocalMusicScannerFailureTest {
         var processed = 0
         val scanner = LocalMusicScanner(
             context,
-            mapRow = { cursor ->
+            mapRow = { _ ->
                 processed++
                 if (processed == 2) throw IllegalStateException("OEM provider failed halfway")
-                LocalMediaRowMapper.from(cursor)
+                // Keep this regression focused on mid-scan failure propagation:
+                // Robolectric's Android URI mapper is covered by the separate
+                // valid-cursor test, not coupled to this partial-scan fixture.
+                Song(
+                    id = "local_100",
+                    title = "First track",
+                    artist = "Test artist",
+                    artistId = "test_artist",
+                    album = "Test album",
+                    durationMs = 0L,
+                    category = MusicCategory.LOCAL,
+                    coverUrl = "",
+                    audioUrl = "content://media/external/audio/media/100",
+                    releaseYear = 0,
+                    sourceType = SongSourceType.LOCAL
+                )
             },
             audioQuery = { _, _, _ -> rows }
         )
