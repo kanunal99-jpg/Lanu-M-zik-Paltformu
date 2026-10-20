@@ -17,6 +17,15 @@ import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Stable offline filename policy: reject path separators and suspicious IDs,
+ * never interpolate untrusted catalog identifiers into arbitrary filesystem paths.
+ */
+internal object OfflineFileNamePolicy {
+    private val safe = Regex("[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}")
+    fun accepts(songId: String): Boolean = safe.matches(songId) && !songId.contains("..")
+}
+
 enum class DownloadStatus { QUEUED, DOWNLOADING, COMPLETED, FAILED, CANCELLED }
 
 data class DownloadProgress(
@@ -45,6 +54,8 @@ class DownloadManager(private val context: Context) {
             var temp: File? = null
             try {
                 updateState(song.id, DownloadStatus.QUEUED, 0f, 0L, 0L)
+                if (!OfflineFileNamePolicy.accepts(song.id))
+                    throw IllegalArgumentException("INVALID_OFFLINE_TRACK_ID")
                 val uri = Uri.parse(song.audioUrl)
                 if (!OfflineSourcePolicy.isAuthorized(uri)) throw IllegalStateException("REMOTE_DOWNLOAD_NOT_AUTHORIZED")
                 val offlineDir = File(context.filesDir, "offline_audio")
@@ -108,6 +119,7 @@ class DownloadManager(private val context: Context) {
     }
 
     fun deleteDownloadedFile(songId: String): Boolean {
+        if (!OfflineFileNamePolicy.accepts(songId)) return false
         cancelDownload(songId)
         val dir = File(context.filesDir, "offline_audio")
         val deleted = listOf(File(dir, "$songId.bin"), File(dir, "$songId.part")).filter { it.exists() }.map { it.delete() }.any { it }
