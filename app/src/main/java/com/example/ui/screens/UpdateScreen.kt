@@ -46,7 +46,9 @@ import com.example.update.UpdateViewModel
 fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
     val context = LocalContext.current
     val state by updates.screen.collectAsState()
-    LaunchedEffect(Unit) { updates.checkForUpdates() }
+    LaunchedEffect(Unit) {
+        if (updates.screen.value is UpdateScreenState.Idle) updates.checkForUpdates()
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().background(LanuDarkBg)
@@ -106,6 +108,11 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
                 Text("APK indirildikten sonra SHA-256, paket kimliği, sürüm ve imza denetlenecek.",
                     color = LanuTextMuted, fontSize = 12.sp)
             }
+            UpdateScreenState.VerifyingInstaller -> {
+                CircularProgressIndicator(color = LanuGreen)
+                Text("APK imzası ve kurulum güvenliği yeniden doğrulanıyor…",
+                    color = LanuTextPrimary, modifier = Modifier.testTag("ota_verifying_install"))
+            }
             is UpdateScreenState.ReadyToInstall -> {
                 Text("Güncelleme indirildi ve doğrulandı.", color = LanuGreen,
                     fontWeight = FontWeight.Bold, modifier = Modifier.testTag("update_verified"))
@@ -126,7 +133,7 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
         }
         OutlinedButton(
             onClick = updates::checkForUpdates,
-            enabled = state !is UpdateScreenState.Checking && state !is UpdateScreenState.Downloading,
+            enabled = state !is UpdateScreenState.Checking && state !is UpdateScreenState.Downloading && state !is UpdateScreenState.VerifyingInstaller,
             modifier = Modifier.fillMaxWidth().testTag("check_updates")
         ) { Text("Güncellemeleri denetle") }
 

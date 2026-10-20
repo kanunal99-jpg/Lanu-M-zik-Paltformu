@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
@@ -67,6 +69,8 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.UpdateScreen
+import com.example.update.UpdateScreenState
+import com.example.update.UpdateViewModel
 import com.example.ui.theme.LanuDarkBg
 import com.example.ui.theme.LanuDarkSurface
 import com.example.ui.theme.LanuGreen
@@ -79,7 +83,9 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
+fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewModel = viewModel()) {
+    val updateState by updates.screen.collectAsState()
+    LaunchedEffect(Unit) { updates.checkOnAppLaunch() }
     val context = LocalContext.current
     val incomingUri = remember(context) { (context as? Activity)?.intent?.data }
     val deepLink = remember(incomingUri) { LanuDeepLink.parse(incomingUri) }
@@ -161,10 +167,18 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
             Column(Modifier.navigationBarsPadding()) {
                 if (!isNowPlayingExpanded) PlayerBottomAppBar(song = currentSong, isPlaying = isPlaying, currentPositionMs = currentPositionMs, durationMs = durationMs, isFavorite = currentSong?.let { favoriteIds.contains(it.id) } ?: false, isShuffle = isShuffle, repeatMode = repeatMode, onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it.id) } }, onTogglePlayPause = { viewModel.togglePlayPause() }, onPrevious = { viewModel.prevSong() }, onNext = { viewModel.nextSong() }, onToggleShuffle = { viewModel.toggleShuffle() }, onToggleRepeat = { viewModel.toggleRepeat() }, onExpand = { viewModel.openNowPlaying() }, onSeekTo = { viewModel.seekTo(it) })
                 NavigationBar(containerColor = LanuDarkSurface, tonalElevation = 8.dp, modifier = Modifier.testTag("bottom_navigation_bar")) {
-                    val tabs = listOf(Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home), Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search), Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer), Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person), Triple(MainTab.UPDATE, "Güncelleme", Icons.Default.SystemUpdate))
+                    val tabs = listOf(Triple(MainTab.HOME, "Ana Sayfa", Icons.Default.Home), Triple(MainTab.SEARCH, "Keşfet", Icons.Default.Search), Triple(MainTab.EQUALIZER, "Ekolayzır", Icons.Default.Equalizer), Triple(MainTab.ACCOUNT, "Hesabım", Icons.Default.Person), Triple(MainTab.UPDATE, "Güncelleme Kontrol", Icons.Default.SystemUpdate))
                     tabs.forEach { (tab, label, icon) ->
                         val isSelected = currentTab == tab
-                        NavigationBarItem(selected = isSelected, onClick = { if (currentTab != tab) viewModel.setTab(tab) }, icon = { Icon(icon, contentDescription = label, tint = if (isSelected) LanuGreen else LanuTextMuted, modifier = Modifier.size(24.dp)) }, label = { Text(label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) LanuGreen else LanuTextMuted) }, colors = NavigationBarItemDefaults.colors(indicatorColor = LanuGreen.copy(alpha = 0.15f)), modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"))
+                        NavigationBarItem(selected = isSelected, onClick = { if (currentTab != tab) viewModel.setTab(tab) }, icon = {
+                            BadgedBox(badge = {
+                                if (tab == MainTab.UPDATE && updateState is UpdateScreenState.Available) {
+                                    Badge(containerColor = LanuGreen, modifier = Modifier.testTag("new_update_badge"))
+                                }
+                            }) {
+                                Icon(icon, contentDescription = label, tint = if (isSelected) LanuGreen else LanuTextMuted, modifier = Modifier.size(24.dp))
+                            }
+                        }, label = { Text(label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) LanuGreen else LanuTextMuted) }, colors = NavigationBarItemDefaults.colors(indicatorColor = LanuGreen.copy(alpha = 0.15f)), modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"))
                     }
                 }
             }
@@ -177,7 +191,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                     MainTab.FRIENDS -> HomeScreen(songs = categorizedSongs, artists = viewModel.artists, newReleaseAlert = newReleaseAlert, onPlaySong = { song, queue -> viewModel.playSong(song, queue) }, onSelectArtist = { viewModel.selectArtist(it) }, onCategoryClick = { category -> viewModel.updateSearchQuery(""); viewModel.filterByCategory(category); viewModel.setTab(MainTab.SEARCH) }, onSimulateNewRelease = { viewModel.simulateNewReleasePush() }, onDismissNewReleaseAlert = { viewModel.dismissNewReleaseNotification() })
                     MainTab.EQUALIZER -> EqualizerView(equalizerState = equalizerState, isPlaying = isPlaying, onPresetSelected = { viewModel.setEqualizerPreset(it) }, onBandLevelChanged = { band, level -> viewModel.setBandLevel(band, level) }, onBassBoostChanged = { viewModel.setBassBoost(it) }, onVirtualizerChanged = { viewModel.setVirtualizer(it) }, onToggleEqualizer = { viewModel.toggleEqualizer() })
                     MainTab.ACCOUNT -> AccountHistoryScreen(session = session, history = history, allSongs = allSongs, onPlaySong = { song, _ -> viewModel.playSong(song, listOf(song)) }, onSignOut = { viewModel.signOut() })
-                    MainTab.UPDATE -> UpdateScreen()
+                    MainTab.UPDATE -> UpdateScreen(updates = updates)
                 }
                 if (isLoading) Box(modifier = Modifier.fillMaxSize().background(LanuDarkBg.copy(alpha = 0.5f)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}, contentAlignment = Alignment.Center) { CircularProgressIndicator(color = LanuGreen, strokeWidth = 4.dp) }
             }

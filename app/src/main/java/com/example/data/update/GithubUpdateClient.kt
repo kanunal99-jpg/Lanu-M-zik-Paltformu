@@ -3,6 +3,7 @@ package com.example.data.update
 import android.content.Context
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import com.android.apksig.ApkVerifier
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -10,6 +11,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -88,12 +90,13 @@ class GithubUpdateClient(private val context: Context) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .callTimeout(90, TimeUnit.SECONDS)
+        // Slow mobile networks need enough time to download a verified APK.
+        .callTimeout(10, TimeUnit.MINUTES)
         .build()
 
     private fun get(url: String) = client.newCall(Request.Builder().url(url)
         .header("User-Agent", "LANU-Music-Android-Updater")
-        .header("Accept", "application/vnd.github+json").build()).execute()
+        .header("Accept", if (url.contains("/releases/download/")) "application/octet-stream" else "application/vnd.github+json").build()).execute()
 
     private fun responseBody(response: okhttp3.Response): String {
         if (!response.isSuccessful) throw IOException(
@@ -104,10 +107,38 @@ class GithubUpdateClient(private val context: Context) {
         return response.body?.string() ?: throw IOException("GitHub boş yanıt döndürdü.")
     }
 
+    /**
+     * GitHub's /latest endpoint is the authoritative most recently published
+     * stable release. Authenticated release lists may be dominated by old drafts
+     * and miss it in their first page: always include /latest independently.
+     */
     suspend fun check(installedCode: Int): UpdateAvailability = withContext(Dispatchers.IO) {
-        get("https://api.github.com/repos/kanunal99-jpg/Lanu-M-zik-Paltformu/releases?per_page=20").use {
-            UpdateReleasePolicy.choose(responseBody(it), installedCode)
+        val root = "https://api.github.com/repos/kanunal99-jpg/Lanu-M-zik-Paltformu"
+        val latest = get(root + "/releases/latest").use { response ->
+            when (response.code) {
+                404 -> null
+                else -> JSONObject(responseBody(response))
+            }
         }
+        val newest = JSONArray()
+        if (latest != null) newest.put(latest)
+        val latestResult = UpdateReleasePolicy.choose(newest.toString(), installedCode)
+        if (latestResult is UpdateAvailability.Available) {
+            return@withContext latestResult
+        }
+        // Previous signed stable builds may remain installable even when newest
+        // publish only has a debug preview. Best effort; do not discard /latest
+        // if listing is temporarily rate limited.
+        val combined = runCatching {
+            get(root + "/releases?per_page=100").use { response ->
+                val history = JSONArray(responseBody(response))
+                val result = JSONArray()
+                if (latest != null) result.put(latest)
+                for (i in 0 until history.length()) result.put(history.getJSONObject(i))
+                UpdateReleasePolicy.choose(result.toString(), installedCode)
+            }
+        }.getOrDefault(latestResult)
+        combined
     }
 
     suspend fun downloadAndVerify(release: VerifiedRelease, onProgress: (Int) -> Unit): File =
@@ -131,6 +162,7 @@ class GithubUpdateClient(private val context: Context) {
                     val body = response.body ?: throw IOException("APK dosyası boş.")
                     val sha = MessageDigest.getInstance("SHA-256")
                     var count = 0L
+                    var lastProgress = -1
                     body.byteStream().use { input ->
                         temporary.outputStream().buffered().use { output ->
                             val buffer = ByteArray(65536)
@@ -143,7 +175,11 @@ class GithubUpdateClient(private val context: Context) {
                                     throw IOException("APK boyutu yayın bilgisiyle eşleşmiyor.")
                                 sha.update(buffer, 0, n)
                                 output.write(buffer, 0, n)
-                                onProgress((count * 100 / release.sizeBytes).toInt().coerceIn(0, 100))
+                                val progress = (count * 100 / release.sizeBytes).toInt().coerceIn(0, 100)
+                                if (progress != lastProgress) {
+                                    lastProgress = progress
+                                    onProgress(progress)
+                                }
                             }
                         }
                     }
@@ -197,9 +233,31 @@ class GithubUpdateClient(private val context: Context) {
             installed.longVersionCode else installed.versionCode.toLong()
         if (candidateCode != expectedVersionCode.toLong() || candidateCode <= installedCode)
             throw IOException("APK yeni bir sürüm değil. Kurulum engellendi.")
-        val current = signatureDigests(installed)
-        if (current.isEmpty() || current != signatureDigests(candidate))
+        if (candidate.applicationInfo?.minSdkVersion?.let { it > Build.VERSION.SDK_INT } == true)
+            throw IOException("Bu Android sürümü yeni APK ile uyumlu değil.")
+
+        // PackageManager.getPackageArchiveInfo may omit signingInfo for an
+        // uninstalled APK even when its signatures are valid. Verify the bytes
+        // and signer certificates using Google's official APK verifier.
+        val verification = try {
+            ApkVerifier.Builder(file)
+                .setMinCheckedPlatformVersion(Build.VERSION.SDK_INT)
+                .setMaxCheckedPlatformVersion(Build.VERSION.SDK_INT)
+                .build()
+                .verify()
+        } catch (e: Exception) {
+            throw IOException("APK imzası doğrulanamadı. Kurulum engellendi.", e)
+        }
+        if (!verification.isVerified || verification.signerCertificates.isEmpty())
+            throw IOException("APK dijital imzası geçersiz. Kurulum engellendi.")
+        val candidateSigners = verification.signerCertificates.map { certificate ->
+            MessageDigest.getInstance("SHA-256").digest(certificate.encoded)
+                .joinToString("") { b -> "%02x".format(b) }
+        }.toSet()
+        val installedSigners = signatureDigests(installed)
+        if (installedSigners.isEmpty() || installedSigners != candidateSigners)
             throw IOException("APK imzası yüklü LANU sürümüyle eşleşmiyor. " +
                 "Verilerinizi korumak için kurulum engellendi; uygulamayı kaldırmayın.")
+
     }
 }

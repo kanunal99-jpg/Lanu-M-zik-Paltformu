@@ -75,6 +75,42 @@ class UpdateReleasePolicyTest {
         assertTrue(runCatching { UpdateReleasePolicy.parseExpectedSha256("invalid") }.exceptionOrNull() is IOException)
     }
 
+    @Test fun newestStableReleaseIsFoundDespiteCrowdedOlderDrafts() {
+        val oldDrafts = (1..40).map { entry(180 + it).put("draft", true) }
+        val newest = entry(340)
+        val releaseResponse = list(*(oldDrafts + newest).toTypedArray())
+        val result = UpdateReleasePolicy.choose(releaseResponse, 333)
+        assertEquals(340, (result as UpdateAvailability.Available).release.versionCode)
+    }
+
+    @Test fun doesNotSelectAnUnpublishedDraftOrPreRelease() {
+        assertEquals(UpdateAvailability.UpToDate,
+            UpdateReleasePolicy.choose(list(
+                entry(400).put("draft", true),
+                entry(399).put("prerelease", true)
+            ), 350)
+        )
+    }
+
+    @Test fun refusesIncompleteSignatureOrApkAssets() {
+        val broken = entry(350)
+        val assets = broken.getJSONArray("assets")
+        assets.getJSONObject(0).put("browser_download_url", "https://github.com/evil/app-release.apk")
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(list(broken), 340))
+        assets.getJSONObject(0).put("browser_download_url",
+            base + "/download/lanu-music-350-" + sha + "/app-release.apk")
+        assets.getJSONObject(0).put("size", 300L * 1024L * 1024L)
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(list(broken), 340))
+    }
+
+    @Test fun choosesOlderSignedIfLatestDebugOnlyInSameBatch() {
+        val releases = list(entry(360, signed = false), entry(359, signed = true))
+        val result = UpdateReleasePolicy.choose(releases, 350) as UpdateAvailability.Available
+        assertEquals(359, result.release.versionCode)
+    }
+
     @Test fun emptyReleasesDoNotCreatePhantomUpdate() {
         assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose("[]", 341))
     }
