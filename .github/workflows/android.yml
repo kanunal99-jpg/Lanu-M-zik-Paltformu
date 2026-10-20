@@ -157,6 +157,13 @@ jobs:
           assets="$(gh release view --repo "${GH_REPO}" "${TAG_NAME}" --json assets --jq '.assets[].name')"
           grep -Fxq 'app-debug.apk' <<<"${assets}"
           grep -Fxq 'app-debug.apk.sha256' <<<"${assets}"
+          remote_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-debug.apk") | .digest')"
+          expected_digest="sha256:$(sha256sum "${apk_path}" | cut -d ' ' -f1)"
+          [[ "${remote_digest}" == "${expected_digest}" ]]
+          remote_checksum_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-debug.apk.sha256") | .digest')"
+          expected_checksum_digest="sha256:$(sha256sum "${sha_path}" | cut -d ' ' -f1)"
+          [[ "${remote_checksum_digest}" == "${expected_checksum_digest}" ]]
+          echo "Verified downloaded release assets and remote GitHub asset digests."
           echo "Verified release assets:"
           printf '%s\n' "${assets}"
 
@@ -249,7 +256,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${EXPECTED_FINGERPRINT}" ]]; then
-            echo "::warning::Set repository variable LANU_SIGNING_CERT_SHA256 to pin the production signing certificate."
+            echo "::error::Production signing requires repository variable LANU_SIGNING_CERT_SHA256. No unpinned release is allowed."
+            exit 1
           else
             apk="app/build/outputs/apk/release/app-release.apk"
             signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
@@ -284,6 +292,14 @@ jobs:
           assets="$(gh release view --repo "${GH_REPO}" "${TAG_NAME}" --json assets --jq '.assets[].name')"
           grep -Fxq 'app-release.apk' <<<"${assets}"
           grep -Fxq 'app-release.apk.sha256' <<<"${assets}"
+          # Read the digest BACK from the public GitHub release, not only the runner.
+          remote_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-release.apk") | .digest')"
+          remote_checksum_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-release.apk.sha256") | .digest')"
+          expected_digest="sha256:$(sha256sum app/build/outputs/apk/release/app-release.apk | cut -d ' ' -f1)"
+          expected_checksum_digest="sha256:$(sha256sum app/build/outputs/apk/release/app-release.apk.sha256 | cut -d ' ' -f1)"
+          [[ "${remote_digest}" == "${expected_digest}" ]]
+          [[ "${remote_checksum_digest}" == "${expected_checksum_digest}" ]]
+          echo "Remote GitHub signed APK and checksum assets match runner SHA-256."
       - name: Erase temporary signing key
         if: always() && steps.signing.outputs.enabled == 'true'
         env:
