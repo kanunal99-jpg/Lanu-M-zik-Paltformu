@@ -6,6 +6,8 @@ import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.example.auth.AuthResult
 import com.example.auth.AuthSession
 import com.example.data.DownloadedSongEntity
@@ -44,9 +46,12 @@ import kotlinx.coroutines.launch
 
 enum class MainTab(val titleTr: String) { HOME("Ana Sayfa"), SEARCH("Keşfet"), LIBRARY("Kitaplığım"), FRIENDS("Arkadaşlar"), EQUALIZER("Ekolayzır"), ACCOUNT("Hesabım"), UPDATE("Güncelleme Kontrol") }
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
-    val repository = MusicRepository(application)
-    val playerController = AudioPlayerController(application)
+@HiltViewModel
+class MainViewModel @Inject constructor(
+    application: Application,
+    val repository: MusicRepository,
+    val playerController: AudioPlayerController
+) : AndroidViewModel(application) {
     private val _currentTab = MutableStateFlow(MainTab.HOME)
     val currentTab: StateFlow<MainTab> = _currentTab.asStateFlow()
     private val _isNowPlayingExpanded = MutableStateFlow(false)
