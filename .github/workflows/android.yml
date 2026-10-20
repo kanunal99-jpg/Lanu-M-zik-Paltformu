@@ -229,9 +229,39 @@ jobs:
           [[ -s "${apk}" ]]
           signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
           [[ -x "${signer}" ]]
-          "${signer}" verify --verbose --print-certs "${apk}"
+          cert_output="$("${signer}" verify --verbose --print-certs "${apk}")"
+          printf '%s\n' "${cert_output}"
+          # Refuse publishing a release that cannot update LANU or has the wrong versionCode.
+          aapt="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          [[ -x "${aapt}" ]]
+          package_line="$("${aapt}" dump badging "${apk}" | grep '^package: ' | head -n 1)"
+          [[ "${package_line}" == *"name='com.aistudio.lanumusic.kpxzqa'"* ]]
+          [[ "${package_line}" == *"versionCode='${GITHUB_RUN_NUMBER}'"* ]]
+          [[ "${cert_output}" == *"certificate SHA-256 digest:"* ]]
+          echo "Signed APK identity and CI versionCode verified."
           sha256sum "${apk}" > "${apk}.sha256"
           unzip -t "${apk}" > /dev/null
+      - name: Pin signing certificate when fingerprint is configured
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        env:
+          EXPECTED_FINGERPRINT: ${{ vars.LANU_SIGNING_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPECTED_FINGERPRINT}" ]]; then
+            echo "::warning::Set repository variable LANU_SIGNING_CERT_SHA256 to pin the production signing certificate."
+          else
+            apk="app/build/outputs/apk/release/app-release.apk"
+            signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+            actual="$("${signer}" verify --print-certs "${apk}" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}')"
+            expected="$(tr '[:upper:]' '[:lower:]' <<<"${EXPECTED_FINGERPRINT}" | tr -d ':[:space:]')"
+            [[ "${expected}" =~ ^[0-9a-f]{64}$ ]]
+            [[ "${actual}" == "${expected}" ]] || {
+              echo "::error::Signing certificate changed unexpectedly. Publishing is blocked."
+              exit 1
+            }
+            echo "Pinned signing certificate verified."
+          fi
       - name: Attach signed APK only after verification
         if: steps.signing.outputs.enabled == 'true'
         shell: bash
