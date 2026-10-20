@@ -63,3 +63,24 @@ Bu işin kullanıcı hesabında yalnız bir kez tamamlanması gerekir:
 
 ### Kurulumdaki kalan dış bağımlılık
 Mevcut Android kurulumunun imzasını bilmeden ve aynı imzalama anahtarını GitHub Actions'a güvenle tanımlamadan, veri kayıpsız OTA yükseltmesi doğrulanamaz. Uygulamanın otomatik testlerden geçmesi bunun yerine geçmez. Kurulu APK'yı silmeyin.
+
+
+## Kurumsal sertleştirme: güvenlik ve kurtarma (2026-10-20)
+
+- OTA ağı, yönlendirmelerin HER adımında HTTPS ve GitHub/GitHub CDN host doğrulaması yapar. HTTP downgrade ve sahte domain engellenir. Metadata için ayrı 30 saniyelik çağrı sınırı vardır.
+- SHA-256 dosyası yalnız app-release.apk dosyasının sha256sum biçiminde özetini içeriyorsa kabul edilir.
+- İndirilen dosya Android kurulum ekranına yönlendirilmeden hemen önce yeniden SHA-256 ve APK dijital imza kontrolünden geçirilir (TOCTOU koruması).
+- Doğrulanmış güncellemenin özel depoda saklanan oturum bilgisi, uygulama kapanıp yeniden açıldığında ancak TAM dosya SHA ve sertifika doğrulamasından sonra geri yüklenebilir.
+- Bozuk veya sahte release tag / metadata reddedilir; eski sürüme dönüş engellenir. Uygulamanın favorileri, çalma listeleri ve medya dosyaları değişmez.
+- Signed CI için LANU_SIGNING_CERT_SHA256 repository variable artık zorunlu imza sertifikası pinidir; değer yoksa imzalı APK yayımı bloke edilir.
+- GitHub Releases'e yüklenen debug ve signed APK'nın uzak digest değeri GitHub API'den tekrar okunup yerel SHA-256 ile karşılaştırılır. Dosya adını doğrulamak tek başına yeterli değildir.
+- Regresyon testleri: geçersiz checksum dosya adı, zararlı HTTPS yönlendirme, reboot restore, bozuk SharedPreferences, downgrade.
+
+### Üretim geçişi için dış bağımlılıklar
+
+1. Kurulu LANU APK imzasının fingerprint'i doğrulanır; aynı anahtarla yeniden imzalanabilmeli. Mevcut uygulama kaldırılmaz.
+2. GitHub Actions için LANU_SIGNING_KEYSTORE_BASE64, LANU_SIGNING_STORE_PASSWORD, LANU_SIGNING_KEY_PASSWORD, LANU_SIGNING_KEY_ALIAS secret'ları ve LANU_SIGNING_CERT_SHA256 variable alanı güvenli biçimde kaydedilir.
+3. İmzalı APK ve .sha256 dosyaları yayımlanıp gerçek cihazda silmeden üzerine kurulum, saklanan Room/playlist/favori verileri ve izinler doğrulanır.
+4. Üretim imza anahtarı güvenli çevrimdışı yedeklenir; imza kaybı aynı kurulu uygulamanın üzerine güncellemeyi engeller.
+
+**Not:** CI başarısı cihazdaki imza uyumluluğunu veya veri kayıpsız yükseltmeyi tek başına doğrulamaz. Bu iki kapı tamamlanmadan OTA üretim sertifikasyonu bitmiş sayılmaz.
