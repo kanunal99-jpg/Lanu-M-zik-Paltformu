@@ -26,4 +26,9 @@
     <string name="ota_channel">Yayın kanalı: %1$s</string>
     <string name="lanu_open_friends_preview">Arkadaşlar (yerel önizleme)</string>
     <string name="lanu_friends_back">Hesabıma dön</string>
+    <string name="nav_home">Ana Sayfa</string>
+    <string name="nav_search">Keşfet</string>
+    <string name="nav_library">Kitaplığım</string>
+    <string name="nav_account">Hesabım</string>
+    <string name="nav_updates">Güncelleme Kontrol</string>
 </resources>
