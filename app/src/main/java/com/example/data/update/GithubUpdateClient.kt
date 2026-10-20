@@ -7,6 +7,7 @@ import com.android.apksig.ApkVerifier
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -197,7 +198,7 @@ class GithubUpdateClient(private val context: Context) {
         // Previous signed stable builds may remain installable even when newest
         // publish only has a debug preview. Best effort; do not discard /latest
         // if listing is temporarily rate limited.
-        val combined = runCatching {
+        val historyResult = runCatching {
             get(root + "/releases?per_page=100").use { response ->
                 val history = JSONArray(responseBody(response))
                 val result = JSONArray()
@@ -205,8 +206,12 @@ class GithubUpdateClient(private val context: Context) {
                 for (i in 0 until history.length()) result.put(history.getJSONObject(i))
                 UpdateReleasePolicy.choose(result.toString(), installedCode)
             }
-        }.getOrDefault(latestResult)
-        combined
+        }
+        // Never report "up to date" if neither endpoint returned trustworthy data.
+        historyResult.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) throw error
+        }
+        if (latest == null) historyResult.getOrThrow() else historyResult.getOrDefault(latestResult)
     }
 
     /** Resume interrupted downloads using HTTP Range, never without checking Content-Range. */
@@ -326,10 +331,14 @@ class GithubUpdateClient(private val context: Context) {
             // A previously fully verified download can be reused after process death,
             // but ONLY if the freshly fetched SHA-256 still matches.
             if (finalApk.isFile) {
-                val cached = runCatching {
+                val cached = try {
                     finalApk.length() == release.sizeBytes &&
                         sha256Of(finalApk).equals(expected, ignoreCase = true)
-                }.getOrDefault(false)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: IOException) {
+                    false
+                }
                 if (cached) {
                     verifyApk(finalApk, release.versionCode)
                     onProgress(100)
