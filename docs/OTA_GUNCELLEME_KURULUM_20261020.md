@@ -84,3 +84,21 @@ Mevcut Android kurulumunun imzasını bilmeden ve aynı imzalama anahtarını Gi
 4. Üretim imza anahtarı güvenli çevrimdışı yedeklenir; imza kaybı aynı kurulu uygulamanın üzerine güncellemeyi engeller.
 
 **Not:** CI başarısı cihazdaki imza uyumluluğunu veya veri kayıpsız yükseltmeyi tek başına doğrulamaz. Bu iki kapı tamamlanmadan OTA üretim sertifikasyonu bitmiş sayılmaz.
+
+## Kurulu APK imzasını LANU içinden okuma — 20.10.2026 (PR #54)
+
+LANU Müzik > **Güncelleme Kontrol** ekranında `Kurulu uygulamanın imza sertifikası` altında **SHA-256** ve **SHA-1** alanları bulunur (PR #54 CI ile kabul edildikten sonra kullanıma sunulur).
+
+- **SHA-256**: Yüklü APK'nın imza sertifikasının açık parmak izi. Yalnızca bu değeri GitHub Actions repository variable `LANU_SIGNING_CERT_SHA256` ile kıyaslayın. Bu değer bir APK'nın indirme checksum'ı değildir.
+- **SHA-1**: Google Cloud YouTube Data API v3 Android-restricted API key için kurulu uygulamanın imza parmak izi. Android application ID: `com.aistudio.lanumusic.kpxzqa`. API anahtarının kendisi sohbet, issue veya kaynak kodunda tutulmaz.
+- **Sertifika okunamıyor** durumu asla uygulamayı kaldırma/yeni anahtar üretme önerisine dönüşmez. Aynı kurulu uygulamayı koruyun.
+- Bir SHA-256 fingerprint görmek, özel imzalama anahtarına erişildiğini **kanıtlamaz**. Var olan keystore ve imza yetkisi yoksa bir kullanıcı güncellemesini veri kayıpsız yükseltmek güvenle garanti edilemez.
+- **Sertifika eşleşmesi tek başına yeterli değildir**: resmî signed `app-release.apk` ve SHA-256 asset; artan versionCode, paket kimliği, Android kurulum onayı ve mevcut uygulamayı silmeden veri/çalma listesi koruyan gerçek cihaz kabul testi zorunludur.
+
+### QA kontrol listesi (kapanmamış kabul işleri)
+
+1. Android 7–16 cihazlarında parmak izleri, aynı APK dosyasında `apksigner verify --print-certs` ile kıyaslanır (SHA-256). Telefonu silme yok.
+2. Kopyala butonunun doğru SHA-1/SHA-256 metnini panoya yazdığı, ekran okuyucular için etiketler, küçük ekranlarda metin kaydırma ve her iki dil fiziksel cihazda doğrulanır.
+3. Sertifika okunamıyorsa güvenli açıklama çıkar; hiçbir otomatik yeniden kurulum tetiklenmez.
+4. Hilt/OTA/Room regresyonları ve lint geçer; üretim release anahtarı veya Google/Firebase yapılandırması bu PR ile otomatik oluşmaz.
+
