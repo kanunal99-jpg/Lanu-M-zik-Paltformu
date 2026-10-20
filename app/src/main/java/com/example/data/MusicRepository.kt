@@ -405,19 +405,22 @@ class MusicRepository(context: Context) {
     }
 
     suspend fun syncOfflineStorage() {
+        // Reconciliation must NEVER remove user media or metadata as a side effect
+        // of boot, a transient storage outage, or delayed Room initialization.
+        // Deletion belongs only in the explicit user-requested delete flow.
         val downloaded = dao.getDownloadedSongs().first()
         val dir = File(context.filesDir, "offline_audio")
-        val files = if (dir.exists()) dir.listFiles()?.filter { it.isFile && it.name.endsWith(".bin") }.orEmpty() else emptyList()
-        val names = files.map { it.name }.toSet()
-        downloaded.forEach { entity ->
-            val fileName = "${entity.songId}.bin"
-            if (fileName !in names) {
-                dao.removeDownload(entity.songId)
-                dao.setSongOfflineAvailability(entity.songId, false)
-            }
+        val storedNames = dir.listFiles()?.asSequence()
+            ?.filter { it.isFile && it.name.endsWith(".bin") }
+            ?.map { it.name }?.toSet()
+            ?: emptySet()
+        val audit = OfflineStorageAuditPolicy.inspect(downloaded.map { it.songId }, storedNames)
+        if (audit.missingDownloadRecords.isNotEmpty() || audit.unindexedFiles.isNotEmpty()) {
+            // Counts only: never expose users' local filenames or track identifiers in logs.
+            Log.w("MusicRepository", "Offline reconciliation: " +
+                "${audit.missingDownloadRecords.size} missing references, " +
+                "${audit.unindexedFiles.size} unindexed files. Retained for recovery.")
         }
-        val dbIds = downloaded.map { it.songId }.toSet()
-        files.filter { it.nameWithoutExtension !in dbIds }.forEach { it.delete() }
     }
 
     val favoriteSongIds: Flow<Set<String>> = userLibrarySnapshot.map { snapshot -> snapshot?.favorites?.map { it.songId }?.toSet().orEmpty() }
