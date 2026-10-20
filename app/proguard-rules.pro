@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep source/line information for actionable crash reports after R8 shrinking.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
+# Do not broadly keep application classes: allow R8 to shrink/obfuscate.
+# Reflective library integrations should use narrow, documented consumer rules.
