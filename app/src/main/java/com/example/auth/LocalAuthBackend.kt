@@ -32,9 +32,10 @@ class LocalAuthBackend(context: Context) : AuthBackend {
     suspend fun ensureLocalSession(): AuthSession {
         currentSession()?.let { return it }
         val createdAt = System.currentTimeMillis()
-        val userId = "local-${UUID.randomUUID()}"
+        val userId = retainedLocalIdentity()
         preferences.edit()
             .putString(KEY_USER_ID, userId)
+            .putString(KEY_LAST_LOCAL_ID, userId)
             .putString(KEY_DISPLAY_NAME, "LANU Kullanıcısı")
             .putLong(KEY_CREATED_AT, createdAt)
             .apply()
@@ -56,7 +57,7 @@ class LocalAuthBackend(context: Context) : AuthBackend {
 
         // This is deliberately NOT a remote login. It only establishes a local identity.
         val existingId = preferences.getString(KEY_USER_ID, null)
-        val userId = existingId ?: "local-${UUID.randomUUID()}"
+        val userId = existingId ?: retainedLocalIdentity()
         val createdAt = preferences.getLong(KEY_CREATED_AT, 0L).takeIf { it > 0L }
             ?: System.currentTimeMillis()
 
@@ -84,11 +85,21 @@ class LocalAuthBackend(context: Context) : AuthBackend {
         if (current == null) {
             return AuthResult.Failure(AuthFailure.UNKNOWN, "Aktif LANU oturumu yok")
         }
-        preferences.edit().clear().apply()
+        // Sign-out ends the active session but must not orphan locally stored playlists.
+        // The retained ID is NOT a login credential or a remote authenticated session.
+        preferences.edit().clear()
+            .putString(KEY_LAST_LOCAL_ID, current.userId)
+            .apply()
         return AuthResult.Success(current)
     }
 
+    private fun retainedLocalIdentity(): String =
+        preferences.getString(KEY_LAST_LOCAL_ID, null)
+            ?.takeIf { it.startsWith("local-") && it.length < 120 }
+            ?: "local-${UUID.randomUUID()}"
+
     private companion object {
+        const val KEY_LAST_LOCAL_ID = "last_local_user_id"
         const val KEY_USER_ID = "user_id"
         const val KEY_DISPLAY_NAME = "display_name"
         const val KEY_EMAIL = "email"

@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReleaseSyncStateEntity::class
     ],
     version = 5,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun musicDao(): MusicDao
