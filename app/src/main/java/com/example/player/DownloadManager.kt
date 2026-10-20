@@ -71,9 +71,10 @@ class DownloadManager(private val context: Context) {
                         }
                     }
                     if (copied == 0L) throw IllegalStateException("EMPTY_AUDIO_SOURCE")
-                    if (target!!.exists()) target!!.delete()
+                    // Verify the newly downloaded temp file BEFORE replacing existing offline media.
+                    // POSIX rename replaces the destination atomically; if it fails, keep the old file.
+                    val checksum = calculateSHA256(temp!!)
                     check(temp!!.renameTo(target!!)) { "ATOMIC_MOVE_FAILED" }
-                    val checksum = calculateSHA256(target!!)
                     val completed = DownloadProgress(song.id, DownloadStatus.COMPLETED, 1f, copied, copied, target!!.absolutePath, checksum, null)
                     updateState(completed)
                     onFinished(completed)
@@ -81,13 +82,13 @@ class DownloadManager(private val context: Context) {
                 }
             } catch (e: CancellationException) {
                 temp?.delete()
-                target?.delete()
+                // Never delete an earlier successfully cached track when this attempt fails.
                 val state = DownloadProgress(song.id, DownloadStatus.CANCELLED, 0f, 0L, 0L, error = "Cancelled")
                 updateState(state)
                 onFinished(state)
             } catch (e: Exception) {
                 temp?.delete()
-                target?.delete()
+                // Never delete an earlier successfully cached track when this attempt fails.
                 val state = DownloadProgress(song.id, DownloadStatus.FAILED, 0f, 0L, 0L, error = e.message ?: "DOWNLOAD_FAILED")
                 Log.e("DownloadManager", "Download failed for ${song.id}", e)
                 updateState(state)
