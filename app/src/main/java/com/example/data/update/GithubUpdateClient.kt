@@ -30,7 +30,8 @@ data class VerifiedRelease(
     val apkUrl: String,
     val sha256Url: String,
     val sizeBytes: Long,
-    val githubDigest: String? = null
+    val githubDigest: String? = null,
+    val notes: String = ""
 )
 
 sealed interface UpdateAvailability {
@@ -79,7 +80,8 @@ object UpdateReleasePolicy {
             }
             val apk = assetUrl("app-release.apk") ?: continue
             val hash = assetUrl("app-release.apk.sha256") ?: continue
-            signed.add(VerifiedRelease(version, tag, page, apk.first, hash.first, apk.second, apk.third))
+            val notes = release.optString("body").trim().take(1500)
+            signed.add(VerifiedRelease(version, tag, page, apk.first, hash.first, apk.second, apk.third, notes))
         }
         return when {
             signed.isNotEmpty() -> UpdateAvailability.Available(signed.maxBy { it.versionCode })
