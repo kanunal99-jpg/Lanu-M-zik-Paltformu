@@ -1,6 +1,12 @@
 package com.example.auth
 
 import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.IOException
 import java.util.UUID
 
 /**
@@ -13,7 +19,18 @@ class LocalAuthBackend(context: Context) : AuthBackend {
         Context.MODE_PRIVATE
     )
 
-    override suspend fun currentSession(): AuthSession? {
+    // Shared across all LocalAuthBackend instances in the Android process.
+    // Session creation, login and logout must observe a single atomic identity.
+    private suspend fun <T> transaction(block: () -> T): T =
+        withContext(Dispatchers.IO) { identityMutex.withLock { block() } }
+
+    private fun SharedPreferences.Editor.persist() {
+        if (!commit()) throw IOException("Yerel kimlik diske kaydedilemedi.")
+    }
+
+    override suspend fun currentSession(): AuthSession? = transaction { readSession() }
+
+    private fun readSession(): AuthSession? {
         val userId = preferences.getString(KEY_USER_ID, null) ?: return null
         return AuthSession(
             userId = userId,
@@ -29,8 +46,8 @@ class LocalAuthBackend(context: Context) : AuthBackend {
      * Creates/returns a device-local identity without pretending that a cloud account exists.
      * This is the safe default used until a real remote provider is configured.
      */
-    suspend fun ensureLocalSession(): AuthSession {
-        currentSession()?.let { return it }
+    suspend fun ensureLocalSession(): AuthSession = transaction {
+        readSession()?.let { return@transaction it }
         val createdAt = System.currentTimeMillis()
         val userId = retainedLocalIdentity()
         preferences.edit()
@@ -38,7 +55,7 @@ class LocalAuthBackend(context: Context) : AuthBackend {
             .putString(KEY_LAST_LOCAL_ID, userId)
             .putString(KEY_DISPLAY_NAME, "LANU Kullanıcısı")
             .putLong(KEY_CREATED_AT, createdAt)
-            .apply()
+            .persist()
         return AuthSession(
             userId = userId,
             displayName = "LANU Kullanıcısı",
@@ -47,9 +64,9 @@ class LocalAuthBackend(context: Context) : AuthBackend {
         )
     }
 
-    override suspend fun signIn(identifier: String, secret: String): AuthResult {
+    override suspend fun signIn(identifier: String, secret: String): AuthResult = transaction {
         if (identifier.isBlank() || secret.isBlank()) {
-            return AuthResult.Failure(
+            return@transaction AuthResult.Failure(
                 AuthFailure.INVALID_INPUT,
                 "Kimlik bilgileri boş bırakılamaz"
             )
@@ -63,12 +80,13 @@ class LocalAuthBackend(context: Context) : AuthBackend {
 
         preferences.edit()
             .putString(KEY_USER_ID, userId)
+            .putString(KEY_LAST_LOCAL_ID, userId)
             .putString(KEY_DISPLAY_NAME, identifier.substringBefore('@').ifBlank { "LANU Kullanıcısı" })
             .putString(KEY_EMAIL, identifier.takeIf { it.contains('@') })
             .putLong(KEY_CREATED_AT, createdAt)
-            .apply()
+            .persist()
 
-        return AuthResult.Success(
+        AuthResult.Success(
             AuthSession(
                 userId = userId,
                 displayName = preferences.getString(KEY_DISPLAY_NAME, "LANU Kullanıcısı")
@@ -80,17 +98,17 @@ class LocalAuthBackend(context: Context) : AuthBackend {
         )
     }
 
-    override suspend fun signOut(): AuthResult {
-        val current = currentSession()
+    override suspend fun signOut(): AuthResult = transaction {
+        val current = readSession()
         if (current == null) {
-            return AuthResult.Failure(AuthFailure.UNKNOWN, "Aktif LANU oturumu yok")
+            return@transaction AuthResult.Failure(AuthFailure.UNKNOWN, "Aktif LANU oturumu yok")
         }
         // Sign-out ends the active session but must not orphan locally stored playlists.
         // The retained ID is NOT a login credential or a remote authenticated session.
         preferences.edit().clear()
             .putString(KEY_LAST_LOCAL_ID, current.userId)
-            .apply()
-        return AuthResult.Success(current)
+            .persist()
+        AuthResult.Success(current)
     }
 
     private fun retainedLocalIdentity(): String =
@@ -99,6 +117,7 @@ class LocalAuthBackend(context: Context) : AuthBackend {
             ?: "local-${UUID.randomUUID()}"
 
     private companion object {
+        private val identityMutex = Mutex()
         const val KEY_LAST_LOCAL_ID = "last_local_user_id"
         const val KEY_USER_ID = "user_id"
         const val KEY_DISPLAY_NAME = "display_name"
