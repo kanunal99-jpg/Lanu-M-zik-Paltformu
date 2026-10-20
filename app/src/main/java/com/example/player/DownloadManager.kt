@@ -26,6 +26,36 @@ internal object OfflineFileNamePolicy {
     fun accepts(songId: String): Boolean = safe.matches(songId) && !songId.contains("..")
 }
 
+/**
+ * One owner per song ID within the process. Operations are atomic so parallel
+ * Compose/ViewModel callbacks cannot schedule competing writes to the same .part file.
+ */
+internal class InFlightDownloadRegistry {
+    companion object {
+        // Different ViewModel and MediaSession instances may share offline_audio.
+        private val processJobs = ConcurrentHashMap<String, Job>()
+    }
+    private val ownedJobs = ConcurrentHashMap<String, Job>()
+
+    fun register(songId: String, job: Job): Boolean {
+        if (processJobs.putIfAbsent(songId, job) != null) return false
+        ownedJobs[songId] = job
+        return true
+    }
+
+    fun release(songId: String, job: Job): Boolean {
+        ownedJobs.remove(songId, job)
+        return processJobs.remove(songId, job)
+    }
+
+    fun cancel(songId: String) { ownedJobs[songId]?.cancel() }
+    fun cancelAll() {
+        // Closing one manager must NOT cancel another manager's active transfer.
+        ownedJobs.values.forEach { it.cancel() }
+        ownedJobs.clear()
+    }
+}
+
 enum class DownloadStatus { QUEUED, DOWNLOADING, COMPLETED, FAILED, CANCELLED }
 
 data class DownloadProgress(
@@ -41,15 +71,14 @@ data class DownloadProgress(
 
 class DownloadManager(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val activeJobs = ConcurrentHashMap<String, Job>()
+    private val activeJobs = InFlightDownloadRegistry()
     private val _downloadStates = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
     val downloadStates: StateFlow<Map<String, DownloadProgress>> = _downloadStates.asStateFlow()
 
     fun getDownloadProgress(songId: String): DownloadProgress? = _downloadStates.value[songId]
 
     fun startDownload(song: Song, quality: AudioQuality, onFinished: (DownloadProgress) -> Unit = {}) {
-        if (activeJobs.containsKey(song.id)) return
-        val job = scope.launch {
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             var target: File? = null
             var temp: File? = null
             try {
@@ -104,16 +133,22 @@ class DownloadManager(private val context: Context) {
                 Log.e("DownloadManager", "Download failed for ${song.id}", e)
                 updateState(state)
                 onFinished(state)
-            } finally { activeJobs.remove(song.id) }
+            } finally {
+                coroutineContext[Job]?.let { activeJobs.release(song.id, it) }
+            }
         }
-        activeJobs[song.id] = job
+        if (activeJobs.register(song.id, job)) {
+            if (!job.start()) activeJobs.release(song.id, job)
+        } else {
+            // Another caller owns the transfer. Cancel the unstarted coroutine.
+            job.cancel()
+        }
     }
 
-    fun cancelDownload(songId: String) { activeJobs[songId]?.cancel() }
+    fun cancelDownload(songId: String) { activeJobs.cancel(songId) }
 
     fun close() {
-        activeJobs.values.forEach { it.cancel() }
-        activeJobs.clear()
+        activeJobs.cancelAll()
         scope.cancel()
         _downloadStates.value = emptyMap()
     }
