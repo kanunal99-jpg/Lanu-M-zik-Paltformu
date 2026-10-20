@@ -1,3 +1,27 @@
 <resources>
     <string name="app_name">LANU Müzik</string>
+    <string name="ota_title">Check for Updates</string>
+    <string name="ota_installed_version">Installed version: %1$s (%2$d)</string>
+    <string name="ota_release_source">Updates are checked against official LANU GitHub Releases.</string>
+    <string name="ota_checking">Checking for updates…</string>
+    <string name="ota_up_to_date">No newer published release is available.</string>
+    <string name="ota_waiting_signed">A new release exists, but its signed update APK is not available yet.</string>
+    <string name="ota_waiting_signed_detail">Preview and debug APKs are not used for automatic updates. The same signing certificate is required to preserve your app data.</string>
+    <string name="ota_update_available">Update available: Build %1$d</string>
+    <string name="ota_size_mb">Download size: %1$d MB</string>
+    <string name="ota_release_notes">What\'s new</string>
+    <string name="ota_download_verify">Download and verify update</string>
+    <string name="ota_downloading">Downloading update: %1$d%%</string>
+    <string name="ota_verify_description">SHA-256, package identity, version and signing certificate will be verified before installation.</string>
+    <string name="ota_resume_hint">Interrupted downloads can safely resume later.</string>
+    <string name="ota_cancel">Stop download</string>
+    <string name="ota_verifying_install">Rechecking APK signature and installation safety…</string>
+    <string name="ota_cancelling">Stopping the download safely…</string>
+    <string name="ota_verified">Update downloaded and verified.</string>
+    <string name="ota_permission_needed">Allow installations from this source in Android settings, then return here.</string>
+    <string name="ota_install_confirm">Android will ask you to approve installation. Do not uninstall the current app.</string>
+    <string name="ota_install">Install update</string>
+    <string name="ota_check_button">Check for updates</string>
+    <string name="ota_legal_description">LANU never silently removes your app. Android installation approval and the same signing certificate are required. If preview/debug APK signatures differ, the update is blocked to protect your data.</string>
+    <string name="ota_channel">Release channel: %1$s</string>
 </resources>
