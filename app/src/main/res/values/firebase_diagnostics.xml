@@ -1,0 +1,5 @@
+<resources>
+    <!-- Never collect Crashlytics reports until the user has opted in.
+         Firebase production onboarding and consent UI are separate acceptance gates. -->
+    <bool name="firebase_crashlytics_collection_enabled">false</bool>
+</resources>

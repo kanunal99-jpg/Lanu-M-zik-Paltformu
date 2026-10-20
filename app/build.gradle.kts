@@ -72,8 +72,12 @@ android {
   }
 }
 
-if (file("google-services.json").isFile) {
+// Configuration is deliberately optional: LANU must build/start without GMS,
+// including Huawei Android/EMUI or AOSP builds without Google services.
+val firebaseConfigured = file("google-services.json").isFile
+if (firebaseConfigured) {
   apply(plugin = "com.google.gms.google-services")
+  apply(plugin = "com.google.firebase.crashlytics")
 }
 
 ksp {
@@ -113,6 +117,11 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
+  // Crash telemetry is opt-in by resource; no Firebase SDK dependency in
+  // unconfigured Android/AOSP builds (no google-services.json).
+  if (firebaseConfigured) {
+    implementation(libs.firebase.crashlytics)
+  }
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
