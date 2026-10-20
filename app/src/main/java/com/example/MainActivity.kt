@@ -113,15 +113,11 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
             context, audioPermission
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (hasAudioAccess) viewModel.scanLocalMusic()
-        val pendingPermissions = mutableListOf<String>()
-        if (!hasAudioAccess) pendingPermissions += audioPermission
-        LocalMediaPermissionPolicy.notificationPermission(Build.VERSION.SDK_INT)?.let { permission ->
-            if (androidx.core.content.ContextCompat.checkSelfPermission(
-                context, permission
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                pendingPermissions += permission
-            }
-        }
+        // Initial launch only asks to read the user's music, not to send notifications.
+        // On API 33+ POST_NOTIFICATIONS is a separate, feature-specific consent.
+        val pendingPermissions = LocalMediaPermissionPolicy.startupPermissions(
+            Build.VERSION.SDK_INT, hasAudioAccess
+        )
         if (pendingPermissions.isNotEmpty()) {
             permissionsLauncher.launch(pendingPermissions.toTypedArray())
         }
