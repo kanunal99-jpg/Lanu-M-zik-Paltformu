@@ -43,6 +43,35 @@ class OtaSessionStoreTest {
         assertNull(sessions.restore(344))
     }
 
+    @Test fun installerRejectsCacheTamperingAndOutsidePaths() {
+        val code = 355
+        val directory = java.io.File(context.cacheDir, "lanu_updates")
+        directory.mkdirs()
+        val file = java.io.File(directory, "lanu-" + code + ".apk")
+        file.writeText("APK changed on disk")
+        try {
+            val updater = com.example.data.update.GithubUpdateClient(context)
+            val fakeSha = "0".repeat(64)
+            val tampered = runCatching {
+                kotlinx.coroutines.runBlocking {
+                    updater.verifyForInstall(file, code, fakeSha)
+                }
+            }.exceptionOrNull()
+            org.junit.Assert.assertTrue(tampered is java.io.IOException)
+            val other = java.io.File(context.cacheDir, "another.apk")
+            other.writeText("wrong-path")
+            val wrongPath = runCatching {
+                kotlinx.coroutines.runBlocking {
+                    updater.verifyForInstall(other, code, fakeSha)
+                }
+            }.exceptionOrNull()
+            org.junit.Assert.assertTrue(wrongPath is java.io.IOException)
+            other.delete()
+        } finally {
+            file.delete()
+        }
+    }
+
     @Test fun forgedTagAndInvalidHashNeverBecomeReady() {
         sessions.save(release(345), "c".repeat(64))
         val prefs = context.getSharedPreferences("lanu_ota_verified_session", Context.MODE_PRIVATE)
