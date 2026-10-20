@@ -111,6 +111,35 @@ class UpdateReleasePolicyTest {
         assertEquals(359, result.release.versionCode)
     }
 
+    @Test fun partialTransfersRequireCorrectByteRangeAndTotal() {
+        assertTrue(OtaTransferPolicy.matchesRange("bytes 2048-9999/10000", 2048, 10000))
+        assertTrue(!OtaTransferPolicy.matchesRange("bytes 2047-9999/10000", 2048, 10000))
+        assertTrue(!OtaTransferPolicy.matchesRange("bytes 2048-9999/9999", 2048, 10000))
+        assertTrue(!OtaTransferPolicy.matchesRange("bytes 2048-10000/10000", 2048, 10000))
+        assertTrue(!OtaTransferPolicy.matchesRange("bytes */10000", 2048, 10000))
+        assertTrue(!OtaTransferPolicy.matchesRange(null, 2048, 10000))
+        assertTrue(!OtaTransferPolicy.matchesRange("bytes -1-500/10000", 0, 10000))
+    }
+
+    @Test fun releaseDigestIsAcceptedOnlyAsValidSha256() {
+        val apkDigest = "b".repeat(64)
+        val release = entry(362)
+        release.getJSONArray("assets").getJSONObject(0)
+            .put("digest", "sha256:" + apkDigest)
+        val chosen = UpdateReleasePolicy.choose(list(release), 361)
+            as UpdateAvailability.Available
+        assertEquals(apkDigest, chosen.release.githubDigest)
+        release.getJSONArray("assets").getJSONObject(0).put("digest", "md5:aaa")
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(list(release), 361))
+    }
+
+    @Test fun missingGitHubDigestPreservesLegacyCompatibility() {
+        val chosen = UpdateReleasePolicy.choose(list(entry(364)), 363)
+            as UpdateAvailability.Available
+        assertEquals(null, chosen.release.githubDigest)
+    }
+
     @Test fun emptyReleasesDoNotCreatePhantomUpdate() {
         assertEquals(UpdateAvailability.UpToDate, UpdateReleasePolicy.choose("[]", 341))
     }

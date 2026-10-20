@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import java.io.File
 
 sealed interface UpdateScreenState {
@@ -28,6 +29,7 @@ sealed interface UpdateScreenState {
     data object WaitingForSignedApk : UpdateScreenState
     data class Available(val release: VerifiedRelease) : UpdateScreenState
     data class Downloading(val release: VerifiedRelease, val progress: Int) : UpdateScreenState
+    data class Cancelling(val release: VerifiedRelease) : UpdateScreenState
     data class ReadyToInstall(val release: VerifiedRelease, val file: File, val permissionsNeeded: Boolean = false) : UpdateScreenState
     data object VerifyingInstaller : UpdateScreenState
     data class Failed(val reason: String) : UpdateScreenState
@@ -35,6 +37,7 @@ sealed interface UpdateScreenState {
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
     private val updater = GithubUpdateClient(application)
+    private var activeDownload: Job? = null
     private val _screen = MutableStateFlow<UpdateScreenState>(UpdateScreenState.Idle)
     val screen: StateFlow<UpdateScreenState> = _screen
 
@@ -52,7 +55,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun checkForUpdates() {
-        if (_screen.value is UpdateScreenState.Checking || _screen.value is UpdateScreenState.Downloading || _screen.value is UpdateScreenState.VerifyingInstaller) return
+        if (_screen.value is UpdateScreenState.Checking || _screen.value is UpdateScreenState.Downloading || _screen.value is UpdateScreenState.Cancelling || _screen.value is UpdateScreenState.VerifyingInstaller) return
         _screen.value = UpdateScreenState.Checking
         viewModelScope.launch {
             try {
@@ -76,17 +79,37 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     fun downloadUpdate() {
         val available = _screen.value as? UpdateScreenState.Available ?: return
         _screen.value = UpdateScreenState.Downloading(available.release, 0)
-        viewModelScope.launch {
+        activeDownload = viewModelScope.launch {
             try {
                 val downloaded = updater.downloadAndVerify(available.release) { percent ->
-                    _screen.value = UpdateScreenState.Downloading(available.release, percent)
+                    if (_screen.value is UpdateScreenState.Downloading) {
+                        _screen.value = UpdateScreenState.Downloading(available.release, percent)
+                    }
                 }
-                _screen.value = UpdateScreenState.ReadyToInstall(available.release, downloaded)
+                if (_screen.value is UpdateScreenState.Downloading) {
+                    _screen.value = UpdateScreenState.ReadyToInstall(available.release, downloaded)
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 _screen.value = UpdateScreenState.Failed(
                     "Güncelleme kuruluma hazırlanamadı: " + (e.message ?: "Bilinmeyen hata.")
                 )
+            } finally {
+                activeDownload = null
+            }
+        }
+    }
+
+    /** Abort this transfer without losing the already downloaded partial bytes. */
+    fun cancelDownload() {
+        val inProgress = _screen.value as? UpdateScreenState.Downloading ?: return
+        _screen.value = UpdateScreenState.Cancelling(inProgress.release)
+        val interrupted = activeDownload
+        interrupted?.cancel()
+        viewModelScope.launch {
+            interrupted?.join()
+            if (_screen.value is UpdateScreenState.Cancelling) {
+                _screen.value = UpdateScreenState.Available(inProgress.release)
             }
         }
     }
