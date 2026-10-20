@@ -38,4 +38,6 @@
     <string name="ota_copy_certificate_sha256">SHA-256 parmak izini kopyala</string>
     <string name="ota_copy_certificate_sha1">SHA-1 parmak izini kopyala</string>
     <string name="ota_certificate_notice">SHA-256, OTA kontrolü için kurulu sertifikayı tanımlar. SHA-1, Android kısıtlı Google API anahtarı kurulumunda kullanılabilir. Bu değerler imza anahtarı değildir ve yeni bir APK dosyasının kurulabileceğini tek başına kanıtlamaz.</string>
+    <string name="youtube_webview_unavailable">Bu Android cihazında gömülü YouTube oynatıcısı kullanılamıyor. Yerel müzikleriniz etkilenmez.</string>
+    <string name="youtube_browser_fallback">Resmî YouTube videosunu tarayıcıda aç</string>
 </resources>
