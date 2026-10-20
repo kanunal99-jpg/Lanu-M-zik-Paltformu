@@ -53,8 +53,8 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
 
     fun checkForUpdates() {
         if (_screen.value is UpdateScreenState.Checking || _screen.value is UpdateScreenState.Downloading || _screen.value is UpdateScreenState.VerifyingInstaller) return
+        _screen.value = UpdateScreenState.Checking
         viewModelScope.launch {
-            _screen.value = UpdateScreenState.Checking
             try {
                 _screen.value = when (val result = updater.check(installedCode)) {
                     is UpdateAvailability.Available -> UpdateScreenState.Available(result.release)
