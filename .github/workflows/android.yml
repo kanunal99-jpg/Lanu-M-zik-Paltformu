@@ -94,7 +94,27 @@ jobs:
             echo "Jamendo commercial license gate: DISABLED (safe default); Audius is the default full-stream catalog."
           fi
       - name: Android Lint quality gate
-        run: gradle lintDebug --stacktrace
+        shell: bash
+        run: |
+          set +e
+          gradle lintDebug --stacktrace
+          outcome=$?
+          report="app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
+          if [[ -f "${report}" ]]; then
+            echo "::group::Android Lint findings"
+            grep -E ':[0-9]+: (Error|Warning):' "${report}" || true
+            echo "::endgroup::"
+          fi
+          exit "${outcome}"
+      - name: Archive Lint findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanu-android-lint-${{ github.sha }}
+          if-no-files-found: ignore
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
       - name: Run Unit & Robolectric Tests
         run: gradle testDebugUnitTest --stacktrace
       - name: Assemble Debug APK
