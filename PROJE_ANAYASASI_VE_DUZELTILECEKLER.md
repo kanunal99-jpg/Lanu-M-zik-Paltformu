@@ -2,6 +2,23 @@
 
 Bu belge mevcut ANAYASA.md, docs/ANAYASA.md, AGENTS.md ve proje belgelerini **silmez veya geçersiz kılmaz**; çelişkide daha güvenli/katı kural uygulanır, karar ADR'de belgelenir.
 
+## EK DURUM 20.10.2026 — PR #54, #55 birleştirme ve P0 #56 veri bütünlüğü
+
+Bu bölüm üstündeki eski snapshot tablolarını günceller. **PR açılması ve kod oluşturulması üretim kabulü değildir**; CI, gerçek cihaz ve servis koşulları ayrı ayrı kanıtlanır.
+
+| İş | Otomatik kanıt ve mevcut durum | Hâlâ açık sınırlar |
+|---|---|---|
+| P0 imza sertifikası parmak izi ekranı | [PR #54](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/54) main'e **birleştirildi**, [CI #387 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39419003322) | SHA-1/SHA-256 görüntülenmesi keystore özel anahtarı değildir; A55 cihaz sertifikası ve kalıcı signing key eşleştirme gerekli |
+| P1 bozuk Room tür alanı | [PR #55](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/55) main'e **birleştirildi**, [CI #388 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39419355673) | Yalnızca okuma sırasındaki tür fallback'i; tablo/veri silinmedi |
+| P0 yerel kullanıcı arşivi yarış/veri korunması | [PR #56](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/56): uygulama içindeki farklı LocalUserLibraryBackend örneklerine ortak işlem kilidi, diske yazma onayı, bozuk JSON'u hata göstererek koruma; paralel favori/playlist ve bozuk kayıt regresyonları | **CI ve gerçek cihaz kabulü bekleniyor.** İşlem kilidi tek Android süreç kapsamındadır; bu PR kalıcı çoklu süreç / bulut senkronizasyonu garantisi değildir |
+| En son birleşik anayasa güncellemesi | [PR #53](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/53) main'e birleştirildi, [CI #380 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39417286720) | Tarihsel tablolardaki önceki PR açık/CI bekliyor satırları bu güncel kanıtlara göre değerlendirilir |
+
+**Sert üretim engelleri değişmedi:** Mevcut cihazdaki APK **kaldırılmaz**. Aynı paket adı + imza sertifikası, kalıcı yetkili keystore, GitHub signed `app-release.apk` + SHA-256, artan versionCode ve fiziksel A55 üzerinde yükleme sırasında yerel kimlik/favori/playlist/Room bütünlüğü doğrulanmadan OTA yayına hazır sayılamaz. Google YouTube Data API gerçek anahtar/kota/gömülü oynatma ve Firebase Crashlytics proje erişimi de doğrulanmalı. Debug Build, imzalı production OTA değildir.
+
+**Puan etiketi:** Önceki **55/100** ihtiyatlı temel notu ayrı bir kanıtlı yeniden değerlendirme yapılıncaya kadar korunur; **92/100** hedef ve 90+ etiketi üretim engelleri kalkana kadar sadece hedef olarak tutulur.
+
+---
+
 ## 20 Ekim 2026 — CANLI DURUM, TAMAMLANANLAR, AÇIK İŞLER VE HEDEF PUANLAMA
 
 > Bu tarihli bölüm **güncel durumun tek özetidir**; alttaki 15 Ekim tarihli denetim bulguları tarihsel kayıt olarak korunur. PR açılması = kod yazıldı; CI yeşil = sadece kapsanan kontroller geçti; fiziksel cihaz doğrulaması olmadan üretim kabulü yoktur. Her yeni denetimde bu tablonun tarihini, kanıt URL'lerini ve durumunu güncelleyin.
