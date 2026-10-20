@@ -4,6 +4,8 @@ import com.example.auth.AuthBackend
 import com.example.auth.AuthFailure
 import com.example.auth.AuthResult
 import com.example.auth.AuthSession
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,35 +15,41 @@ class UserLibraryService(
     private val authBackend: AuthBackend,
     private val libraryBackend: UserLibraryBackend
 ) {
+    private val sessionTransitionMutex = Mutex()
     private val _session = MutableStateFlow<AuthSession?>(null)
     val session: StateFlow<AuthSession?> = _session.asStateFlow()
 
     private val _snapshot = MutableStateFlow<UserLibrarySnapshot?>(null)
     val snapshot: StateFlow<UserLibrarySnapshot?> = _snapshot.asStateFlow()
 
-    suspend fun restoreSession(): AuthSession? {
+    suspend fun restoreSession(): AuthSession? = sessionTransitionMutex.withLock {
         val current = authBackend.currentSession()
+        // Read data first. Publishing the new identity before snapshot loading
+        // could briefly expose the previous account's favorites under a new ID.
+        val restoredSnapshot = current?.let { libraryBackend.snapshot(it.userId) }
+        _snapshot.value = restoredSnapshot
         _session.value = current
-        _snapshot.value = current?.let { libraryBackend.snapshot(it.userId) }
-        return current
+        current
     }
 
-    suspend fun signIn(identifier: String, secret: String): AuthResult {
+    suspend fun signIn(identifier: String, secret: String): AuthResult = sessionTransitionMutex.withLock {
         val result = authBackend.signIn(identifier, secret)
         if (result is AuthResult.Success) {
+            // Avoid publishing another user's identity with the old favorites.
+            val nextSnapshot = libraryBackend.snapshot(result.session.userId)
+            _snapshot.value = nextSnapshot
             _session.value = result.session
-            _snapshot.value = libraryBackend.snapshot(result.session.userId)
         }
-        return result
+        result
     }
 
-    suspend fun signOut(): AuthResult {
+    suspend fun signOut(): AuthResult = sessionTransitionMutex.withLock {
         val result = authBackend.signOut()
         if (result is AuthResult.Success) {
             _session.value = null
             _snapshot.value = null
         }
-        return result
+        result
     }
 
     suspend fun addFavorite(songId: String): AuthResult = withSession { userId ->
@@ -54,10 +62,10 @@ class UserLibraryService(
         refreshSnapshot(userId)
     }
 
-    suspend fun createPlaylist(name: String, description: String = ""): Result<PlaylistRecord> {
+    suspend fun createPlaylist(name: String, description: String = ""): Result<PlaylistRecord> = sessionTransitionMutex.withLock {
         val userId = _session.value?.userId
-            ?: return Result.failure(IllegalStateException("Aktif LANU oturumu yok"))
-        return runCatching {
+            ?: return@withLock Result.failure(IllegalStateException("Aktif LANU oturumu yok"))
+        runCatching {
             libraryBackend.createPlaylist(userId, name, description).also { refreshSnapshot(userId) }
         }
     }
@@ -106,10 +114,10 @@ class UserLibraryService(
         _snapshot.value = libraryBackend.snapshot(userId)
     }
 
-    private suspend fun withSession(action: suspend (String) -> Unit): AuthResult {
+    private suspend fun withSession(action: suspend (String) -> Unit): AuthResult = sessionTransitionMutex.withLock {
         val session = _session.value
-            ?: return AuthResult.Failure(AuthFailure.NOT_CONFIGURED, "Aktif LANU oturumu yok")
-        return runCatching {
+            ?: return@withLock AuthResult.Failure(AuthFailure.NOT_CONFIGURED, "Aktif LANU oturumu yok")
+        runCatching {
             action(session.userId)
             AuthResult.Success(session)
         }.getOrElse { error ->
