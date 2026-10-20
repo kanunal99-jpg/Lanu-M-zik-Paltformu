@@ -86,7 +86,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
 
     override suspend fun snapshot(userId: String): UserLibrarySnapshot = transaction {
         requireValidUserId(userId)
-        return UserLibrarySnapshot(
+        UserLibrarySnapshot(
             userId = userId,
             favorites = readFavorites(userId),
             playlists = readPlaylists(userId),
@@ -211,7 +211,9 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
             val item = array.getJSONObject(index)
             FavoriteRecord(item.getString("songId"), item.getLong("addedAtMs"))
         }
-    }.getOrDefault(emptyList())
+    }.getOrElse { cause ->
+        throw IOException("Yerel favori verisi okunamadı; kayıtların üzerine yazılmadı.", cause)
+    }
 
     private fun writeFavorites(userId: String, favorites: List<FavoriteRecord>) {
         val array = JSONArray()
@@ -235,7 +237,9 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
                 songIds = (0 until songs.length()).map(songs::getString)
             )
         }
-    }.getOrDefault(emptyList())
+    }.getOrElse { cause ->
+        throw IOException("Yerel çalma listesi verisi okunamadı; kayıtların üzerine yazılmadı.", cause)
+    }
 
     private fun writePlaylists(userId: String, playlists: List<PlaylistRecord>) {
         val array = JSONArray()
@@ -260,7 +264,9 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
             val item = array.getJSONObject(index)
             HistoryRecord(item.getString("songId"), item.getLong("playedAtMs"))
         }
-    }.getOrDefault(emptyList())
+    }.getOrElse { cause ->
+        throw IOException("Yerel dinleme geçmişi verisi okunamadı; kayıtların üzerine yazılmadı.", cause)
+    }
 
     private fun writeHistory(userId: String, history: List<HistoryRecord>) {
         val array = JSONArray()
