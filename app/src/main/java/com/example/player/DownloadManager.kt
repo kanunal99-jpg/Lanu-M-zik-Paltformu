@@ -31,14 +31,28 @@ internal object OfflineFileNamePolicy {
  * Compose/ViewModel callbacks cannot schedule competing writes to the same .part file.
  */
 internal class InFlightDownloadRegistry {
-    private val jobs = ConcurrentHashMap<String, Job>()
+    companion object {
+        // Different ViewModel and MediaSession instances may share offline_audio.
+        private val processJobs = ConcurrentHashMap<String, Job>()
+    }
+    private val ownedJobs = ConcurrentHashMap<String, Job>()
 
-    fun register(songId: String, job: Job): Boolean = jobs.putIfAbsent(songId, job) == null
-    fun release(songId: String, job: Job): Boolean = jobs.remove(songId, job)
-    fun cancel(songId: String) { jobs[songId]?.cancel() }
+    fun register(songId: String, job: Job): Boolean {
+        if (processJobs.putIfAbsent(songId, job) != null) return false
+        ownedJobs[songId] = job
+        return true
+    }
+
+    fun release(songId: String, job: Job): Boolean {
+        ownedJobs.remove(songId, job)
+        return processJobs.remove(songId, job)
+    }
+
+    fun cancel(songId: String) { ownedJobs[songId]?.cancel() }
     fun cancelAll() {
-        jobs.values.forEach { it.cancel() }
-        jobs.clear()
+        // Closing one manager must NOT cancel another manager's active transfer.
+        ownedJobs.values.forEach { it.cancel() }
+        ownedJobs.clear()
     }
 }
 
@@ -124,7 +138,7 @@ class DownloadManager(private val context: Context) {
             }
         }
         if (activeJobs.register(song.id, job)) {
-            job.start()
+            if (!job.start()) activeJobs.release(song.id, job)
         } else {
             // Another caller owns the transfer. Cancel the unstarted coroutine.
             job.cancel()
