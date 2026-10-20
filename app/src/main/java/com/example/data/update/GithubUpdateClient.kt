@@ -28,7 +28,8 @@ data class VerifiedRelease(
     val pageUrl: String,
     val apkUrl: String,
     val sha256Url: String,
-    val sizeBytes: Long
+    val sizeBytes: Long,
+    val githubDigest: String? = null
 )
 
 sealed interface UpdateAvailability {
@@ -58,7 +59,7 @@ object UpdateReleasePolicy {
             val page = release.optString("html_url")
             if (page != releasesPage + "/tag/" + tag) continue
             val assets = release.optJSONArray("assets") ?: continue
-            fun assetUrl(name: String): Pair<String, Long>? {
+            fun assetUrl(name: String): Triple<String, Long, String?>? {
                 for (j in 0 until assets.length()) {
                     val asset = assets.optJSONObject(j) ?: continue
                     if (asset.optString("name") != name) continue
@@ -66,13 +67,18 @@ object UpdateReleasePolicy {
                     if (url != downloadPrefix + tag + "/" + name) continue
                     val size = asset.optLong("size", -1L)
                     if (size <= 0 || size > 200L * 1024L * 1024L) continue
-                    return url to size
+                    val rawDigest = asset.optString("digest")
+                    val digest = if (rawDigest.isBlank()) null else {
+                        if (!Regex("sha256:[a-fA-F0-9]{64}").matches(rawDigest)) continue
+                        rawDigest.substringAfter(':').lowercase(Locale.ROOT)
+                    }
+                    return Triple(url, size, digest)
                 }
                 return null
             }
             val apk = assetUrl("app-release.apk") ?: continue
             val hash = assetUrl("app-release.apk.sha256") ?: continue
-            signed.add(VerifiedRelease(version, tag, page, apk.first, hash.first, apk.second))
+            signed.add(VerifiedRelease(version, tag, page, apk.first, hash.first, apk.second, apk.third))
         }
         return when {
             signed.isNotEmpty() -> UpdateAvailability.Available(signed.maxBy { it.versionCode })
@@ -291,6 +297,9 @@ class GithubUpdateClient(private val context: Context) {
             val expected = get(release.sha256Url).use {
                 UpdateReleasePolicy.parseExpectedSha256(responseBody(it, 1024))
             }
+            if (release.githubDigest != null &&
+                !expected.equals(release.githubDigest, ignoreCase = true)
+            ) throw IOException("GitHub yayımlanan SHA-256 bilgileri uyuşmuyor. Kurulum engellendi.")
             // A previously fully verified download can be reused after process death,
             // but ONLY if the freshly fetched SHA-256 still matches.
             if (finalApk.isFile) {
