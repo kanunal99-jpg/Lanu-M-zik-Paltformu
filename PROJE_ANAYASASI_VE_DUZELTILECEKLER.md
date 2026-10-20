@@ -18,9 +18,9 @@ Bu belge mevcut ANAYASA.md, docs/ANAYASA.md, AGENTS.md ve proje belgelerini **si
 | P1 Firebase Crashlytics opsiyonel, varsayılan telemetri kapalı | [#65](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/65), CI #413 | **main'de**, **Firebase dashboard/test crash/mapping ve kullanıcı onayı henüz yok** |
 | P0 OTA oturum sürüm/link/hash tutarlılığı ve kalıcı kayıt | [#66](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/66), CI #418 | **main'de**, fiziksel cihaz silmeden OTA hâlâ bekliyor |
 | P0 aynı şarkı için indirme yarışını önleme | [#67](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/67), CI #420 | **CI/merge kabulü sürüyor**, tamamlandı sayılmaz |
-| P1 Android API24+ HTTPS-only | [#68](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/68), CI #421 | **CI/merge kabulü sürüyor** |
-| P1 farklı OEM MediaStore kolon toleransı | [#69](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/69), CI #423 | **CI/merge kabulü sürüyor** |
-| P2 ilk açılışta gereksiz bildirim izni istememe | [#70](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/70), CI #424 | **CI/merge kabulü sürüyor** |
+| P1 Android API24+ HTTPS-only | [#68](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/68), [CI #421 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39436396865) | **main'de** |
+| P1 farklı OEM MediaStore kolon toleransı | [#69](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/69), [CI #423 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39436646763) | **main'de** |
+| P2 ilk açılışta gereksiz bildirim izni istememe | [#70](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/70), [CI #424 başarılı](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39436931965) | **main'de** |
 
 **Puan kuralı:** Tarihsel 55/100 başlangıç, son **kanıta dayalı yaklaşık 70/100 yazılım/CI mühendislik hazırlığı** ve **92/100 üretim hedefi** farklı ölçümlerdir. Açık PR'lar tamamlanmış kabul edilerek puan yükseltilmez. Üretim alanında hâlâ eksik olanlar: **uyumlu kalıcı signing keystore + kurulu APK SHA-256 sertifika eşleşmesi, signed release APK/hash, farklı Android OEM cihazlarda UYGULAMAYI SİLMEDEN yerel kimlik/Room/favori/playlist/çevrimdışı ses korunumu, gerçek YouTube Data API yetkisi ve Firebase Crashlytics opt-in + dashboard + R8 mapping**. Bu engeller kapanmadan 92/100 veya production-ready etiketi kullanılmaz.
 
