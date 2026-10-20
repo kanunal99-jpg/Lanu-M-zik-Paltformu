@@ -1,7 +1,6 @@
 package com.example.data
 
 import android.content.Context
-import android.database.CursorWrapper
 import android.database.MatrixCursor
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
@@ -29,21 +28,18 @@ class LocalMusicScannerFailureTest {
 
     @Test fun brokenOEMCursorMustNotReturnPartiallyScannedSongs() = runBlocking {
         val cols = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE)
-        val rows = MatrixCursor(cols)
-        rows.addRow(arrayOf(100L, "First track"))
-        rows.addRow(arrayOf(101L, "Second track"))
-        val scanner = LocalMusicScanner(context) { _, _, _ ->
-            object : CursorWrapper(rows) {
-                private var rowsRead = 0
-                override fun moveToNext(): Boolean {
-                    if (rowsRead++ >= 1) throw IllegalStateException("OEM provider failed halfway")
-                    return super.moveToNext()
-                }
+        val rows = object : MatrixCursor(cols) {
+            override fun getLong(column: Int): Long {
+                if (position >= 1) throw IllegalStateException("OEM provider failed halfway")
+                return super.getLong(column)
             }
         }
+        rows.addRow(arrayOf<Any>(100L, "First track"))
+        rows.addRow(arrayOf<Any>(101L, "Second track"))
+        val scanner = LocalMusicScanner(context) { _, _, _ -> rows }
         val error = runCatching { scanner.scanLocalMusic() }.exceptionOrNull()
-        assertTrue(error is IOException)
-        assertTrue(error?.cause is IllegalStateException)
+        assertTrue("Expected IOException from incomplete OEM cursor, got: $error", error is IOException)
+        assertTrue("Expected original provider failure as cause, got: ${error?.cause}", error?.cause is IllegalStateException)
         assertTrue(error?.message.orEmpty().contains("korundu"))
     }
 
@@ -51,8 +47,8 @@ class LocalMusicScannerFailureTest {
         val rows = MatrixCursor(arrayOf(
             MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE
         ))
-        rows.addRow(arrayOf(200L, "A"))
-        rows.addRow(arrayOf(201L, "B"))
+        rows.addRow(arrayOf<Any>(200L, "A"))
+        rows.addRow(arrayOf<Any>(201L, "B"))
         val scanner = LocalMusicScanner(context) { _, _, _ -> rows }
         val result = scanner.scanLocalMusic()
         assertEquals(listOf("local_200", "local_201"), result.map { it.id })
