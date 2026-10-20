@@ -24,16 +24,21 @@ class UserLibraryService(
 
     suspend fun restoreSession(): AuthSession? = sessionTransitionMutex.withLock {
         val current = authBackend.currentSession()
+        // Read data first. Publishing the new identity before snapshot loading
+        // could briefly expose the previous account's favorites under a new ID.
+        val restoredSnapshot = current?.let { libraryBackend.snapshot(it.userId) }
+        _snapshot.value = restoredSnapshot
         _session.value = current
-        _snapshot.value = current?.let { libraryBackend.snapshot(it.userId) }
         current
     }
 
     suspend fun signIn(identifier: String, secret: String): AuthResult = sessionTransitionMutex.withLock {
         val result = authBackend.signIn(identifier, secret)
         if (result is AuthResult.Success) {
+            // Avoid publishing another user's identity with the old favorites.
+            val nextSnapshot = libraryBackend.snapshot(result.session.userId)
+            _snapshot.value = nextSnapshot
             _session.value = result.session
-            _snapshot.value = libraryBackend.snapshot(result.session.userId)
         }
         result
     }
