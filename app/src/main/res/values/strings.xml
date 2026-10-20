@@ -38,4 +38,6 @@
     <string name="ota_copy_certificate_sha256">Copy SHA-256 fingerprint</string>
     <string name="ota_copy_certificate_sha1">Copy SHA-1 fingerprint</string>
     <string name="ota_certificate_notice">SHA-256 identifies the installed signing certificate for OTA checks. SHA-1 can help configure Android-restricted Google API keys. These fingerprints are not signing keys and do not prove that a new APK can be installed.</string>
+    <string name="youtube_webview_unavailable">Embedded YouTube playback is not available on this Android device. Your local music remains accessible.</string>
+    <string name="youtube_browser_fallback">Open official YouTube video in browser</string>
 </resources>
