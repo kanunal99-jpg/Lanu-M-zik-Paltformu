@@ -31,4 +31,11 @@
     <string name="nav_library">My Library</string>
     <string name="nav_account">Account</string>
     <string name="nav_updates">Check for Updates</string>
+    <string name="ota_installed_certificate_title">Installed app signing certificate</string>
+    <string name="ota_installed_certificate_sha256">SHA-256: %1$s</string>
+    <string name="ota_installed_certificate_sha1">SHA-1: %1$s</string>
+    <string name="ota_installed_certificate_unavailable">Could not read the installed app certificate. Do not attempt to reinstall for this check.</string>
+    <string name="ota_copy_certificate_sha256">Copy SHA-256 fingerprint</string>
+    <string name="ota_copy_certificate_sha1">Copy SHA-1 fingerprint</string>
+    <string name="ota_certificate_notice">SHA-256 identifies the installed signing certificate for OTA checks. SHA-1 can help configure Android-restricted Google API keys. These fingerprints are not signing keys and do not prove that a new APK can be installed.</string>
 </resources>
