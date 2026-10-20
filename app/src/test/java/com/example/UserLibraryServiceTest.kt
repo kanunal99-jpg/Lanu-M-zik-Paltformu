@@ -6,9 +6,13 @@ import com.example.auth.AuthProvider
 import com.example.auth.AuthResult
 import com.example.auth.AuthSession
 import com.example.data.UserLibraryService
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class UserLibraryServiceTest {
@@ -75,6 +79,34 @@ class UserLibraryServiceTest {
         assertEquals(null, service.session.value)
         assertEquals(null, service.snapshot.value)
         assertTrue(service.addFavorite("song-2") is AuthResult.Failure)
+    }
+
+
+    @Test
+    fun concurrentLogoutWaitsForInFlightFavoriteAndNeverRepopulatesSignedOutSnapshot() = runTest {
+        val auth = FakeAuthBackend()
+        val delegate = InMemoryLibraryBackend()
+        val started = CompletableDeferred<Unit>()
+        val continueWrite = CompletableDeferred<Unit>()
+        val blocking = object : com.example.data.UserLibraryBackend by delegate {
+            override suspend fun addFavorite(userId: String, songId: String, nowMs: Long) {
+                started.complete(Unit)
+                continueWrite.await()
+                delegate.addFavorite(userId, songId, nowMs)
+            }
+        }
+        val service = UserLibraryService(auth, blocking)
+        assertTrue(service.signIn("user@example.com", "secret") is AuthResult.Success)
+        val favorite = async { service.addFavorite("song-during-logout") }
+        started.await()
+        val logout = async { service.signOut() }
+        assertFalse("Logout must wait for the in-flight authorized mutation", logout.isCompleted)
+        continueWrite.complete(Unit)
+        assertTrue(favorite.await() is AuthResult.Success)
+        assertTrue(logout.await() is AuthResult.Success)
+        assertNull(service.session.value)
+        assertNull(service.snapshot.value)
+        assertTrue(service.addFavorite("unauthorized") is AuthResult.Failure)
     }
 
     private open class LocalUserLibraryBackendForTest : com.example.data.UserLibraryBackend {
