@@ -24,4 +24,6 @@
     <string name="ota_check_button">Check for updates</string>
     <string name="ota_legal_description">LANU never silently removes your app. Android installation approval and the same signing certificate are required. If preview/debug APK signatures differ, the update is blocked to protect your data.</string>
     <string name="ota_channel">Release channel: %1$s</string>
+    <string name="lanu_open_friends_preview">Friends (local preview)</string>
+    <string name="lanu_friends_back">Back to account</string>
 </resources>
