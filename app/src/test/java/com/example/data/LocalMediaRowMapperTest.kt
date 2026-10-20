@@ -7,7 +7,12 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [24, 29, 35])
 class LocalMediaRowMapperTest {
     @Test fun missingOptionalOEMMetadataDoesNotHideUserAudio() {
         val cursor = MatrixCursor(arrayOf(
