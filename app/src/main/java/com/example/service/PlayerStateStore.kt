@@ -28,17 +28,34 @@ class PlayerStateStore(context: Context) {
             .apply()
     }
 
-    fun read(): Snapshot = Snapshot(
-        songId = preferences.getString(KEY_SONG_ID, null),
-        title = preferences.getString(KEY_TITLE, null),
-        artist = preferences.getString(KEY_ARTIST, null),
-        positionMs = preferences.getLong(KEY_POSITION, 0L),
-        isPlaying = preferences.getBoolean(KEY_PLAYING, false),
-        shuffle = preferences.getBoolean(KEY_SHUFFLE, false),
-        repeatMode = runCatching { RepeatMode.valueOf(preferences.getString(KEY_REPEAT, RepeatMode.OFF.name)!!) }.getOrDefault(RepeatMode.OFF)
-    )
+    fun read(): Snapshot {
+        // An OEM backup/restore or interrupted preference migration can leave
+        // a field with the wrong Android SharedPreferences type. Keep all other
+        // valid fields rather than crashing the media service on startup.
+        fun storedText(key: String, maxLength: Int): String? =
+            runCatching { preferences.getString(key, null) }.getOrNull()
+                ?.takeIf { it.isNotBlank() && it.length <= maxLength }
+        fun storedBoolean(key: String): Boolean =
+            runCatching { preferences.getBoolean(key, false) }.getOrDefault(false)
+        val id = storedText(KEY_SONG_ID, 512)
+        val position = runCatching { preferences.getLong(KEY_POSITION, 0L) }
+            .getOrDefault(0L).coerceIn(0L, MAX_RESTORED_POSITION_MS)
+        val repeat = runCatching {
+            RepeatMode.valueOf(preferences.getString(KEY_REPEAT, RepeatMode.OFF.name)!!)
+        }.getOrDefault(RepeatMode.OFF)
+        return Snapshot(
+            songId = id,
+            title = storedText(KEY_TITLE, 500),
+            artist = storedText(KEY_ARTIST, 500),
+            positionMs = if (id == null) 0L else position,
+            isPlaying = id != null && storedBoolean(KEY_PLAYING),
+            shuffle = storedBoolean(KEY_SHUFFLE),
+            repeatMode = repeat
+        )
+    }
 
     private companion object {
+        const val MAX_RESTORED_POSITION_MS = 24L * 60L * 60L * 1000L
         const val KEY_SONG_ID = "song_id"
         const val KEY_TITLE = "title"
         const val KEY_ARTIST = "artist"
