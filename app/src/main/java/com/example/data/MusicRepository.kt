@@ -45,6 +45,7 @@ class MusicRepository(context: Context) {
     private val context = context.applicationContext
     private val database = AppDatabase.getDatabase(context)
     private val dao = database.musicDao()
+    private val offlineMetadataGate = OfflineMetadataMutationGate()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val localMusicScanner = LocalMusicScanner(context)
     val downloadManager = com.example.player.DownloadManager(context)
@@ -458,26 +459,38 @@ class MusicRepository(context: Context) {
 
     suspend fun toggleDownload(song: Song, quality: AudioQuality) {
         if (downloadedSongIds.first().contains(song.id)) {
-            // Do not erase metadata if an OEM filesystem refuses deletion:
-            // the user's verified offline bytes may still be intact.
-            if (downloadManager.deleteDownloadedFile(song.id)) {
-                dao.removeDownload(song.id)
-                dao.setSongOfflineAvailability(song.id, false)
-            } else {
-                Log.w("MusicRepository", "Offline file was not deleted; retained Room record")
+            // Serialize explicit deletion with any completion callback already
+            // queued by the download. Otherwise a late DAO add could resurrect
+            // the user's just-deleted offline record after filesystem cleanup.
+            offlineMetadataGate.withExclusiveAccess {
+                // Keep Room if the OEM filesystem refused to delete existing bytes.
+                if (downloadManager.deleteDownloadedFile(song.id)) {
+                    dao.removeDownload(song.id)
+                    dao.setSongOfflineAvailability(song.id, false)
+                } else {
+                    Log.w("MusicRepository", "Offline file was not deleted; retained Room record")
+                }
             }
             return
         }
         downloadManager.startDownload(song, quality) { state ->
-            scope.launch {
-                if (state.status == com.example.player.DownloadStatus.COMPLETED && state.localFilePath != null) {
-                    val bytes = File(state.localFilePath).length()
-                    val sizeLabel = String.format(java.util.Locale.US, "%.1f MB", bytes / 1_048_576f)
-                    dao.addDownload(DownloadedSongEntity(song.id, quality.title, sizeLabel))
-                    dao.insertLocalSong(song.toLocalEntity(localAudioPath = state.localFilePath, localCoverPath = "", isOffline = true, audioQuality = quality.title, fileSizeBytes = bytes))
-                } else {
-                    dao.removeDownload(song.id)
-                    dao.setSongOfflineAvailability(song.id, false)
+            // An earlier completed .bin can survive retry failure and cancellation.
+            // Never clear its Room record on an unsuccessful callback.
+            if (state.status == com.example.player.DownloadStatus.COMPLETED &&
+                !state.localFilePath.isNullOrBlank()
+            ) {
+                scope.launch {
+                    offlineMetadataGate.withExclusiveAccess {
+                        val path = state.localFilePath ?: return@withExclusiveAccess
+                        val file = File(path)
+                        // The user may have explicitly removed the track before
+                        // this completion callback gets its turn on the mutex.
+                        if (!file.isFile) return@withExclusiveAccess
+                        val bytes = file.length()
+                        val sizeLabel = String.format(java.util.Locale.US, "%.1f MB", bytes / 1_048_576f)
+                        dao.addDownload(DownloadedSongEntity(song.id, quality.title, sizeLabel))
+                        dao.insertLocalSong(song.toLocalEntity(localAudioPath = path, localCoverPath = "", isOffline = true, audioQuality = quality.title, fileSizeBytes = bytes))
+                    }
                 }
             }
         }
