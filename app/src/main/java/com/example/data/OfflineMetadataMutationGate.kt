@@ -3,10 +3,16 @@ package com.example.data
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Serializes offline file-removal metadata with asynchronous completion callbacks. */
+/**
+ * Serializes offline deletion against delayed completion callbacks across all
+ * repository instances in the Android process (not only one ViewModel instance).
+ * This is a process-local safety barrier; it does not claim cross-process locks.
+ */
 internal class OfflineMetadataMutationGate {
-    private val lock = Mutex()
+    companion object {
+        private val processLock = Mutex()
+    }
 
     suspend fun <T> withExclusiveAccess(action: suspend () -> T): T =
-        lock.withLock { action() }
+        processLock.withLock { action() }
 }
