@@ -464,15 +464,21 @@ class MusicRepository(context: Context) {
             return
         }
         downloadManager.startDownload(song, quality) { state ->
-            scope.launch {
-                if (state.status == com.example.player.DownloadStatus.COMPLETED && state.localFilePath != null) {
-                    val bytes = File(state.localFilePath).length()
+            // FAILED/CANCELLED attempts can leave a previous *completed* file
+            // intact. Never destroy its Room download flag or metadata here.
+            // Only the explicit user-delete flow may remove an offline record.
+            if (OfflineTransferRecordPolicy.shouldPersistCompletion(
+                    state.status, state.localFilePath
+                )
+            ) {
+                scope.launch {
+                    val localPath = state.localFilePath ?: return@launch
+                    val file = File(localPath)
+                    if (!file.isFile) return@launch
+                    val bytes = file.length()
                     val sizeLabel = String.format(java.util.Locale.US, "%.1f MB", bytes / 1_048_576f)
                     dao.addDownload(DownloadedSongEntity(song.id, quality.title, sizeLabel))
-                    dao.insertLocalSong(song.toLocalEntity(localAudioPath = state.localFilePath, localCoverPath = "", isOffline = true, audioQuality = quality.title, fileSizeBytes = bytes))
-                } else {
-                    dao.removeDownload(song.id)
-                    dao.setSongOfflineAvailability(song.id, false)
+                    dao.insertLocalSong(song.toLocalEntity(localAudioPath = localPath, localCoverPath = "", isOffline = true, audioQuality = quality.title, fileSizeBytes = bytes))
                 }
             }
         }
