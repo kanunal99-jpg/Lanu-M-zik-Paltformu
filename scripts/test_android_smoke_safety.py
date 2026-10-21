@@ -39,6 +39,7 @@ elif name == "adb":
     elif cmd == ["shell","getprop","sys.boot_completed"]: print("1")
     elif cmd == ["shell","getprop","ro.kernel.qemu"]: print(os.environ.get("FAKE_QEMU", "1"))
     elif cmd == ["shell","pm","path","com.example.lanu"]:
+        if os.environ.get("FAKE_PM_FAILURE") == "1": sys.exit(2)
         print(os.environ.get("FAKE_INSTALLED_PATH", ""))
     elif cmd[:2] == ["shell","pidof"]: print("12345")
     elif cmd[:3] == ["shell","dumpsys","package"]: print("versionCode=6")
@@ -102,6 +103,14 @@ elif name == "adb":
                             FAKE_INSTALLED_PATH="package:/data/app/exists.apk")
         self.assertNotEqual(0, r.returncode)
         self.assertIn("already installed", r.stderr)
+        self.assertFalse(self.installed())
+
+    def test_pm_query_failure_refuses_install_instead_of_assuming_absence(self):
+        r = self.run_script(LANU_SMOKE_MODE="install",
+                            LANU_SMOKE_ENABLE_INSTALL="I_APPROVE_DEDICATED_TEST_DEVICE",
+                            FAKE_PM_FAILURE="1")
+        self.assertNotEqual(0, r.returncode)
+        self.assertIn("Cannot inspect installed package", r.stderr)
         self.assertFalse(self.installed())
 
     def test_physical_device_requires_second_explicit_permission(self):
