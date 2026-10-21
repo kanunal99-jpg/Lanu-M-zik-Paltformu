@@ -55,7 +55,7 @@ class OfflineMetadataMutationGateTest {
         val enteredFirst = CompletableDeferred<Unit>()
         val releaseFirst = CompletableDeferred<Unit>()
         val enteredSecond = CompletableDeferred<Unit>()
-        val first = async(kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+        val first = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
             firstGate.withExclusiveAccess {
                 enteredFirst.complete(Unit)
                 releaseFirst.await()
@@ -63,7 +63,7 @@ class OfflineMetadataMutationGateTest {
         }
         enteredFirst.await()
         // UNDISPATCHED executes synchronously up to mutex suspension: no timing flakiness.
-        val second = async(kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+        val second = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
             secondGate.withExclusiveAccess { enteredSecond.complete(Unit) }
         }
         assertFalse("Different repository instances must not mutate Room in parallel",
