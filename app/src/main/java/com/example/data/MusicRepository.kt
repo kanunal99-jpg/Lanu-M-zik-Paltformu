@@ -458,9 +458,14 @@ class MusicRepository(context: Context) {
 
     suspend fun toggleDownload(song: Song, quality: AudioQuality) {
         if (downloadedSongIds.first().contains(song.id)) {
-            downloadManager.deleteDownloadedFile(song.id)
-            dao.removeDownload(song.id)
-            dao.setSongOfflineAvailability(song.id, false)
+            // Do not erase metadata if an OEM filesystem refuses deletion:
+            // the user's verified offline bytes may still be intact.
+            if (downloadManager.deleteDownloadedFile(song.id)) {
+                dao.removeDownload(song.id)
+                dao.setSongOfflineAvailability(song.id, false)
+            } else {
+                Log.w("MusicRepository", "Offline file was not deleted; retained Room record")
+            }
             return
         }
         downloadManager.startDownload(song, quality) { state ->
