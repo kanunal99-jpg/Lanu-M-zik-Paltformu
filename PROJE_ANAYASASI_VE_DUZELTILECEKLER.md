@@ -1,3 +1,29 @@
+# CANLI KANIT ÖZETİ — 21.10.2026
+
+**Bu bölüm önceki tarihsel durum tablolarının üstündedir ve 21 Ekim itibarıyla doğrulanmış commit/CI kanıtını gösterir.** CI yeşil olması yalnızca CI'de yürütülen testlerin başarılı olduğuna işaret eder; GMS'siz Huawei, Samsung, Xiaomi, tablet veya fiziksel cihaz kabulünün yerine geçmez.
+
+| İş | Kanıt | 21.10.2026 statüsü |
+|---|---|---|
+| P1 bozuk oynatıcı tercihlerini güvenli geri yükleme | [PR #79](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/79) | main'de; birleştirildi |
+| P0 bozuk yerel arşiv yüklemesinde oturum izolasyonu | [PR #80](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/80) | main'de; birleştirildi |
+| P0 çevrimdışı dosya silme/indirme yarışı ve Room kaydı koruması | [PR #82](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/82), [PR CI #462](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39539651067), commit `8241616` | main'e birleştirildi; PR lint/unit/Robolectric/R8 başarılı; birleşik main CI #465 sonuç bekliyor |
+| P0 OTA SharedPreferences tip bozulmasında cache ve kullanıcı verilerini koruma | [PR #81](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/81), [PR CI #461](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39539141839), commit `eadc129` | main'e birleştirildi; PR kalite adımları başarılı; birleşik main CI bekliyor |
+| Android test runtime: Roborazzi güncellemesi / Robolectric 4.16.1 uyumu | [PR #36](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/36), [PR CI #453](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39537706181), commit `02eb4b2` | main'e birleştirildi; PR'daki Unit/Robolectric adımı başarılı; birleşik main CI bekliyor |
+| P0 kullanıcı tarafından istenen silmede, dosyalar zaten yoksa Room'da takılı kalan kayıt | [PR #83](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/83), [PR CI #466](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39546153802) | ayrı PR açıldı; 3 regresyon testi eklendi, **CI ve merge henüz onaylanmadı** |
+| Son önceden doğrulanmış ana dal paketi | [main CI #464](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39539757254), [GitHub Build 464](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/tag/lanu-music-464-6bc361b8c6729436655f4f4603a95ff745ef6226) | CI başarılı; **indirilebilir app-debug.apk ve SHA-256 var**; imzalı production OTA değildir |
+| Kalıcı signing / production APK | [main CI #464 signed job](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39539757254), [Issue #34](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/issues/34) | Job *success* görünse de secret'lar eksik olduğundan signed build, fingerprint ve upload adımları **SKIPPED**; production release **YOK** |
+
+### Değişmez sonraki işler (paralel kontrol listesi)
+1. **P0 testlerin birleşik hali:** main CI #465 ve sonraki birleşik push çalışmaları ile #83 PR lint, bütün Unit/Robolectric, R8 ve APK smoke sonuçlarını doğrula; başarısız olursa logla kök nedeni gider, CI yeşil olmadan #83'ü birleştirme.
+2. **P0 imzalı yayımlama:** kurulu cihaz paket/sertifika SHA-256 fingerprint'ini yetkili olarak doğrula, aynı sertifikaya sahip kalıcı signing keystore'u sadece GitHub secrets üzerinden kullan; signature pin, artan versionCode, APK SHA ve uzaktan GitHub release asset digest'i doğrulanmadan production OTA yayınlama. **Kurulu uygulama asla silinmez.**
+3. **P0 Android çeşitliliği:** API 24/29/33/35/36 ve mümkünse 37, Samsung/Xiaomi/Huawei APK-uyumlu GMS'siz cihaz, telefon/tablet/katlanır ile yerel kimlik, çalma listesi, favoriler, MediaStore ve Room veri bütünlüğü; salt statik OEM kontrolünü gerçek cihaz testi sanma.
+4. **P1 mimari / kalite:** MainViewModel Hilt+Clean Architecture, Crashlytics opt-in ve R8 mapping, TR/EN, TalkBack ve düşük RAM/yavaş ağ testlerini izole PR/test kabulü ile sürdür.
+5. **P0 gerçek servis/telif:** Audius canlı smoke kapsamını sürdür, YouTube ve Jamendo erişim/lisans/anahtar kısıtları resmî olarak kanıtlanmadan içeriği açık veya hazır gösterme.
+
+**Puanlama:** Eski 55/100 ihtiyatlı üretim kabul başlangıcı ve 92/100 hedef korunur; yalnızca CI başarısından 90+ üretim puanı türetilmez. Puan değişikliği için yazılım, cihaz, imza, servis ve release kanıtı ayrı ayrı gerekir. İlgili kök takip: [#34](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/issues/34).
+
+---
+
 # PROJE ANAYASASI — 15.10.2026
 
 Bu belge mevcut ANAYASA.md, docs/ANAYASA.md, AGENTS.md ve proje belgelerini **silmez veya geçersiz kılmaz**; çelişkide daha güvenli/katı kural uygulanır, karar ADR'de belgelenir.
