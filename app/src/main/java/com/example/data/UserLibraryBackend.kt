@@ -231,6 +231,44 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         if (!preferences.contains(key)) preferences.edit().putString(key, "[]").persist()
     }
 
+    /**
+     * All legacy categories are committed in one synchronous preference transaction.
+     * An already-present key (including []) is authoritative: never overwrite user edits.
+     * No partial playlist writes, duplicate generated IDs or halfway import checkpoints.
+     */
+    suspend fun importLegacyIfAbsent(
+        userId: String,
+        favorites: List<FavoriteRecord>,
+        playlists: List<PlaylistRecord>,
+        history: List<HistoryRecord>
+    ) = transaction {
+        requireValidUserId(userId)
+        val editor = preferences.edit()
+        if (!preferences.contains(favoritesKey(userId))) {
+            val array = JSONArray()
+            favorites.forEach { array.put(JSONObject().put("songId", it.songId).put("addedAtMs", it.addedAtMs)) }
+            editor.putString(favoritesKey(userId), array.toString())
+        }
+        if (!preferences.contains(playlistsKey(userId))) {
+            val array = JSONArray()
+            playlists.forEach { playlist ->
+                val songs = JSONArray().apply { playlist.songIds.forEach(::put) }
+                array.put(JSONObject().put("id", playlist.id).put("name", playlist.name)
+                    .put("description", playlist.description).put("createdAtMs", playlist.createdAtMs)
+                    .put("updatedAtMs", playlist.updatedAtMs).put("songIds", songs))
+            }
+            editor.putString(playlistsKey(userId), array.toString())
+        }
+        if (!preferences.contains(historyKey(userId))) {
+            val array = JSONArray()
+            history.take(MAX_HISTORY_ITEMS).forEach {
+                array.put(JSONObject().put("songId", it.songId).put("playedAtMs", it.playedAtMs))
+            }
+            editor.putString(historyKey(userId), array.toString())
+        }
+        editor.persist()
+    }
+
     private fun readFavorites(userId: String): List<FavoriteRecord> = runCatching {
         val array = JSONArray(preferences.getString(favoritesKey(userId), "[]"))
         (0 until array.length()).map { index ->
