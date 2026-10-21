@@ -15,8 +15,7 @@ import androidx.media3.session.SessionToken
 import com.example.model.EqualizerPreset
 import com.example.model.EqualizerState
 import com.example.model.Song
-import com.example.model.SongSourceType
-import com.example.data.catalog.CatalogLicensePolicy
+import com.example.player.PlaybackUriPolicy
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +26,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
 
 class AudioPlayerController(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -196,18 +194,15 @@ class AudioPlayerController(private val context: Context) {
      * Static/legacy catalog entries therefore cannot accidentally become playable.
      */
     private fun playableUri(song: Song): Uri? {
-        val offline = File(context.filesDir, "offline_audio/${song.id}.bin")
-        if (offline.isFile && offline.length() > 0L) return Uri.fromFile(offline)
+        // Use the same stable filename allowlist as DownloadManager. Legacy
+        // valid IDs still map to their original .bin bytes; no files are moved,
+        // rewritten or deleted by this security change.
+        val offline = PlaybackUriPolicy.managedOfflineFile(context.filesDir, song.id)
+        if (offline?.isFile == true && offline.length() > 0L) return Uri.fromFile(offline)
 
-        val raw = song.audioUrl.trim()
-        if (raw.startsWith("content://") || raw.startsWith("file://")) {
-            return Uri.parse(raw)
-        }
-        if (song.sourceType == SongSourceType.VERIFIED_REMOTE &&
-            !CatalogLicensePolicy.isPermittedRemoteLicense(song.license)
-        ) return null
-        if (song.sourceType != SongSourceType.VERIFIED_REMOTE && song.sourceType != SongSourceType.VERIFIED_PREVIEW) return null
-        return raw.takeIf { it.startsWith("https://") || it.startsWith("http://") }?.let(Uri::parse)
+        // A remote catalog entry must not spoof file/content URIs or downgrade
+        // encrypted HTTPS playback to plaintext HTTP.
+        return PlaybackUriPolicy.verifiedSource(song)?.let(Uri::parse)
     }
 
     private fun showUnavailablePlayback() {
