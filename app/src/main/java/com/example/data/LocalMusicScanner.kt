@@ -43,8 +43,12 @@ class LocalMusicScanner(
         val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
         try {
+            // ContentResolver.query() returns null on some OEM/provider
+            // failures. A healthy empty library has a non-null, empty cursor.
+            // Never report a failed query as an authoritative empty scan.
             val cursor = audioQuery(projection, selection, sortOrder)
-            cursor?.use { c ->
+                ?: throw IOException("MediaStore audio query returned null")
+            cursor.use { c ->
                 while (c.moveToNext()) {
                     currentCoroutineContext().ensureActive()
                     // Some OEM MediaStore implementations omit optional metadata
