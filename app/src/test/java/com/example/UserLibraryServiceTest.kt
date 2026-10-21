@@ -152,6 +152,46 @@ class UserLibraryServiceTest {
         assertTrue(service.snapshot.value?.favorites.orEmpty().isEmpty())
     }
 
+
+    @Test
+    fun corruptLibraryFailsLoginClosedWithoutPublishingPartialIdentity() = runTest {
+        val auth = FakeAuthBackend()
+        val stable = InMemoryLibraryBackend()
+        val failing = object : com.example.data.UserLibraryBackend by stable {
+            override suspend fun snapshot(userId: String): com.example.data.UserLibrarySnapshot {
+                throw java.io.IOException("corrupt playlist JSON")
+            }
+        }
+        val service = UserLibraryService(auth, failing)
+        val login = service.signIn("local@example.com", "secret")
+        assertTrue(login is AuthResult.Failure)
+        assertEquals(AuthFailure.UNKNOWN, (login as AuthResult.Failure).reason)
+        assertNull(service.session.value)
+        assertNull(service.snapshot.value)
+        assertTrue(service.addFavorite("new-song") is AuthResult.Failure)
+    }
+
+    @Test
+    fun corruptStoredLibraryDoesNotExposePreviousSessionOrEraseBytes() = runTest {
+        val auth = FakeAuthBackend()
+        val backend = InMemoryLibraryBackend()
+        val normal = UserLibraryService(auth, backend)
+        assertTrue(normal.signIn("local@example.com", "secret") is AuthResult.Success)
+        assertTrue(normal.addFavorite("retained-song") is AuthResult.Success)
+
+        val failing = object : com.example.data.UserLibraryBackend by backend {
+            override suspend fun snapshot(userId: String): com.example.data.UserLibrarySnapshot {
+                throw java.io.IOException("malformed backup")
+            }
+        }
+        val restored = UserLibraryService(auth, failing)
+        assertNull(restored.restoreSession())
+        assertNull(restored.session.value)
+        assertNull(restored.snapshot.value)
+        // We did not write, clear, or replace the real stored user records.
+        assertEquals(listOf("retained-song"), backend.snapshot("user-1").favorites.map { it.songId })
+    }
+
     private open class LocalUserLibraryBackendForTest : com.example.data.UserLibraryBackend {
         private val delegate = InMemoryLibraryBackend()
         override suspend fun snapshot(userId: String) = delegate.snapshot(userId)
