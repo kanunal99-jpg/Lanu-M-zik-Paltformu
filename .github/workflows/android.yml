@@ -124,6 +124,30 @@ jobs:
             app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
       - name: Run Unit & Robolectric Tests
         run: gradle testDebugUnitTest --stacktrace
+      - name: Report failed unit-test assertions
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root = Path("app/build/test-results/testDebugUnitTest")
+          found = 0
+          for filename in sorted(root.glob("TEST-*.xml")):
+              try:
+                  suite = ET.parse(filename).getroot()
+              except (ET.ParseError, OSError):
+                  continue
+              for test in suite.findall(".//testcase"):
+                  for issue in list(test.findall("failure")) + list(test.findall("error")):
+                      found += 1
+                      print(f"FAILED {test.get('classname')}::{test.get('name')}")
+                      print("TYPE:", issue.get("type", "unknown"))
+                      print("MESSAGE:", str(issue.get("message", ""))[:600])
+                      print("STACK:", (issue.text or "")[:1800])
+          if found == 0:
+              print("No failed unit-test XML found; failure might belong to another CI step.")
+          PY
       - name: Assemble Debug APK
         run: gradle assembleDebug --stacktrace
       - name: Release R8, resource shrinking and signature smoke build
