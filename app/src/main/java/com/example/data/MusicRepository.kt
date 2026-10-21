@@ -51,9 +51,10 @@ class MusicRepository(context: Context) {
     val downloadManager = com.example.player.DownloadManager(context)
 
     private val localAuthBackend = LocalAuthBackend(context)
+    private val localUserLibraryBackend = LocalUserLibraryBackend(context)
     private val userLibraryService = UserLibraryService(
         authBackend = localAuthBackend,
-        libraryBackend = LocalUserLibraryBackend(context)
+        libraryBackend = localUserLibraryBackend
     )
 
     private val audiusCatalogProvider: CatalogProvider = AudiusCatalogProvider()
@@ -390,20 +391,35 @@ class MusicRepository(context: Context) {
 
     private suspend fun migrateLegacyLibraryIfNeeded() {
         val session = userLibraryService.session.value ?: return
-        val snapshot = userLibraryService.snapshot.value ?: return
-        if (snapshot.favorites.isEmpty()) {
-            dao.getFavoriteSongs().first().forEach { favorite -> userLibraryService.addFavorite(favorite.songId) }
-        }
-        if (snapshot.playlists.isEmpty()) {
-            dao.getAllPlaylists().first().forEach { playlist ->
-                val created = userLibraryService.createPlaylist(playlist.name, playlist.description).getOrNull() ?: return@forEach
-                dao.getSongsForPlaylist(playlist.id).first().forEach { relation -> userLibraryService.addSongToPlaylist(created.id, relation.songId) }
+        val userId = session.userId
+        // A persisted empty collection is an explicit user choice. Import legacy
+        // Room rows ONLY for categories never written in the new library.
+        // Successful backend writes are synchronously committed before continuing.
+        if (!localUserLibraryBackend.hasPersistedCategory(userId, "favorites")) {
+            dao.getFavoriteSongs().first().forEach { favorite ->
+                val result = userLibraryService.addFavorite(favorite.songId)
+                check(result is AuthResult.Success) { "Legacy favorite import failed" }
             }
+            localUserLibraryBackend.markLegacyCategoryHandled(userId, "favorites")
         }
-        if (snapshot.history.isEmpty()) {
-            dao.getHistory().first().reversed().forEach { history -> userLibraryService.recordPlay(history.songId) }
+        if (!localUserLibraryBackend.hasPersistedCategory(userId, "playlists")) {
+            dao.getAllPlaylists().first().forEach { playlist ->
+                val created = userLibraryService.createPlaylist(playlist.name, playlist.description).getOrThrow()
+                dao.getSongsForPlaylist(playlist.id).first().forEach { relation ->
+                    val result = userLibraryService.addSongToPlaylist(created.id, relation.songId)
+                    check(result is AuthResult.Success) { "Legacy playlist song import failed" }
+                }
+            }
+            localUserLibraryBackend.markLegacyCategoryHandled(userId, "playlists")
         }
-        Log.d("MusicRepository", "User library ready for ${session.userId}")
+        if (!localUserLibraryBackend.hasPersistedCategory(userId, "history")) {
+            dao.getHistory().first().reversed().forEach { history ->
+                val result = userLibraryService.recordPlay(history.songId)
+                check(result is AuthResult.Success) { "Legacy history import failed" }
+            }
+            localUserLibraryBackend.markLegacyCategoryHandled(userId, "history")
+        }
+        Log.d("MusicRepository", "User library ready for $userId")
     }
 
     suspend fun syncOfflineStorage() {
