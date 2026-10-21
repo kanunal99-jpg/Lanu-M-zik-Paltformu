@@ -72,6 +72,7 @@ class MusicRepository(context: Context) {
         )
     )
     private val catalogPreferences = context.getSharedPreferences("catalog_sync", Context.MODE_PRIVATE)
+    private val catalogState = SafeCatalogSyncPreferences(catalogPreferences)
     private val musicBrainzTurkishRapDiscovery = MusicBrainzTurkishRapDiscovery()
     private val catalogRefreshIntervalMs = 6L * 60L * 60L * 1000L
     private val catalogSyncVersion = 4
@@ -144,15 +145,15 @@ class MusicRepository(context: Context) {
         val normalized = query.trim().lowercase()
         if (normalized.isBlank()) return
         val exhaustedKey = catalogExhaustedKey(normalized)
-        if (catalogPreferences.getBoolean(exhaustedKey, false)) return
+        if (catalogState.boolean(exhaustedKey, false)) return
 
-        var page = catalogPreferences.getInt(catalogCursorKey(normalized), 0).coerceAtLeast(0)
+        var page = catalogState.int(catalogCursorKey(normalized), 0).coerceAtLeast(0)
         // Carry empty-page streak across separate refresh/expand calls.
         var consecutiveEmptyPages =
-            catalogPreferences.getInt(catalogEmptyStreakKey(normalized), 0).coerceIn(0, maxConsecutiveEmptyPages)
+            catalogState.int(catalogEmptyStreakKey(normalized), 0).coerceIn(0, maxConsecutiveEmptyPages)
         var pagesRead = 0
 
-        while (pagesRead < maxPages && !catalogPreferences.getBoolean(exhaustedKey, false)) {
+        while (pagesRead < maxPages && !catalogState.boolean(exhaustedKey, false)) {
             val result = try {
                 catalogProvider.searchSongsPage(normalized, page, catalogPageSize)
             } catch (cancelled: CancellationException) {
@@ -198,8 +199,8 @@ class MusicRepository(context: Context) {
 
     private suspend fun refreshRemoteCatalogIfStale() {
         val now = System.currentTimeMillis()
-        val lastSync = catalogPreferences.getLong("last_sync_ms", 0L)
-        val storedVersion = catalogPreferences.getInt("catalog_sync_version", 0)
+        val lastSync = catalogState.long("last_sync_ms", 0L)
+        val storedVersion = catalogState.int("catalog_sync_version", 0)
         if (storedVersion == catalogSyncVersion && now - lastSync < catalogRefreshIntervalMs) return
 
         // Automatic refresh advances a small batch of real provider pages. It deliberately
@@ -241,7 +242,7 @@ class MusicRepository(context: Context) {
      * a song is added only after a provider returns a verified playable/preview source.
      */
     private suspend fun expandHistoricalTurkishRapArtists(fetched: MutableMap<String, Song>) {
-        val offset = catalogPreferences.getInt("musicbrainz_turkish_rap_offset", 0)
+        val offset = catalogState.int("musicbrainz_turkish_rap_offset", 0)
         val candidates = musicBrainzTurkishRapDiscovery.searchArtists(offset = offset, limit = 25)
             .getOrElse { error ->
                 Log.w("MusicRepository", "MusicBrainz Turkish rap discovery failed", error)
