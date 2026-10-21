@@ -71,9 +71,7 @@ class UpdateViewModel @Inject constructor(application: Application) : AndroidVie
         }
         val prefs = getApplication<Application>()
             .getSharedPreferences("lanu_ota_check", Context.MODE_PRIVATE)
-        val now = System.currentTimeMillis()
-        val last = prefs.getLong("last_successful_check", 0L)
-        if (last > 0L && now >= last && now - last < 6L * 60L * 60L * 1000L) return
+        if (OtaCheckCooldownPolicy.canSkipCheck(prefs, System.currentTimeMillis())) return
         checkForUpdates()
     }
 
