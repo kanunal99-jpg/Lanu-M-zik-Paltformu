@@ -16,6 +16,14 @@ class OtaSessionStore(private val context: Context) {
     private val tagPattern = Regex("""lanu-music-(\d+)-[0-9a-f]{40}""")
     private val shaPattern = Regex("[a-fA-F0-9]{64}")
 
+    private data class StoredOtaHint(
+        val tag: String?,
+        val sha256: String?,
+        val code: Int,
+        val bytes: Long,
+        val digest: String?
+    )
+
     fun save(release: VerifiedRelease, expectedSha256: String) {
         // Session state is a resume hint, but it must be internally coherent
         // before reaching disk. Never accept an unrelated release or asset URL.
@@ -45,12 +53,29 @@ class OtaSessionStore(private val context: Context) {
         if (!saved) throw java.io.IOException("OTA durumu diske kaydedilemedi.")
     }
 
+    /**
+     * Restore is a hint only, not a trust boundary. OEM backup/import can leave
+     * a field with an unexpected SharedPreferences type, e.g. size as String.
+     * Drop ONLY the unusable OTA hint. Keep APK cache and all user content.
+     */
     fun restore(installedCode: Int): RestorableUpdate? {
-        val tag = prefs.getString("tag", null) ?: return null
-        val sha256 = prefs.getString("sha256", null) ?: return null
-        val code = prefs.getInt("code", -1)
-        val bytes = prefs.getLong("size", -1)
-        val digest = prefs.getString("github_digest", null)
+        val stored = try {
+            StoredOtaHint(
+                tag = prefs.getString("tag", null),
+                sha256 = prefs.getString("sha256", null),
+                code = prefs.getInt("code", -1),
+                bytes = prefs.getLong("size", -1),
+                digest = prefs.getString("github_digest", null)
+            )
+        } catch (_: ClassCastException) {
+            clear()
+            return null
+        }
+        val tag = stored.tag ?: return null
+        val sha256 = stored.sha256 ?: return null
+        val code = stored.code
+        val bytes = stored.bytes
+        val digest = stored.digest
         if (!tagPattern.matches(tag) || tagPattern.matchEntire(tag)?.groupValues?.get(1)?.toIntOrNull() != code ||
             code <= installedCode || !shaPattern.matches(sha256) ||
             bytes !in 1L..(200L * 1024L * 1024L) ||
