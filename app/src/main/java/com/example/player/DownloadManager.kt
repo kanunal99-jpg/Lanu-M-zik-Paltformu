@@ -129,8 +129,12 @@ class DownloadManager(private val context: Context) {
                 updateState(song.id, DownloadStatus.QUEUED, 0f, 0L, 0L)
                 if (!OfflineFileNamePolicy.accepts(song.id))
                     throw IllegalArgumentException("INVALID_OFFLINE_TRACK_ID")
+                // Both the declared origin and URI scheme must be local.
+                // Never open a private content/file URI supplied by a remote
+                // catalog object simply because its URL looks local.
+                if (!OfflineSourcePolicy.isAuthorized(song))
+                    throw IllegalStateException("REMOTE_DOWNLOAD_NOT_AUTHORIZED")
                 val uri = Uri.parse(song.audioUrl)
-                if (!OfflineSourcePolicy.isAuthorized(uri)) throw IllegalStateException("REMOTE_DOWNLOAD_NOT_AUTHORIZED")
                 val offlineDir = File(context.filesDir, "offline_audio")
                 check(offlineDir.exists() || offlineDir.mkdirs()) { "OFFLINE_STORAGE_UNAVAILABLE" }
                 temp = File(offlineDir, "${song.id}.part")
