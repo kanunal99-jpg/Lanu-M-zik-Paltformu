@@ -32,7 +32,7 @@ elif name == "apksigner":
     cert=os.environ.get("FAKE_UPGRADE_CERT", "a"*64) if "upgrade" in args[-1] else "a"*64
     print("Signer #1 certificate SHA-256 digest: "+cert)
 elif name == "adb":
-    with open(os.environ["FAKE_ADB_LOG"],"a") as f: f.write(" ".join(args)+"\\n")
+    with open(os.environ["FAKE_ADB_LOG"],"a") as f: f.write(" ".join(args)+"\n")
     assert args[:2] == ["-s","emulator-5554"],args
     cmd=args[2:]
     if cmd == ["get-serialno"]: print("emulator-5554")
