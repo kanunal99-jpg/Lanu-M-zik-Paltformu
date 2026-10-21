@@ -82,7 +82,7 @@ class LanuMediaSessionService : MediaLibraryService() {
                 params: MediaLibraryService.LibraryParams?
             ) = Futures.immediateFuture(
                 LibraryResult.ofItemList(
-                    paginate(repository.searchSongs(query).map(::toMediaItem), page, pageSize),
+                    paginate(MediaLibrarySongPolicy.searchableSongs(repository.searchSongs(query)).map(::toMediaItem), page, pageSize),
                     params
                 )
             )
@@ -120,7 +120,8 @@ class LanuMediaSessionService : MediaLibraryService() {
             browsableItem(LOCAL_ID, "Cihazımdaki Müzikler"),
             browsableItem(CATALOG_ID, "LANU Kataloğu")
         )
-        LOCAL_ID, CATALOG_ID -> paginate(repository.songs.value.map(::toMediaItem), page, pageSize)
+        LOCAL_ID -> paginate(MediaLibrarySongPolicy.localSongs(repository.songs.value).map(::toMediaItem), page, pageSize)
+        CATALOG_ID -> paginate(MediaLibrarySongPolicy.catalogSongs(repository.songs.value).map(::toMediaItem), page, pageSize)
         else -> emptyList()
     }
 
@@ -141,20 +142,24 @@ class LanuMediaSessionService : MediaLibraryService() {
                 .build()
     }
 
-    private fun toMediaItem(song: Song): MediaItem = MediaItem.Builder()
-        .setMediaId(song.id)
-        .setUri(song.audioUrl)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(song.title)
-                .setArtist(song.artist)
-                .setAlbumTitle(song.album)
-                .setArtworkUri(song.coverUrl.takeIf { it.isNotBlank() }?.let(android.net.Uri::parse))
-                .setIsBrowsable(false)
-                .setIsPlayable(song.audioUrl.isNotBlank())
-                .build()
-        )
-        .build()
+    private fun toMediaItem(song: Song): MediaItem {
+        val playableUri = MediaLibrarySongPolicy.playableUri(song)
+        val builder = MediaItem.Builder()
+            .setMediaId(song.id)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(song.title)
+                    .setArtist(song.artist)
+                    .setAlbumTitle(song.album)
+                    .setArtworkUri(song.coverUrl.takeIf { it.isNotBlank() }?.let(android.net.Uri::parse))
+                    .setIsBrowsable(false)
+                    .setIsPlayable(playableUri != null)
+                    .build()
+            )
+        // Never expose a URI from unverified, unlicensed or wrongly grouped content.
+        playableUri?.let(builder::setUri)
+        return builder.build()
+    }
 
     private fun browsableItem(id: String, title: String): MediaItem = MediaItem.Builder()
         .setMediaId(id)
