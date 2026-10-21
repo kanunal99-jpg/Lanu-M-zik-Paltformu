@@ -1,8 +1,21 @@
 package com.example.player
 
 import android.net.Uri
+import com.example.model.Song
+import com.example.model.SongSourceType
 
 object OfflineSourcePolicy {
+    /**
+     * Reject remotely sourced catalog records that spoof a local content://
+     * or file:// URI. Scheme alone is not a provenance check.
+     *
+     * Remote downloading is intentionally not offered by the current policy.
+     * Never open or copy a local private file as a side effect of untrusted
+     * catalog metadata claiming that it is local audio.
+     */
+    fun isAuthorized(song: Song): Boolean =
+        song.sourceType == SongSourceType.LOCAL && isAuthorized(song.audioUrl)
+
     fun isAuthorized(uri: Uri): Boolean = isAuthorized(uri.toString())
 
     /**
