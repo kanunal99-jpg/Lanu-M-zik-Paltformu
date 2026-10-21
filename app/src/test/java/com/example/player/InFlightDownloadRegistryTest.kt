@@ -1,5 +1,6 @@
 package com.example.player
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -75,5 +76,27 @@ class InFlightDownloadRegistryTest {
         second.cancelAll()
         assertTrue(secondJob.isCancelled)
         assertTrue(second.release("multi-instance", secondJob))
+    }
+
+    @Test fun deleteBarrierBlocksNewDownloadsUntilFileDeletionCompletes() = runBlocking {
+        val first = InFlightDownloadRegistry()
+        val anotherManager = InFlightDownloadRegistry()
+        val insideDelete = CompletableDeferred<Unit>()
+        val unblock = CompletableDeferred<Unit>()
+        val removing = async(Dispatchers.Default) {
+            first.deleteExclusively("one-song") {
+                insideDelete.complete(Unit)
+                unblock.await()
+                true
+            }
+        }
+        insideDelete.await()
+        assertFalse(anotherManager.register("one-song", Job()))
+        assertFalse(anotherManager.deleteExclusively("one-song") { true })
+        unblock.complete(Unit)
+        assertTrue(removing.await())
+        val retry = Job()
+        assertTrue(anotherManager.register("one-song", retry))
+        assertTrue(anotherManager.release("one-song", retry))
     }
 }

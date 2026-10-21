@@ -34,18 +34,35 @@ internal class InFlightDownloadRegistry {
     companion object {
         // Different ViewModel and MediaSession instances may share offline_audio.
         private val processJobs = ConcurrentHashMap<String, Job>()
+        private val deletionInProgress = mutableSetOf<String>()
+        private val processLock = Any()
     }
     private val ownedJobs = ConcurrentHashMap<String, Job>()
 
-    fun register(songId: String, job: Job): Boolean {
-        if (processJobs.putIfAbsent(songId, job) != null) return false
+    fun register(songId: String, job: Job): Boolean = synchronized(processLock) {
+        if (songId in deletionInProgress || processJobs.putIfAbsent(songId, job) != null)
+            return@synchronized false
         ownedJobs[songId] = job
-        return true
+        true
     }
 
-    fun release(songId: String, job: Job): Boolean {
+    fun release(songId: String, job: Job): Boolean = synchronized(processLock) {
         ownedJobs.remove(songId, job)
-        return processJobs.remove(songId, job)
+        processJobs.remove(songId, job)
+    }
+
+    /** Exclude all new writers, await the current owner, then delete its media. */
+    suspend fun deleteExclusively(songId: String, action: suspend () -> Boolean): Boolean {
+        val ongoing = synchronized(processLock) {
+            if (!deletionInProgress.add(songId)) return false
+            processJobs[songId]
+        }
+        try {
+            ongoing?.cancelAndJoin()
+            return action()
+        } finally {
+            synchronized(processLock) { deletionInProgress.remove(songId) }
+        }
     }
 
     fun cancel(songId: String) { ownedJobs[songId]?.cancel() }
@@ -169,13 +186,21 @@ class DownloadManager(private val context: Context) {
         _downloadStates.value = emptyMap()
     }
 
-    fun deleteDownloadedFile(songId: String): Boolean {
+    suspend fun deleteDownloadedFile(songId: String): Boolean {
         if (!OfflineFileNamePolicy.accepts(songId)) return false
-        cancelDownload(songId)
-        val dir = File(context.filesDir, "offline_audio")
-        val deleted = listOf(File(dir, "$songId.bin"), File(dir, "$songId.part")).filter { it.exists() }.map { it.delete() }.any { it }
-        _downloadStates.value = _downloadStates.value.toMutableMap().also { it.remove(songId) }
-        return deleted
+        return activeJobs.deleteExclusively(songId) {
+            val dir = File(context.filesDir, "offline_audio")
+            val files = listOf(File(dir, "$songId.bin"), File(dir, "$songId.part"))
+            var deleted = false
+            for (file in files) {
+                if (file.exists()) {
+                    if (!file.delete()) return@deleteExclusively false
+                    deleted = true
+                }
+            }
+            _downloadStates.value = _downloadStates.value.toMutableMap().also { it.remove(songId) }
+            deleted
+        }
     }
 
     private data class OpenedSource(val stream: java.io.InputStream, val contentLength: Long)
