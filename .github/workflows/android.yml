@@ -100,6 +100,9 @@ jobs:
           python3 scripts/check_android_oem_compatibility.py
           bash -n scripts/android_device_readonly_smoke.sh
           bash scripts/android_device_readonly_smoke.sh --help
+          bash -n scripts/android-smoke.sh
+          bash scripts/android-smoke.sh --help
+          python3 -m unittest discover -s scripts -p 'test_android_smoke_safety.py'
       - name: Verify installed APK signing certificate gate unit tests
         run: python3 -m unittest discover -s scripts -p 'test_verify_installed_signing_certificate.py'
       - name: Android Lint quality gate
