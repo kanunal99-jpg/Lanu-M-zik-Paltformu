@@ -83,17 +83,46 @@ class LegacyLibraryImportSafetyTest {
         assertEquals(UserLibrarySnapshot(user), reopened.snapshot(user))
     }
 
-    @Test fun existingModernFavoritePreventsAllRetiredRoomRowsBeingReimported() = runBlocking {
+    @Test fun existingModernFavoriteIsPreservedWhileMissingLegacySectionsAreRecovered() = runBlocking {
         reset()
         val user = "local-modern-owned"
         val backend = LocalUserLibraryBackend(context)
         backend.addFavorite(user, "my-modern-favorite")
-        assertFalse(backend.needsLegacyImport(user))
-        assertFalse(backend.importLegacyIfUninitialized(legacy(user)))
+        assertTrue("Missing playlists and history still need first import", backend.needsLegacyImport(user))
+        assertTrue(backend.importLegacyIfUninitialized(legacy(user)))
         val snapshot = LocalUserLibraryBackend(context).snapshot(user)
         assertEquals(listOf("my-modern-favorite"), snapshot.favorites.map { it.songId })
-        assertTrue(snapshot.playlists.isEmpty())
+        assertEquals(legacy(user).playlists, snapshot.playlists)
+        assertEquals(legacy(user).history, snapshot.history)
+        assertFalse(backend.importLegacyIfUninitialized(legacy(user)))
+        assertEquals(snapshot, LocalUserLibraryBackend(context).snapshot(user))
+    }
+
+    @Test fun deliberatelyClearedHistoryIsNotResurrectedWhileOtherOldRowsImport() = runBlocking {
+        reset()
+        val user = "local-cleared-history"
+        val backend = LocalUserLibraryBackend(context)
+        backend.clearHistory(user)
+        assertTrue(backend.needsLegacyImport(user))
+        assertTrue(backend.importLegacyIfUninitialized(legacy(user)))
+        val snapshot = LocalUserLibraryBackend(context).snapshot(user)
         assertTrue(snapshot.history.isEmpty())
+        assertEquals(legacy(user).favorites, snapshot.favorites)
+        assertEquals(legacy(user).playlists, snapshot.playlists)
+        assertFalse(backend.needsLegacyImport(user))
+    }
+
+    @Test fun allModernSectionsPresentAreAuthoritativeWithoutMigrationMarker() = runBlocking {
+        reset()
+        val user = "local-existing-three-sections"
+        val backend = LocalUserLibraryBackend(context)
+        backend.addFavorite(user, "new-favorite")
+        backend.createPlaylist(user, "New playlist")
+        backend.recordPlay(user, "new-play")
+        assertFalse(backend.needsLegacyImport(user))
+        assertFalse(backend.importLegacyIfUninitialized(legacy(user)))
+        assertEquals("new-favorite", backend.snapshot(user).favorites.single().songId)
+        assertEquals("new-play", backend.snapshot(user).history.single().songId)
     }
 
     @Test fun intentionalClearBeforeFirstStartupAlsoBlocksLegacyResurrection() = runBlocking {
