@@ -107,30 +107,43 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
      */
     suspend fun needsLegacyImport(userId: String): Boolean = transaction {
         requireValidUserId(userId)
-        !hasModernLibraryFootprint(userId)
+        !legacyImportAlreadyComplete(userId) && (
+            !preferences.contains(favoritesKey(userId)) ||
+            !preferences.contains(playlistsKey(userId)) ||
+            !preferences.contains(historyKey(userId))
+        )
     }
 
     suspend fun importLegacyIfUninitialized(legacy: UserLibrarySnapshot): Boolean = transaction {
         val userId = legacy.userId
         requireValidUserId(userId)
-        if (hasModernLibraryFootprint(userId)) return@transaction false
+        if (legacyImportAlreadyComplete(userId)) return@transaction false
 
-        // Do not split this into addFavorite/createPlaylist/recordPlay calls:
-        // that would expose a half-import and could duplicate playlists on retry.
-        preferences.edit()
-            .putString(favoritesKey(userId), serializeFavorites(legacy.favorites))
-            .putString(playlistsKey(userId), serializePlaylists(legacy.playlists))
-            .putString(historyKey(userId), serializeHistory(legacy.history))
-            .putBoolean(legacyImportedKey(userId), true)
-            .persist()
+        val missingFavorites = !preferences.contains(favoritesKey(userId))
+        val missingPlaylists = !preferences.contains(playlistsKey(userId))
+        val missingHistory = !preferences.contains(historyKey(userId))
+        if (!missingFavorites && !missingPlaylists && !missingHistory) return@transaction false
+
+        // Write only NEVER-PERSISTED categories; modern user edits (including
+        // deliberate empty "[]" tombstones) take precedence over old Room data.
+        // One synchronous commit also writes the completion marker so retries
+        // cannot duplicate partially migrated playlists or resurrect deletions.
+        val editor = preferences.edit()
+        if (missingFavorites) editor.putString(
+            favoritesKey(userId), serializeFavorites(legacy.favorites)
+        )
+        if (missingPlaylists) editor.putString(
+            playlistsKey(userId), serializePlaylists(legacy.playlists)
+        )
+        if (missingHistory) editor.putString(
+            historyKey(userId), serializeHistory(legacy.history)
+        )
+        editor.putBoolean(legacyImportedKey(userId), true).persist()
         true
     }
 
-    private fun hasModernLibraryFootprint(userId: String): Boolean =
-        preferences.contains(legacyImportedKey(userId)) ||
-            preferences.contains(favoritesKey(userId)) ||
-            preferences.contains(playlistsKey(userId)) ||
-            preferences.contains(historyKey(userId))
+    private fun legacyImportAlreadyComplete(userId: String): Boolean =
+        preferences.contains(legacyImportedKey(userId))
 
     private fun legacyImportedKey(userId: String) = "legacy_imported_v1::$userId"
 
