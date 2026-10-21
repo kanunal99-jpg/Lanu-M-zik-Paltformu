@@ -79,7 +79,7 @@ if [[ "$(adb_device shell getprop ro.kernel.qemu | tr -d '\r')" != "1" ]]; then
 fi
 # Protect an installed account/library: this suite must begin on a fresh test
 # device. A real user installation is NEVER replaced by the smoke script.
-INSTALLED_PATH="$(adb_device shell pm path "$PKG" 2>/dev/null || true)"
+INSTALLED_PATH="$(adb_device shell pm path "$PKG")" || fail "Cannot inspect installed package; refusing to install"
 [[ -z "$INSTALLED_PATH" ]] || fail "Package already installed. Refusing to overwrite an existing library."
 echo "Dedicated-device installation approved for $SERIAL, package $PKG"
 adb_device install -r "$BASE_APK" || fail "Base install failed; no recovery uninstall is attempted"
