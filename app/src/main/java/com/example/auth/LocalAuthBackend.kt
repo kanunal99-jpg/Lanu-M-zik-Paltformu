@@ -30,15 +30,37 @@ class LocalAuthBackend(context: Context) : AuthBackend {
 
     override suspend fun currentSession(): AuthSession? = transaction { readSession() }
 
+    /**
+     * A malformed restored user ID must NEVER trigger automatic creation of a
+     * different local account: that would orphan the existing user's library.
+     */
+    private fun storedUserId(): String? {
+        val id = try {
+            preferences.getString(KEY_USER_ID, null)
+        } catch (error: ClassCastException) {
+            throw IOException("Yerel kimlik okunamadı; kullanıcı arşivi korundu.", error)
+        }
+        if (id != null && id.isBlank()) {
+            throw IOException("Yerel kimlik boş; kullanıcı arşivi korundu.")
+        }
+        return id
+    }
+
+    private fun optionalText(key: String, default: String? = null): String? =
+        try { preferences.getString(key, default) } catch (_: ClassCastException) { default }
+
+    private fun optionalTime(key: String, default: Long): Long =
+        try { preferences.getLong(key, default) } catch (_: ClassCastException) { default }
+
     private fun readSession(): AuthSession? {
-        val userId = preferences.getString(KEY_USER_ID, null) ?: return null
+        val userId = storedUserId() ?: return null
         return AuthSession(
             userId = userId,
-            displayName = preferences.getString(KEY_DISPLAY_NAME, "LANU Kullanıcısı")
+            displayName = optionalText(KEY_DISPLAY_NAME, "LANU Kullanıcısı")
                 ?: "LANU Kullanıcısı",
-            email = preferences.getString(KEY_EMAIL, null),
+            email = optionalText(KEY_EMAIL),
             provider = AuthProvider.LOCAL,
-            createdAtMs = preferences.getLong(KEY_CREATED_AT, 0L)
+            createdAtMs = optionalTime(KEY_CREATED_AT, 0L)
         )
     }
 
@@ -73,9 +95,9 @@ class LocalAuthBackend(context: Context) : AuthBackend {
         }
 
         // This is deliberately NOT a remote login. It only establishes a local identity.
-        val existingId = preferences.getString(KEY_USER_ID, null)
+        val existingId = storedUserId()
         val userId = existingId ?: retainedLocalIdentity()
-        val createdAt = preferences.getLong(KEY_CREATED_AT, 0L).takeIf { it > 0L }
+        val createdAt = optionalTime(KEY_CREATED_AT, 0L).takeIf { it > 0L }
             ?: System.currentTimeMillis()
 
         preferences.edit()
@@ -111,10 +133,15 @@ class LocalAuthBackend(context: Context) : AuthBackend {
         AuthResult.Success(current)
     }
 
-    private fun retainedLocalIdentity(): String =
-        preferences.getString(KEY_LAST_LOCAL_ID, null)
-            ?.takeIf { it.startsWith("local-") && it.length < 120 }
+    private fun retainedLocalIdentity(): String {
+        val retained = try {
+            preferences.getString(KEY_LAST_LOCAL_ID, null)
+        } catch (error: ClassCastException) {
+            throw IOException("Önceki yerel kimlik okunamadı; kullanıcı arşivi korundu.", error)
+        }
+        return retained?.takeIf { it.startsWith("local-") && it.length < 120 }
             ?: "local-${UUID.randomUUID()}"
+    }
 
     private companion object {
         private val identityMutex = Mutex()
