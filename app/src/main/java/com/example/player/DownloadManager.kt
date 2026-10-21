@@ -87,6 +87,19 @@ internal object OfflineTransferSizePolicy {
     }
 }
 
+/**
+ * Explicit offline removal: success means no managed bytes remain. Missing files
+ * count as already deleted; failed filesystem removals retain the Room record.
+ */
+internal object OfflineFileDeletionPolicy {
+    fun deleteKnownFiles(files: List<File>): Boolean {
+        for (file in files) {
+            if (file.exists() && !file.delete()) return false
+        }
+        return files.none { it.exists() }
+    }
+}
+
 enum class DownloadStatus { QUEUED, DOWNLOADING, COMPLETED, FAILED, CANCELLED }
 
 data class DownloadProgress(
@@ -191,15 +204,12 @@ class DownloadManager(private val context: Context) {
         return activeJobs.deleteExclusively(songId) {
             val dir = File(context.filesDir, "offline_audio")
             val files = listOf(File(dir, "$songId.bin"), File(dir, "$songId.part"))
-            var deleted = false
-            for (file in files) {
-                if (file.exists()) {
-                    if (!file.delete()) return@deleteExclusively false
-                    deleted = true
-                }
-            }
+            // An explicit user delete must also clear a stale Room entry when
+            // both private media files are ALREADY absent (e.g. external cleanup).
+            // Never claim success if a present file cannot actually be removed.
+            if (!OfflineFileDeletionPolicy.deleteKnownFiles(files)) return@deleteExclusively false
             _downloadStates.value = _downloadStates.value.toMutableMap().also { it.remove(songId) }
-            deleted
+            true
         }
     }
 
