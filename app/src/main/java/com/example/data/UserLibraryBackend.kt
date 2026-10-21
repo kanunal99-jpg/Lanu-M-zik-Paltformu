@@ -94,6 +94,92 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         )
     }
 
+
+    /**
+     * Legacy Room data is strictly a one-time import source. An existing modern
+     * preferences key (even "[]") is proof that the user has already edited the
+     * modern library; importing old rows then could resurrect deleted records.
+     *
+     * An atomic SharedPreferences commit stores all three sections + marker.
+     * If the commit fails, Room rows remain intact and the next start may retry.
+     * The process-wide libraryWriteMutex serializes it against user edits and
+     * imports running in another repository instance.
+     */
+    suspend fun needsLegacyImport(userId: String): Boolean = transaction {
+        requireValidUserId(userId)
+        !legacyImportAlreadyComplete(userId) && (
+            !preferences.contains(favoritesKey(userId)) ||
+            !preferences.contains(playlistsKey(userId)) ||
+            !preferences.contains(historyKey(userId))
+        )
+    }
+
+    suspend fun importLegacyIfUninitialized(legacy: UserLibrarySnapshot): Boolean = transaction {
+        val userId = legacy.userId
+        requireValidUserId(userId)
+        if (legacyImportAlreadyComplete(userId)) return@transaction false
+
+        val missingFavorites = !preferences.contains(favoritesKey(userId))
+        val missingPlaylists = !preferences.contains(playlistsKey(userId))
+        val missingHistory = !preferences.contains(historyKey(userId))
+        if (!missingFavorites && !missingPlaylists && !missingHistory) return@transaction false
+
+        // Write only NEVER-PERSISTED categories; modern user edits (including
+        // deliberate empty "[]" tombstones) take precedence over old Room data.
+        // One synchronous commit also writes the completion marker so retries
+        // cannot duplicate partially migrated playlists or resurrect deletions.
+        val editor = preferences.edit()
+        if (missingFavorites) editor.putString(
+            favoritesKey(userId), serializeFavorites(legacy.favorites)
+        )
+        if (missingPlaylists) editor.putString(
+            playlistsKey(userId), serializePlaylists(legacy.playlists)
+        )
+        if (missingHistory) editor.putString(
+            historyKey(userId), serializeHistory(legacy.history)
+        )
+        editor.putBoolean(legacyImportedKey(userId), true).persist()
+        true
+    }
+
+    private fun legacyImportAlreadyComplete(userId: String): Boolean =
+        preferences.contains(legacyImportedKey(userId))
+
+    private fun legacyImportedKey(userId: String) = "legacy_imported_v1::$userId"
+
+    private fun serializeFavorites(favorites: List<FavoriteRecord>): String {
+        val array = JSONArray()
+        favorites.forEach {
+            array.put(JSONObject().put("songId", it.songId).put("addedAtMs", it.addedAtMs))
+        }
+        return array.toString()
+    }
+
+    private fun serializePlaylists(playlists: List<PlaylistRecord>): String {
+        val array = JSONArray()
+        playlists.forEach { playlist ->
+            val songArray = JSONArray().apply { playlist.songIds.forEach(::put) }
+            array.put(
+                JSONObject()
+                    .put("id", playlist.id)
+                    .put("name", playlist.name)
+                    .put("description", playlist.description)
+                    .put("createdAtMs", playlist.createdAtMs)
+                    .put("updatedAtMs", playlist.updatedAtMs)
+                    .put("songIds", songArray)
+            )
+        }
+        return array.toString()
+    }
+
+    private fun serializeHistory(history: List<HistoryRecord>): String {
+        val array = JSONArray()
+        history.take(MAX_HISTORY_ITEMS).forEach {
+            array.put(JSONObject().put("songId", it.songId).put("playedAtMs", it.playedAtMs))
+        }
+        return array.toString()
+    }
+
     override suspend fun addFavorite(userId: String, songId: String, nowMs: Long) = transaction {
         requireValidUserId(userId)
         require(songId.isNotBlank()) { "songId boş olamaz" }
@@ -197,12 +283,17 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
 
     override suspend fun clearHistory(userId: String) = transaction {
         requireValidUserId(userId)
-        preferences.edit().remove(historyKey(userId)).persist()
+        preferences.edit().putString(historyKey(userId), "[]").persist()
     }
 
     override suspend fun clearUser(userId: String) = transaction {
         requireValidUserId(userId)
-        preferences.edit().remove(favoritesKey(userId)).remove(playlistsKey(userId)).remove(historyKey(userId)).persist()
+        preferences.edit()
+            .putString(favoritesKey(userId), "[]")
+            .putString(playlistsKey(userId), "[]")
+            .putString(historyKey(userId), "[]")
+            .putBoolean(legacyImportedKey(userId), true)
+            .persist()
     }
 
     private fun readFavorites(userId: String): List<FavoriteRecord> = runCatching {
@@ -216,11 +307,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
     }
 
     private fun writeFavorites(userId: String, favorites: List<FavoriteRecord>) {
-        val array = JSONArray()
-        favorites.forEach {
-            array.put(JSONObject().put("songId", it.songId).put("addedAtMs", it.addedAtMs))
-        }
-        preferences.edit().putString(favoritesKey(userId), array.toString()).persist()
+        preferences.edit().putString(favoritesKey(userId), serializeFavorites(favorites)).persist()
     }
 
     private fun readPlaylists(userId: String): List<PlaylistRecord> = runCatching {
@@ -242,20 +329,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
     }
 
     private fun writePlaylists(userId: String, playlists: List<PlaylistRecord>) {
-        val array = JSONArray()
-        playlists.forEach { playlist ->
-            val songArray = JSONArray().apply { playlist.songIds.forEach(::put) }
-            array.put(
-                JSONObject()
-                    .put("id", playlist.id)
-                    .put("name", playlist.name)
-                    .put("description", playlist.description)
-                    .put("createdAtMs", playlist.createdAtMs)
-                    .put("updatedAtMs", playlist.updatedAtMs)
-                    .put("songIds", songArray)
-            )
-        }
-        preferences.edit().putString(playlistsKey(userId), array.toString()).persist()
+        preferences.edit().putString(playlistsKey(userId), serializePlaylists(playlists)).persist()
     }
 
     private fun readHistory(userId: String): List<HistoryRecord> = runCatching {
@@ -269,11 +343,7 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
     }
 
     private fun writeHistory(userId: String, history: List<HistoryRecord>) {
-        val array = JSONArray()
-        history.take(MAX_HISTORY_ITEMS).forEach {
-            array.put(JSONObject().put("songId", it.songId).put("playedAtMs", it.playedAtMs))
-        }
-        preferences.edit().putString(historyKey(userId), array.toString()).persist()
+        preferences.edit().putString(historyKey(userId), serializeHistory(history)).persist()
     }
 
     private fun requireValidUserId(userId: String) {

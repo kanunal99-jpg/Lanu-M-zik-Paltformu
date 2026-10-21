@@ -51,9 +51,10 @@ class MusicRepository(context: Context) {
     val downloadManager = com.example.player.DownloadManager(context)
 
     private val localAuthBackend = LocalAuthBackend(context)
+    private val localUserLibraryBackend = LocalUserLibraryBackend(context)
     private val userLibraryService = UserLibraryService(
         authBackend = localAuthBackend,
-        libraryBackend = LocalUserLibraryBackend(context)
+        libraryBackend = localUserLibraryBackend
     )
 
     private val audiusCatalogProvider: CatalogProvider = AudiusCatalogProvider()
@@ -390,20 +391,17 @@ class MusicRepository(context: Context) {
 
     private suspend fun migrateLegacyLibraryIfNeeded() {
         val session = userLibraryService.session.value ?: return
-        val snapshot = userLibraryService.snapshot.value ?: return
-        if (snapshot.favorites.isEmpty()) {
-            dao.getFavoriteSongs().first().forEach { favorite -> userLibraryService.addFavorite(favorite.songId) }
+        // Once a modern library has any durable user footprint, importing
+        // retired Room rows would resurrect deliberately deleted data.
+        if (!localUserLibraryBackend.needsLegacyImport(session.userId)) return
+
+        // Read all retired Room sections before touching modern preferences.
+        val legacy = loadLegacyRoomLibrary(dao, session.userId)
+        val imported = userLibraryService.importLegacyIfNeeded(legacy)
+        if (imported) {
+            // Never log private track IDs or playlist names.
+            Log.i("MusicRepository", "One-time legacy library import committed")
         }
-        if (snapshot.playlists.isEmpty()) {
-            dao.getAllPlaylists().first().forEach { playlist ->
-                val created = userLibraryService.createPlaylist(playlist.name, playlist.description).getOrNull() ?: return@forEach
-                dao.getSongsForPlaylist(playlist.id).first().forEach { relation -> userLibraryService.addSongToPlaylist(created.id, relation.songId) }
-            }
-        }
-        if (snapshot.history.isEmpty()) {
-            dao.getHistory().first().reversed().forEach { history -> userLibraryService.recordPlay(history.songId) }
-        }
-        Log.d("MusicRepository", "User library ready for ${session.userId}")
     }
 
     suspend fun syncOfflineStorage() {
