@@ -1,3 +1,32 @@
+# ZORUNLU CANLI RAPOR FORMATI — 21.10.2026
+
+**Kullanıcı talebi:** LANU Müzik için HER geliştirme/görev yanıtında aşağıdaki başlıklar ve kalem kalem mevcut puan ile 100/100 hedefi gösterilir. Bu biçim ilerleme raporlarında ve saatlik otomatik çalışmanın anlamlı bildirimlerinde de geçerlidir.
+
+1. **Mevcut Durum:** En güncel doğrulanmış `main` commit SHA, tamamlanan/bekleyen PR'lar, son GitHub Release ve APK türü. 'Önceki birleşik main CI başarılı' ile 'yeni main CI bekliyor' asla karıştırılmaz.
+2. **Test Sonuçları:** Son main run numarası, durumu ve linki; ilgili PR run numarası, sonucu; canlı sanatçı/şarkı doğrulama, Android Lint, Unit/Robolectric, debug APK, R8, SHA-256, varsa gerçek cihaz, imzalı üretim işinin **gerçekte skipped olup olmadığı** ayrı satırlar. Beklemede/başarısız/iptal ayrı raporlanır.
+3. **Puanlama:** Her zaman **kalem/alan**, `mevcut puan / alan azamisi`, `alan hedefi`, `fark`, `kanıt` ve `açık engel` içeren tablo; güncel toplam /100, hedef 100/100, kalan fark, eski→yeni değişim. Tahmini/provizyonel puan kesin CI sonucundan farklı etiketlenir. Üretim kapıları eksikken 100 yazılmaz.
+4. **Hedefler:** P0/P1 öncelikli somut eksikler, her biri için doğrulanabilir kabul testi ve puan katkısı, kim/ne dış bağımlılık sağlıyor açıkça belirtilir.
+5. **Devam Eden Çalışmalar:** Bu turda gerçekten yazılan dosyalar/PR/commit, doğrulanmış test sonucu, merge ve Release asset bağlantısı; sıradaki güvenli işlem. 'Çalışıyorum' sözü kendi başına test kanıtı değildir.
+
+### Güncel skor kartı (kanıta dayalı editoryal değerlendirme, 21 Ekim 2026)
+
+| Alan | Mevcut / azami | Hedef | Eksik | Gerekçe / açık kabul |
+|---|---:|---:|---:|---|
+| CI ve otomatik test | 24 / 25 | 25 | 1 | #491 ve #492 PR testleri tamamen başarılı; yeni birleşik main #494 henüz tamamlanmadı |
+| Veri güvenliği ve çevrimdışı kullanıcı arşivi | 21 / 25 | 25 | 4 | [#93](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/93) veri göçü güvenlik testi ve merge; gerçek kurulu sürümden no-uninstall veri retention doğrulaması eksik |
+| Müzik kataloğu ve işlevler | 15 / 20 | 20 | 5 | CI canlı 10 sanatçı / 20 parça doğrulaması başarılı; tüm katalog lisansı/diskografi/kullanıcı playback/E2E ayrıca gerekli |
+| Premium mimari ve UX | 10 / 15 | 15 | 5 | Hilt/Clean, tam TR/EN erişilebilirlik ve opt-in Crashlytics dashboard/R8 mapping üretim kabulü açık |
+| APK/OTA üretim ve gerçek cihaz kabulü | 5 / 15 | 15 | 10 | [#91](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/91) kurulu APK sertifika gate'i ve [#94](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/pull/94) OTA kurtarma merge edildi; gerçek kalıcı signing secrets, sertifika eşitliği, signed APK, fiziksel OEM testleri yok |
+| **Toplam** | **75 / 100** | **100 / 100** | **25** | CI/PR başarısı gerçek üretim kabulü değildir |
+
+**Son doğrulanmış yayın:** [Build 489 (yalnız debug APK + SHA-256)](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/tag/lanu-music-489-b627c0e69d5fd59cbe5e9b65db070298ff51245f). [main #494](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/39627959922) bitmeden #93 + #94 birleşiminin yayınlandığı iddia edilemez.
+
+**P0/P1 100 puan kabul kapıları:** (i) tam birleşik `main` CI, (ii) eski sürüm + yeni imzalı sürüm **aynı kurulu sertifika** ve artan versionCode ile uygulamayı kaldırmadan yükseltme, kullanıcı ID/Room/favori/listeler/offline dosyalar bire bir karşılaştırmalı koruma, (iii) Samsung A55 ve en az bir Xiaomi ve GMS'siz Huawei/Android OEM, tablet, API seviyesi matrisi, (iv) Firebase Crashlytics opt-in test crash+dashboard+mappings, (v) tam Clean/MVVM/Hilt, TR/EN TalkBack/a11y, (vi) telif/lisans/API yetkisi + gerçek ses kataloğu kabulü. Gizli keystore/secrets sohbet/issue içine yazılmaz; eksik dış bağımlılıklar test edilmiş gibi işaretlenmez.
+
+Tarihsel skorlar (55/70/72 veya önceki 92 hedefi) geçmiş değerlendirmedir; **geçerli yeni hedef 100/100**. Bu skor yalnız kanıt geldikçe, aynı alan ağırlıkları korunarak güncellenir.
+
+---
+
 # CANLI KANIT ÖZETİ — 21.10.2026
 
 **Bu bölüm önceki tarihsel durum tablolarının üstündedir ve 21 Ekim itibarıyla doğrulanmış commit/CI kanıtını gösterir.** CI yeşil olması yalnızca CI'de yürütülen testlerin başarılı olduğuna işaret eder; GMS'siz Huawei, Samsung, Xiaomi, tablet veya fiziksel cihaz kabulünün yerine geçmez.
