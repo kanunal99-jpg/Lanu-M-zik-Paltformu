@@ -103,7 +103,7 @@ if [[ -n "$UPGRADE_APK" ]]; then
   # Only the APK freshly installed above may be upgraded here.
   adb_device install -r "$UPGRADE_APK" || fail "In-place test upgrade failed; never uninstall"
   INSTALLED="$(adb_device shell dumpsys package "$PKG" |
-    sed -n 's/.*versionCode=\\([0-9]*\\).*/\\1/p' | head -1)"
+    sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1)"
   [[ "$INSTALLED" == "$NEW_VERSION" ]] || fail "Installed version does not match"
   launch_check
   echo "PASS: test-device upgrade; data integrity still requires separate assertions"
