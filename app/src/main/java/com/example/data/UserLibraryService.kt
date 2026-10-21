@@ -83,8 +83,14 @@ class UserLibraryService(
     suspend fun createPlaylist(name: String, description: String = ""): Result<PlaylistRecord> = sessionTransitionMutex.withLock {
         val userId = _session.value?.userId
             ?: return@withLock Result.failure(IllegalStateException("Aktif LANU oturumu yok"))
-        runCatching {
-            libraryBackend.createPlaylist(userId, name, description).also { refreshSnapshot(userId) }
+        try {
+            Result.success(libraryBackend.createPlaylist(userId, name, description).also {
+                refreshSnapshot(userId)
+            })
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
         }
     }
 
@@ -135,10 +141,14 @@ class UserLibraryService(
     private suspend fun withSession(action: suspend (String) -> Unit): AuthResult = sessionTransitionMutex.withLock {
         val session = _session.value
             ?: return@withLock AuthResult.Failure(AuthFailure.NOT_CONFIGURED, "Aktif LANU oturumu yok")
-        runCatching {
+        try {
             action(session.userId)
             AuthResult.Success(session)
-        }.getOrElse { error ->
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            // Cancellation belongs to structured concurrency, not a user-facing
+            // write failure. Never swallow it and continue stale account work.
+            throw cancelled
+        } catch (error: Exception) {
             AuthResult.Failure(AuthFailure.UNKNOWN, error.message ?: "Kullanıcı kitaplığı işlemi başarısız")
         }
     }
