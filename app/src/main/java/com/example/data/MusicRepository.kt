@@ -395,27 +395,9 @@ class MusicRepository(context: Context) {
         // retired Room rows would resurrect deliberately deleted data.
         if (!localUserLibraryBackend.needsLegacyImport(session.userId)) return
 
-        // Read all legacy categories first. A failed cursor/query must abort
-        // with NO partial modern library writes and NO completion marker.
-        val legacyFavorites = dao.getFavoriteSongs().first().map {
-            FavoriteRecord(it.songId, it.addedAt)
-        }
-        val legacyPlaylists = dao.getAllPlaylists().first().map { playlist ->
-            PlaylistRecord(
-                id = playlist.id,
-                name = playlist.name,
-                description = playlist.description,
-                createdAtMs = playlist.createdAt,
-                updatedAtMs = playlist.updatedAt,
-                songIds = dao.getSongsForPlaylist(playlist.id).first().map { it.songId }.distinct()
-            )
-        }
-        val legacyHistory = dao.getHistory().first().distinctBy { it.songId }.map {
-            HistoryRecord(it.songId, it.playedAt)
-        }
-        val imported = userLibraryService.importLegacyIfNeeded(
-            UserLibrarySnapshot(session.userId, legacyFavorites, legacyPlaylists, legacyHistory)
-        )
+        // Read all retired Room sections before touching modern preferences.
+        val legacy = loadLegacyRoomLibrary(dao, session.userId)
+        val imported = userLibraryService.importLegacyIfNeeded(legacy)
         if (imported) {
             // Never log private track IDs or playlist names.
             Log.i("MusicRepository", "One-time legacy library import committed")
