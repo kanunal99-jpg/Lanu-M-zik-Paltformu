@@ -70,6 +70,22 @@ class UserLibraryService(
         result
     }
 
+
+    /**
+     * Import only the current session's legacy data. Keep session publication
+     * synchronized with user edits; read back after atomic legacy persistence.
+     */
+    suspend fun importLegacyIfNeeded(legacy: UserLibrarySnapshot): Boolean =
+        sessionTransitionMutex.withLock {
+            val session = _session.value ?: return@withLock false
+            if (legacy.userId != session.userId) return@withLock false
+            val localBackend = libraryBackend as? LocalUserLibraryBackend
+                ?: return@withLock false
+            val imported = localBackend.importLegacyIfUninitialized(legacy)
+            if (imported) refreshSnapshot(session.userId)
+            imported
+        }
+
     suspend fun addFavorite(songId: String): AuthResult = withSession { userId ->
         libraryBackend.addFavorite(userId, songId)
         refreshSnapshot(userId)
