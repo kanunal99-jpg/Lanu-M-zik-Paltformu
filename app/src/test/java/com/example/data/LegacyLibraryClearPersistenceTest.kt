@@ -53,4 +53,33 @@ class LegacyLibraryClearPersistenceTest {
         backend.markLegacyCategoryHandled(user, "favorites")
         assertEquals("new-track", LocalUserLibraryBackend(context).snapshot(user).favorites.single().songId)
     }
+    @Test fun atomicLegacyImportKeepsPlaylistIdentityOrderAndDoesNotResurrectClears() = runBlocking {
+        val user = "migration-test-${UUID.randomUUID()}"
+        val backend = LocalUserLibraryBackend(context)
+        val playlist = PlaylistRecord("old-playlist-id", "Original", "Legacy", 100L, 120L, listOf("song-b", "song-a"))
+        val favorites = listOf(FavoriteRecord("old-song", 200L))
+        val history = listOf(HistoryRecord("old-song", 300L))
+        backend.importLegacyIfAbsent(user, favorites, listOf(playlist), history)
+        val first = LocalUserLibraryBackend(context).snapshot(user)
+        assertEquals(playlist, first.playlists.single())
+        assertEquals("old-song", first.favorites.single().songId)
+        backend.removeFavorite(user, "old-song")
+        backend.deletePlaylist(user, playlist.id)
+        backend.clearHistory(user)
+        backend.importLegacyIfAbsent(user, favorites, listOf(playlist), history)
+        val reopened = LocalUserLibraryBackend(context).snapshot(user)
+        assertTrue(reopened.favorites.isEmpty())
+        assertTrue(reopened.playlists.isEmpty())
+        assertTrue(reopened.history.isEmpty())
+    }
+
+    @Test fun atomicLegacyImportDoesNotOverwritePreexistingNewLibrary() = runBlocking {
+        val user = "migration-test-${UUID.randomUUID()}"
+        val backend = LocalUserLibraryBackend(context)
+        backend.addFavorite(user, "new-song")
+        backend.importLegacyIfAbsent(user, listOf(FavoriteRecord("old-song", 1L)), emptyList(), emptyList())
+        val reopened = LocalUserLibraryBackend(context).snapshot(user)
+        assertEquals(listOf("new-song"), reopened.favorites.map { it.songId })
+    }
+
 }
