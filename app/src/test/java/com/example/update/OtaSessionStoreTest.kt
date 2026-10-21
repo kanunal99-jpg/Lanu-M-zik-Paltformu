@@ -120,4 +120,34 @@ class OtaSessionStoreTest {
         )
         assertEquals(345, sessions.restore(344)?.release?.versionCode)
     }
+
+    @Test fun incorrectPreferenceTypesAreFailClosedButLeaveCachedApkIntact() {
+        val prefs = context.getSharedPreferences("lanu_ota_verified_session", Context.MODE_PRIVATE)
+        val folder = java.io.File(context.cacheDir, "lanu_updates")
+        folder.mkdirs()
+        val retained = java.io.File(folder, "lanu-345.apk")
+        retained.writeText("already downloaded: not auto-deleted on metadata corruption")
+        try {
+            val cases: List<(android.content.SharedPreferences.Editor) -> Unit> = listOf(
+                { it.putInt("tag", 345) },
+                { it.putBoolean("sha256", false) },
+                { it.putString("code", "invalid int") },
+                { it.putString("size", "invalid long") },
+                { it.putLong("github_digest", 987L) }
+            )
+            for (corrupt in cases) {
+                sessions.save(release(345), "c".repeat(64))
+                val editor = prefs.edit()
+                corrupt(editor)
+                org.junit.Assert.assertTrue(editor.commit())
+                assertNull("Restore must not crash on wrong preference type",
+                    sessions.restore(344))
+                org.junit.Assert.assertTrue("Invalid OTA hint must be cleared", !prefs.contains("tag"))
+                org.junit.Assert.assertTrue("Existing APK bytes must remain", retained.isFile)
+                assertEquals("already downloaded: not auto-deleted on metadata corruption", retained.readText())
+            }
+        } finally {
+            retained.delete()
+        }
+    }
 }
