@@ -26,7 +26,16 @@ class UserLibraryService(
         val current = authBackend.currentSession()
         // Read data first. Publishing the new identity before snapshot loading
         // could briefly expose the previous account's favorites under a new ID.
-        val restoredSnapshot = current?.let { libraryBackend.snapshot(it.userId) }
+        val restoredSnapshot = try {
+            current?.let { libraryBackend.snapshot(it.userId) }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            // Corrupt local JSON is NOT an empty library: don't overwrite it,
+            // don't publish an authenticated identity with stale user content.
+            _session.value = null
+            _snapshot.value = null
+            return@withLock null
+        }
         _snapshot.value = restoredSnapshot
         _session.value = current
         current
@@ -36,7 +45,16 @@ class UserLibraryService(
         val result = authBackend.signIn(identifier, secret)
         if (result is AuthResult.Success) {
             // Avoid publishing another user's identity with the old favorites.
-            val nextSnapshot = libraryBackend.snapshot(result.session.userId)
+            val nextSnapshot = try {
+                libraryBackend.snapshot(result.session.userId)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                _session.value = null
+                _snapshot.value = null
+                return@withLock AuthResult.Failure(
+                    AuthFailure.UNKNOWN, "Yerel arşiv okunamadı; kayıtlar korunuyor."
+                )
+            }
             _snapshot.value = nextSnapshot
             _session.value = result.session
         }
