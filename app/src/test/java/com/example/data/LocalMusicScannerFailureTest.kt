@@ -83,4 +83,21 @@ class LocalMusicScannerFailureTest {
         val result = scanner.scanLocalMusic()
         assertEquals(listOf("local_200", "local_201"), result.map { it.id })
     }
+    @Test fun nullOEMCursorMustFailInsteadOfReportingEmptyLibrary() = runBlocking {
+        val scanner = LocalMusicScanner(context, audioQuery = { _, _, _ -> null })
+        val failure = runCatching { scanner.scanLocalMusic() }.exceptionOrNull()
+        assertTrue("Null MediaStore cursor is a failed scan, got: $failure", failure is IOException)
+        assertTrue(failure?.message.orEmpty().contains("korundu"))
+    }
+
+    @Test fun healthyEmptyCursorStillMeansNoLocalSongs() = runBlocking {
+        val scanner = LocalMusicScanner(
+            context,
+            audioQuery = { _, _, _ ->
+                MatrixCursor(arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE))
+            }
+        )
+        assertTrue(scanner.scanLocalMusic().isEmpty())
+    }
+
 }
