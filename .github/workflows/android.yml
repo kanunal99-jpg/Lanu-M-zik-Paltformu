@@ -253,7 +253,22 @@ jobs:
           remote_checksum_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-debug.apk.sha256") | .digest')"
           expected_checksum_digest="sha256:$(sha256sum "${sha_path}" | cut -d ' ' -f1)"
           [[ "${remote_checksum_digest}" == "${expected_checksum_digest}" ]]
-          echo "Verified downloaded release assets and remote GitHub asset digests."
+          # Verify actual bytes retrieved through the public release asset endpoints,
+          # not only the API-reported digest metadata.
+          verification_dir="$(mktemp -d)"
+          trap 'rm -rf "${verification_dir}"' EXIT
+          gh release download --repo "${GH_REPO}" "${TAG_NAME}" \
+            --pattern 'app-debug.apk' --pattern 'app-debug.apk.sha256' \
+            --dir "${verification_dir}"
+          [[ -s "${verification_dir}/app-debug.apk" ]]
+          [[ -s "${verification_dir}/app-debug.apk.sha256" ]]
+          cmp "${apk_path}" "${verification_dir}/app-debug.apk"
+          cmp "${sha_path}" "${verification_dir}/app-debug.apk.sha256"
+          published_sha="$(awk 'NR==1 {print $1}' "${verification_dir}/app-debug.apk.sha256")"
+          [[ "${published_sha}" =~ ^[0-9a-f]{64}$ ]]
+          calculated_sha="$(sha256sum "${verification_dir}/app-debug.apk" | cut -d ' ' -f1)"
+          [[ "${published_sha}" == "${calculated_sha}" ]]
+          echo "Verified downloaded release APK, checksum file and SHA-256 against actual bytes."
           echo "Verified release assets:"
           printf '%s\n' "${assets}"
 
