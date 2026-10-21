@@ -197,12 +197,38 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
 
     override suspend fun clearHistory(userId: String) = transaction {
         requireValidUserId(userId)
-        preferences.edit().remove(historyKey(userId)).persist()
+        // A persisted empty array is an explicit user decision, not an absent legacy import.
+        writeHistory(userId, emptyList())
     }
 
     override suspend fun clearUser(userId: String) = transaction {
         requireValidUserId(userId)
-        preferences.edit().remove(favoritesKey(userId)).remove(playlistsKey(userId)).remove(historyKey(userId)).persist()
+        // Never turn a deliberate account clear into an absent/never-imported library.
+        preferences.edit().putString(favoritesKey(userId), "[]")
+            .putString(playlistsKey(userId), "[]")
+            .putString(historyKey(userId), "[]").persist()
+    }
+
+    /** Absence means eligible for first-time legacy import; present empty means user-cleared. */
+    suspend fun hasPersistedCategory(userId: String, category: String): Boolean = transaction {
+        requireValidUserId(userId)
+        preferences.contains(when (category) {
+            "favorites" -> favoritesKey(userId)
+            "playlists" -> playlistsKey(userId)
+            "history" -> historyKey(userId)
+            else -> error("Unknown library category")
+        })
+    }
+
+    suspend fun markLegacyCategoryHandled(userId: String, category: String) = transaction {
+        requireValidUserId(userId)
+        val key = when (category) {
+            "favorites" -> favoritesKey(userId)
+            "playlists" -> playlistsKey(userId)
+            "history" -> historyKey(userId)
+            else -> error("Unknown library category")
+        }
+        if (!preferences.contains(key)) preferences.edit().putString(key, "[]").persist()
     }
 
     private fun readFavorites(userId: String): List<FavoriteRecord> = runCatching {
