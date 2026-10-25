@@ -362,8 +362,7 @@ class MusicRepository(context: Context) {
         val responses = sources.map { provider ->
             async {
                 withTimeoutOrNull(4_000L) {
-                    runCatching { provider.searchArtists(query) }
-                        .getOrElse { Result.failure(it) }
+                    ProviderResultPolicy.call { provider.searchArtists(query) }
                 }
             }
         }.awaitAll()

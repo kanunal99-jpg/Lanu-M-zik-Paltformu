@@ -13,6 +13,7 @@ import com.example.auth.AuthSession
 import com.example.data.DownloadedSongEntity
 import com.example.data.HistoryRecord
 import com.example.data.MusicRepository
+import com.example.data.ProviderResultPolicy
 import com.example.data.SearchCatalogSource
 import com.example.data.PlaylistEntity
 import com.example.model.Artist
@@ -213,9 +214,9 @@ class MainViewModel @Inject constructor(
                             launch {
                                 val page = sourcePages[source] ?: 0
                                 val result = withTimeoutOrNull(10_000L) {
-                                    runCatching {
+                                    ProviderResultPolicy.call {
                                         repository.searchRemoteCatalogPageFromSource(query, page, source)
-                                    }.getOrElse { Result.failure(it) }
+                                    }
                                 }
                                 if (query != normalizeSearch(_searchQuery.value)) return@launch
                                 recordSearchPage(source, page, result)
