@@ -43,7 +43,7 @@ class JamendoCatalogProvider(
             httpClient.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
                 if (!response.isSuccessful) error("JAMENDO_HTTP_${response.code}")
                 currentCoroutineContext().ensureActive()
-                val json = JSONObject(response.body?.string().orEmpty())
+                val json = CatalogJsonResponsePolicy.parse(response)
                 val headers = json.optJSONObject("headers")
                 if (headers?.optInt("code", -1) != 0) error(headers?.optString("error_message").orEmpty().ifBlank { "JAMENDO_API_ERROR" })
                 json
