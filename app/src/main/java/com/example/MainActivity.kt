@@ -1,7 +1,6 @@
 package com.example
 
 import android.Manifest
-import android.app.Activity
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -81,8 +80,23 @@ import com.example.ui.theme.MyApplicationTheme
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); enableEdgeToEdge(); setContent { MyApplicationTheme { MainAppScreen() } } }
-    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); setIntent(intent); recreate() }
+    // Compose-observed event. Never recreate the Activity just to handle a link:
+    // recreation drops current UI state and releases the scoped media controller.
+    var incomingLinkEvent by mutableStateOf(LanuIncomingLinkEvent(null, 0L))
+        private set
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        incomingLinkEvent = LanuIncomingLinkEvent(intent?.dataString, 0L)
+        enableEdgeToEdge()
+        setContent { MyApplicationTheme { MainAppScreen() } }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        incomingLinkEvent = LanuIncomingLinkEvent.next(incomingLinkEvent, intent.dataString)
+    }
 }
 
 @Composable
@@ -90,9 +104,9 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
     val updateState by updates.screen.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { updates.checkOnAppLaunch() }
     val context = LocalContext.current
-    val incomingUri = remember(context) { (context as? Activity)?.intent?.data }
-    val deepLink = remember(incomingUri) { LanuDeepLink.parse(incomingUri) }
-    var handledResourceRoute by remember(incomingUri) { mutableStateOf<LanuDeepLink?>(null) }
+    val incomingEvent = (context as? MainActivity)?.incomingLinkEvent
+    val deepLink = remember(incomingEvent) { LanuDeepLink.parse(incomingEvent?.rawUri.orEmpty()) }
+    var handledResourceRoute by remember(incomingEvent) { mutableStateOf<LanuDeepLink?>(null) }
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
 
     val permissionsLauncher = rememberLauncherForActivityResult(
@@ -159,7 +173,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isCatalogExpanding by viewModel.isCatalogExpanding.collectAsStateWithLifecycle()
 
-    LaunchedEffect(deepLink) {
+    LaunchedEffect(incomingEvent) {
         when (val target = deepLink) {
             LanuDeepLink.Home -> viewModel.setTab(MainTab.HOME)
             LanuDeepLink.Library -> viewModel.setTab(MainTab.LIBRARY)
@@ -174,7 +188,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
         }
     }
 
-    LaunchedEffect(deepLink, allSongs, playlists) {
+    LaunchedEffect(incomingEvent, allSongs, playlists) {
         val target = deepLink ?: return@LaunchedEffect
         if (handledResourceRoute == target) return@LaunchedEffect
         when (target) {
