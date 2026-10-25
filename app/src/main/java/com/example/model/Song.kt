@@ -33,9 +33,12 @@ data class TimedLyric(
 )
 
 enum class AudioQuality(val title: String, val bitRate: String, val description: String) {
-    STANDARD("Standart", "128 kbps", "Düşük veri kullanımı"),
-    HIGH("Yüksek", "320 kbps", "Zengin ve kristal ses"),
-    HIFI("Hi-Fi Kayıpsız", "FLAC (24-bit 96kHz)", "Stüdyo kalitesinde saf ses");
+    // Preference names are retained for model/API compatibility, but source
+    // playback and offline copies currently do not transcode or select a
+    // different provider bitrate. Never advertise invented 128/320/FLAC.
+    STANDARD("Standart tercih", "Kaynağa bağlı", "Ses kaynağı değiştirilmez"),
+    HIGH("Yüksek tercih", "Kaynağa bağlı", "Mevcut kaynak kalitesi korunur"),
+    HIFI("Kayıpsız hedef", "Kaynağa bağlı", "Yalnız doğrulanmış kayıpsız kaynakta mümkündür");
 
     val bitrate: String get() = bitRate
 }
