@@ -23,6 +23,7 @@ import com.example.model.EqualizerState
 import com.example.model.FriendActivity
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.search.SongSearchPolicy
 import com.example.model.toSettings
 import com.example.service.AudioPlayerController
 import com.example.service.RepeatMode
@@ -133,7 +134,7 @@ class MainViewModel @Inject constructor(
     val searchResults: StateFlow<List<Song>> = combine(allSongs, _searchQuery, _selectedCategoryFilter) { songs, query, cat ->
         val normalizedQuery = normalizeSearch(query)
         songs.filter { song ->
-            val matchesQuery = normalizedQuery.isBlank() || listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } || song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
+            val matchesQuery = SongSearchPolicy.matchesAll(song, normalizedQuery)
             val matchesCat = cat == null || song.category == cat
             matchesQuery && matchesCat
         }

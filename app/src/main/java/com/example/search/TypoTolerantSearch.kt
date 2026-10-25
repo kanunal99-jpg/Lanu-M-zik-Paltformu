@@ -11,7 +11,7 @@ object TypoTolerantSearch {
         val c = normalize(candidate)
         if (q.isBlank()) return true
         if (c.contains(q)) return true
-        if (q.length < 4) return false
+        if (q.length < 4 || q.length > 32 || c.length > 512) return false
 
         val tokens = c.split(Regex("\\s+"))
         return tokens.any { token ->
