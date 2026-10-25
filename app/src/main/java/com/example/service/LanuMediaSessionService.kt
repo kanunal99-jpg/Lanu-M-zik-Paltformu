@@ -103,7 +103,15 @@ class LanuMediaSessionService : MediaLibraryService() {
                 params: MediaLibraryService.LibraryParams?
             ) = Futures.immediateFuture(
                 LibraryResult.ofItemList(
-                    paginate(MediaLibrarySongPolicy.searchableSongs(repository.searchSongs(query)).map(::toMediaItem), page, pageSize),
+                    MediaLibrarySearchInputPolicy.accept(query)?.let { safeQuery ->
+                        paginate(
+                            MediaLibrarySongPolicy.searchableSongs(
+                                repository.searchSongs(safeQuery)
+                            ).map(::toMediaItem),
+                            page,
+                            pageSize
+                        )
+                    }.orEmpty(),
                     params
                 )
             )
