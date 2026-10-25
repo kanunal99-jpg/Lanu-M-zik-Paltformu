@@ -20,6 +20,9 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +42,9 @@ class AudioPlayerController(private val context: Context) {
     private var latestCatalogForRestore: List<Song> = emptyList()
     private val queuedBeforeConnection = StartupPlaybackQueue<PendingQueueRequest>()
     private var released = false
+    private val historyGate = PlaybackHistoryGate()
+    private val playbackChannel = Channel<String>(Channel.BUFFERED)
+    val actualPlaybackStarts: Flow<String> = playbackChannel.receiveAsFlow()
     var mediaController: MediaController? = null
 
     private data class PendingQueueRequest(
@@ -149,6 +155,18 @@ class AudioPlayerController(private val context: Context) {
                 }
                 _currentPositionMs.value = 0L
                 persistState()
+            }
+
+            override fun onEvents(player: Player, events: Player.Events) {
+                // Only verified queue identities are eligible for history.
+                val currentId = player.currentMediaItem?.mediaId?.takeIf { id ->
+                    _queue.value.any { it.id == id }
+                }
+                historyGate.onPlaybackState(currentId, player.isPlaying)?.let { songId ->
+                    if (playbackChannel.trySend(songId).isFailure) {
+                        android.util.Log.w("AudioPlayerController", "Playback event queue is full")
+                    }
+                }
             }
         })
     }
@@ -385,6 +403,7 @@ class AudioPlayerController(private val context: Context) {
         // If connection never completed, don't erase the persisted last song.
         if (_currentSong.value != null) persistState()
         queuedBeforeConnection.close()
+        playbackChannel.close()
         latestCatalogForRestore = emptyList()
         stopProgressTracker()
         scope.cancel()
