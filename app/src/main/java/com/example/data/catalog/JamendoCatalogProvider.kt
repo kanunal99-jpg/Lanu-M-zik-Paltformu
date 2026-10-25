@@ -4,8 +4,12 @@ import com.example.model.Album
 import com.example.model.Artist
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.data.catalog.CatalogPageBounds
 import com.example.model.SongSourceType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -29,28 +33,33 @@ class JamendoCatalogProvider(
     private suspend fun requestJson(baseUrl: String, params: Map<String, String>): Result<JSONObject> = withContext(Dispatchers.IO) {
         if (clientId.isBlank()) return@withContext Result.failure(IllegalStateException("JAMENDO_CLIENT_ID_NOT_CONFIGURED"))
         runCatching {
-            val encoded = params.entries.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }
+            currentCoroutineContext().ensureActive()
+            // Exactly one limit key: duplicated query params cause backend-dependent paging.
+            val limit = params["limit"]?.toIntOrNull()?.coerceIn(1, 200) ?: DEFAULT_LIMIT
+            val encoded = params.filterKeys { it != "limit" }
+                .entries.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }
             val separator = if (baseUrl.contains('?')) '&' else '?'
-            val url = "$baseUrl${separator}client_id=${encode(clientId)}&format=json&limit=$DEFAULT_LIMIT&$encoded"
+            val url = "$baseUrl${separator}client_id=${encode(clientId)}&format=json&limit=$limit&$encoded"
             httpClient.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
                 if (!response.isSuccessful) error("JAMENDO_HTTP_${response.code}")
+                currentCoroutineContext().ensureActive()
                 val json = JSONObject(response.body?.string().orEmpty())
                 val headers = json.optJSONObject("headers")
                 if (headers?.optInt("code", -1) != 0) error(headers?.optString("error_message").orEmpty().ifBlank { "JAMENDO_API_ERROR" })
                 json
             }
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
     private suspend fun requestTracks(params: Map<String, String>): Result<JSONArray> = requestJson(TRACKS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
     private suspend fun requestArtists(params: Map<String, String>): Result<JSONArray> = requestJson(ARTISTS_URL, params).map { it.optJSONArray("results") ?: JSONArray() }
     override suspend fun searchSongs(query: String): Result<List<Song>> = searchSongsPage(query, 0, DEFAULT_LIMIT)
     override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
-        val safePage = page.coerceAtLeast(0)
-        val safeSize = pageSize.coerceIn(1, 200)
+        val window = CatalogPageBounds.window(page, pageSize, 200)
+            ?: return Result.success(emptyList())
         return requestTracks(mapOf(
             "search" to query,
-            "offset" to (safePage * safeSize).toString(),
-            "limit" to safeSize.toString(),
+            "offset" to window.offset.toString(),
+            "limit" to window.size.toString(),
             "type" to "single albumtrack",
             "audioformat" to "mp32",
             "imagesize" to "300",

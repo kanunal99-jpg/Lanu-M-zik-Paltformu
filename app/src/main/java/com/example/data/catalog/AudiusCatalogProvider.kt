@@ -5,6 +5,7 @@ import com.example.model.Artist
 import com.example.model.MusicCategory
 import com.example.model.MusicGenreResolver
 import com.example.model.Song
+import com.example.data.catalog.CatalogPageBounds
 import com.example.model.SongSourceType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -57,12 +58,12 @@ class AudiusCatalogProvider(
     override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
         // One search page must not expand whole artist discographies. MainViewModel
         // already discovers artists separately and merges identity-verified tracks.
-        val safePage = page.coerceAtLeast(0)
-        val safeSize = pageSize.coerceIn(1, 100)
+        val window = CatalogPageBounds.window(page, pageSize, 100)
+            ?: return Result.success(emptyList())
         return requestArray(
             "/tracks/search",
-            mapOf("query" to query, "limit" to safeSize.toString(),
-                "offset" to (safePage * safeSize).toString())
+            mapOf("query" to query, "limit" to window.size.toString(),
+                "offset" to window.offset.toString())
         ).map { AudiusSongMapper.mapSongs(it) }
     }
 

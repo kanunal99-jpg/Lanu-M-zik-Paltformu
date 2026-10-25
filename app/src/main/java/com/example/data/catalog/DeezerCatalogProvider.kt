@@ -5,8 +5,12 @@ import com.example.model.Artist
 import com.example.model.MusicCategory
 import com.example.model.MusicGenreResolver
 import com.example.model.Song
+import com.example.data.catalog.CatalogPageBounds
 import com.example.model.SongSourceType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -24,26 +28,28 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
 
     private suspend fun request(path: String, params: Map<String, String> = emptyMap()): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
+            currentCoroutineContext().ensureActive()
             val query = params.entries.joinToString("&") { "${encode(it.key)}=${encode(it.value)}" }
             val url = if (query.isBlank()) "$BASE_URL$path" else "$BASE_URL$path?$query"
             httpClient.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
                 if (!response.isSuccessful) error("DEEZER_HTTP_${response.code}")
+                currentCoroutineContext().ensureActive()
                 JSONObject(response.body?.string().orEmpty()).also { json ->
                     if (json.has("error")) error("DEEZER_API_${json.optJSONObject("error")?.optString("type").orEmpty()}")
                 }
             }
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
     override suspend fun searchSongs(query: String): Result<List<Song>> = searchSongsPage(query, 0, LIMIT)
 
     override suspend fun searchSongsPage(query: String, page: Int, pageSize: Int): Result<List<Song>> {
-        val safePage = page.coerceAtLeast(0)
-        val safeSize = pageSize.coerceIn(1, 100)
+        val window = CatalogPageBounds.window(page, pageSize, 100)
+            ?: return Result.success(emptyList())
         return request("/search", mapOf(
             "q" to query,
-            "limit" to safeSize.toString(),
-            "index" to (safePage * safeSize).toString()
+            "limit" to window.size.toString(),
+            "index" to window.offset.toString()
         )).map { json -> mapTracks(json.optJSONArray("data") ?: JSONArray()) }
     }
 
@@ -57,6 +63,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
     override suspend fun getAlbum(id: String): Result<Album?> = request("/album/${id.removePrefix("deezer_album:")}").map(::mapAlbum)
 
     override suspend fun getArtistDiscography(artistId: String): Result<List<Song>> = runCatching {
+        currentCoroutineContext().ensureActive()
         val providerArtistId = artistId.removePrefix("deezer:")
         val verified = linkedMapOf<String, Song>()
         // Singles and collaborations can be missing from an album-only index.
@@ -95,7 +102,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
             if (albumsJson.has("total") && albumOffset >= albumsJson.optInt("total")) break
         }
         verified.values.toList()
-    }
+    }.onFailure { if (it is CancellationException) throw it }
 
     /** Deezer's embedded album track list can contain only the first page. */
     private suspend fun fetchAlbumTracks(albumId: String, albumJson: JSONObject, artistId: String): List<Song> {
