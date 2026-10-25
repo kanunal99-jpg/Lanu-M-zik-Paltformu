@@ -93,6 +93,12 @@ jobs:
           else
             echo "Jamendo commercial license gate: DISABLED (safe default); Audius is the default full-stream catalog."
           fi
+      - name: Verify repository hygiene and guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_repository_hygiene.py
+          python3 -m unittest discover -s scripts -p 'test_repository_hygiene.py'
       - name: Android OEM compatibility policy and read-only device script validation
         shell: bash
         run: |
