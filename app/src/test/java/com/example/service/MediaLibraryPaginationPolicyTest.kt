@@ -33,6 +33,15 @@ class MediaLibraryPaginationPolicyTest {
         assertEquals(listOf(1000), MediaLibraryPaginationPolicy.page(catalog, 2, Int.MAX_VALUE))
     }
 
+    @Test fun rootBrowsePagesRespectRequestedSize() {
+        val root = listOf("Cihazımdaki Müzikler", "LANU Kataloğu")
+        assertEquals(listOf("Cihazımdaki Müzikler"),
+            MediaLibraryPaginationPolicy.page(root, 0, 1))
+        assertEquals(listOf("LANU Kataloğu"),
+            MediaLibraryPaginationPolicy.page(root, 1, 1))
+        assertTrue(MediaLibraryPaginationPolicy.page(root, 2, 1).isEmpty())
+    }
+
     @Test fun emptyCollectionAlwaysReturnsEmpty() {
         assertTrue(MediaLibraryPaginationPolicy.page(emptyList<Int>(), Int.MAX_VALUE, 1).isEmpty())
     }
