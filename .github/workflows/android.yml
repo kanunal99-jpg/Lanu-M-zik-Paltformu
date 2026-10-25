@@ -308,6 +308,18 @@ jobs:
             echo "enabled=false" >> "${GITHUB_OUTPUT}"
             echo "::notice::Stable signing secrets not configured; only debug preview is published."
           fi
+      - name: Report production signing readiness
+        if: steps.signing.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          {
+            echo "### Production: NOT READY"
+            echo
+            echo "Signing credentials missing. Only debug preview was published."
+            echo "The optional signing job can be green even when signing steps are skipped."
+            echo "Production OTA requires signing identity pinning, installed-device certificate match and real-device data-retention validation."
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "::warning::Production signing skipped; debug APK only."
       - name: Checkout verified main commit
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/checkout@v4
@@ -429,6 +441,16 @@ jobs:
           [[ "${remote_digest}" == "${expected_digest}" ]]
           [[ "${remote_checksum_digest}" == "${expected_checksum_digest}" ]]
           echo "Remote GitHub signed APK and checksum assets match runner SHA-256."
+      - name: Report verified signed release
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          {
+            echo "### Signed APK: signing checks passed"
+            echo
+            echo "APK signing, pinned and installed signer, versionCode and release SHA-256 matched."
+            echo "Real-device data-preserving OTA testing remains separately required."
+          } >> "${GITHUB_STEP_SUMMARY}"
       - name: Erase temporary signing key
         if: always() && steps.signing.outputs.enabled == 'true'
         env:
