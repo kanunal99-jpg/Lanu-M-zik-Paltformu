@@ -50,6 +50,27 @@ class LanuMediaSessionService : MediaLibraryService() {
         }
 
         val callback = object : MediaLibraryService.MediaLibrarySession.Callback {
+            override fun onAddMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>
+            ) = Futures.immediateFuture(
+                if (controller.packageName == packageName) {
+                    // Our own app has already applied PlaybackUriPolicy and may
+                    // have a playable queue before this separate service has
+                    // finished its asynchronous database/catalog initialization.
+                    // Preserve trusted same-package playback and startup taps.
+                    mediaItems
+                } else {
+                    // Android Auto/other controllers must not supply arbitrary
+                    // mediaUri or metadata. Canonicalize by verified catalog ID.
+                    // One invalid item fails closed for the whole queue.
+                    MediaSessionQueuePolicy.resolve(
+                        mediaItems.map { it.mediaId }, repository.songs.value
+                    ).map(::toMediaItem)
+                }
+            )
+
             override fun onGetLibraryRoot(
                 session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
