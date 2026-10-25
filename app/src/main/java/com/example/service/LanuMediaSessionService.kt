@@ -55,12 +55,20 @@ class LanuMediaSessionService : MediaLibraryService() {
                 controller: MediaSession.ControllerInfo,
                 mediaItems: List<MediaItem>
             ) = Futures.immediateFuture(
-                // Do not trust controller-supplied mediaUri, localConfiguration
-                // or metadata. Resolve every requested ID from our actual catalog.
-                // One invalid element fails closed for the entire queue.
-                MediaSessionQueuePolicy.resolve(
-                    mediaItems.map { it.mediaId }, repository.songs.value
-                ).map(::toMediaItem)
+                if (controller.packageName == packageName) {
+                    // Our own app has already applied PlaybackUriPolicy and may
+                    // have a playable queue before this separate service has
+                    // finished its asynchronous database/catalog initialization.
+                    // Preserve trusted same-package playback and startup taps.
+                    mediaItems
+                } else {
+                    // Android Auto/other controllers must not supply arbitrary
+                    // mediaUri or metadata. Canonicalize by verified catalog ID.
+                    // One invalid item fails closed for the whole queue.
+                    MediaSessionQueuePolicy.resolve(
+                        mediaItems.map { it.mediaId }, repository.songs.value
+                    ).map(::toMediaItem)
+                }
             )
 
             override fun onGetLibraryRoot(
