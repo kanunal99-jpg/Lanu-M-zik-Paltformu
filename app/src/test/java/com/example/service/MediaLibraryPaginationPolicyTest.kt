@@ -42,6 +42,37 @@ class MediaLibraryPaginationPolicyTest {
         assertTrue(MediaLibraryPaginationPolicy.page(root, 2, 1).isEmpty())
     }
 
+
+    @Test fun onlyRequestedPageAllocatesMappedMediaEntries() {
+        var conversions = 0
+        val mapped = MediaLibraryPaginationPolicy.mapPage(catalog, 2, 3) {
+            conversions++
+            "media:${it}"
+        }
+        assertEquals(listOf("media:6", "media:7", "media:8"), mapped)
+        assertEquals(3, conversions)
+    }
+
+    @Test fun outOfBoundsPageDoesNotConvertAnything() {
+        var conversions = 0
+        val mapped = MediaLibraryPaginationPolicy.mapPage(catalog, Int.MAX_VALUE, 50) {
+            conversions++
+            it.toString()
+        }
+        assertTrue(mapped.isEmpty())
+        assertEquals(0, conversions)
+    }
+
+    @Test fun enormousRequestedPageConvertsAtMostPolicyLimit() {
+        var conversions = 0
+        val mapped = MediaLibraryPaginationPolicy.mapPage(catalog, 0, Int.MAX_VALUE) {
+            conversions++
+            it.toString()
+        }
+        assertEquals(MediaLibraryPaginationPolicy.MAX_PAGE_SIZE, mapped.size)
+        assertEquals(MediaLibraryPaginationPolicy.MAX_PAGE_SIZE, conversions)
+    }
+
     @Test fun emptyCollectionAlwaysReturnsEmpty() {
         assertTrue(MediaLibraryPaginationPolicy.page(emptyList<Int>(), Int.MAX_VALUE, 1).isEmpty())
     }

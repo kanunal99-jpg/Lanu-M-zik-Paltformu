@@ -104,12 +104,13 @@ class LanuMediaSessionService : MediaLibraryService() {
             ) = Futures.immediateFuture(
                 LibraryResult.ofItemList(
                     MediaLibrarySearchInputPolicy.accept(query)?.let { safeQuery ->
-                        paginate(
+                        MediaLibraryPaginationPolicy.mapPage(
                             MediaLibrarySongPolicy.searchableSongs(
                                 repository.searchSongs(safeQuery)
-                            ).map(::toMediaItem),
+                            ),
                             page,
-                            pageSize
+                            pageSize,
+                            ::toMediaItem
                         )
                     }.orEmpty(),
                     params
@@ -149,8 +150,12 @@ class LanuMediaSessionService : MediaLibraryService() {
             browsableItem(LOCAL_ID, "Cihazımdaki Müzikler"),
             browsableItem(CATALOG_ID, "LANU Kataloğu")
         ), page, pageSize)
-        LOCAL_ID -> paginate(MediaLibrarySongPolicy.localSongs(repository.songs.value).map(::toMediaItem), page, pageSize)
-        CATALOG_ID -> paginate(MediaLibrarySongPolicy.catalogSongs(repository.songs.value).map(::toMediaItem), page, pageSize)
+        LOCAL_ID -> MediaLibraryPaginationPolicy.mapPage(
+            MediaLibrarySongPolicy.localSongs(repository.songs.value), page, pageSize, ::toMediaItem
+        )
+        CATALOG_ID -> MediaLibraryPaginationPolicy.mapPage(
+            MediaLibrarySongPolicy.catalogSongs(repository.songs.value), page, pageSize, ::toMediaItem
+        )
         else -> emptyList()
     }
 
