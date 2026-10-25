@@ -17,6 +17,8 @@ Bu protokol kullanıcı talebiyle yürürlüğe girer ve aşağıdaki eski tarih
 - **P0** Veri ve OTA: bozuk JSON / Room migration / MediaStore permission veya cursor hatası kütüphaneyi sıfırlamaz; eşzamanlı indirme/silme; geri yükleme, oturum değişimi ve veri bütünlüğü. Debug APK'yı kurulu farklı sertifikalı üretim APK'sının üzerine güvenle kuruldu diye sunma.
 - **P1** Kaynak doğru temsil: sahte şarkı/sanatçı/popülerlik/arkadaş etkinliği ve ölçülmemiş 128/320 kbps/FLAC kalite vaadi yok; katalog yanıt boyutu, limit, iptal, zaman aşımı, lisans ve gerçek dinleme olayı doğrulanır.
 - **P1** OEM ve premium: Samsung/Xiaomi/GMS'siz Huawei/AOSP, Android API 24–36+, tablet/katlanır, arka plan ses, TalkBack/TR-EN, Hilt/Compose/Coroutines-Flow, Crashlytics opt-in+mapping, güvenli R8. Fiziksel test yoksa açık engel olarak göster.
+- **Tedarik zinciri ve üretim ispatı:** Gradle, Actions ve bağımlılık güncellemelerinde CVE, sürüm/SDK uyumu, least-privilege token, pinlenmiş action sürümü ve gerektiğinde provenance/SBOM incelemesi zorunludur. APK gerçekten indirilebilir olmalı; SHA-256 dosyasının varlığı tek başına hash doğrulaması değildir. Runner SHA, GitHub Release varlık SHA'sı, APK paketi, kurulu cihaz sertifikası ve veri koruyan OTA ayrı doğrulanır.
+- **Geliştirme kapsamı ve zaman:** Dış araçta henüz yapılmamış iş için "tamamlandı", otomasyon kurmadan "arka planda devam eder" deme. Kullanıcı onayı gerektiren kurulum, ücret, destructive DB işlemi veya signing key talebini sessizce gerçekleştirme. CI/cihaz olmadan sıfır hata garantisi verme.
 - **Maliyet:** ücretsiz/açık kaynak/yerel öncelikli; ücret gerektiren API veya servis için kullanıcı onayı olmadan ücretli işleme geçme.
 
 ---
