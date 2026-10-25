@@ -14,7 +14,7 @@ Kotlin + Jetpack Compose tabanlı, **yerel müzik ve izin verilen katalog kaynak
 
 Gereksinimler: JDK 21, Android SDK, Gradle 9.3.1 ve Android Studio/uyumlu build ortamı. Terminalden `gradle testDebugUnitTest`, `gradle lintDebug` ve `gradle assembleDebug` çalıştırılabilir. Çıktı tipik olarak `app/build/outputs/apk/debug/app-debug.apk` olur.
 
-Son yayımlanan derlemeler: [GitHub Releases](../../releases/latest) · [CI](../../actions/workflows/android.yml). **`app-debug.apk` yalnız önizlemedir.** Rastgele CI/debug imzaları önceki kurulu sürümle eşleşmeyebilir. Var olan uygulamayı kaldırmayın, kullanıcı verilerini riske atacak şekilde üzerine yükleme denemeyin. İmzalı üretim APK'sı için önce cihazdaki mevcut imzanın kalıcı anahtarla eşleşmesi ve silmeden yükseltme testleri gerekir.
+Son yayımlanan derlemeler: [GitHub Releases](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/latest) · [CI](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/workflows/android.yml). **`app-debug.apk` yalnız önizlemedir.** Rastgele CI/debug imzaları önceki kurulu sürümle eşleşmeyebilir. Var olan uygulamayı kaldırmayın, kullanıcı verilerini riske atacak şekilde üzerine yükleme denemeyin. İmzalı üretim APK'sı için önce cihazdaki mevcut imzanın kalıcı anahtarla eşleşmesi ve silmeden yükseltme testleri gerekir.
 
 ## Sağlayıcılar ve telif
 
