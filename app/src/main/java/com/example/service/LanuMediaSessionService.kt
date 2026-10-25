@@ -172,13 +172,8 @@ class LanuMediaSessionService : MediaLibraryService() {
         )
         .build()
 
-    private fun <T> paginate(items: List<T>, page: Int, pageSize: Int): List<T> {
-        val safePage = page.coerceAtLeast(0)
-        val safeSize = pageSize.coerceAtLeast(1)
-        val from = safePage * safeSize
-        if (from >= items.size) return emptyList()
-        return items.subList(from, minOf(from + safeSize, items.size))
-    }
+    private fun <T> paginate(items: List<T>, page: Int, pageSize: Int): List<T> =
+        MediaLibraryPaginationPolicy.page(items, page, pageSize)
 
     private companion object {
         const val ROOT_ID = "root"
