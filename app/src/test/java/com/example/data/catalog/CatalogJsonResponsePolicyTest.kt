@@ -66,9 +66,9 @@ class CatalogJsonResponsePolicyTest {
             .code(200)
             .message("OK")
             .build()
-        missing.use {
-            assertEquals("CATALOG_EMPTY_BODY",
-                runCatching { CatalogJsonResponsePolicy.parse(it) }.exceptionOrNull()?.message)
-        }
+        // OkHttp intentionally rejects close() on bodyless responses; this
+        // fixture tests the parser's fail-closed behavior, not Closeable.
+        assertEquals("CATALOG_EMPTY_BODY",
+            runCatching { CatalogJsonResponsePolicy.parse(missing) }.exceptionOrNull()?.message)
     }
 }
