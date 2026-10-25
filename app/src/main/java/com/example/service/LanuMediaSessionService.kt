@@ -50,6 +50,19 @@ class LanuMediaSessionService : MediaLibraryService() {
         }
 
         val callback = object : MediaLibraryService.MediaLibrarySession.Callback {
+            override fun onAddMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>
+            ) = Futures.immediateFuture(
+                // Do not trust controller-supplied mediaUri, localConfiguration
+                // or metadata. Resolve every requested ID from our actual catalog.
+                // One invalid element fails closed for the entire queue.
+                MediaSessionQueuePolicy.resolve(
+                    mediaItems.map { it.mediaId }, repository.songs.value
+                ).map(::toMediaItem)
+            )
+
             override fun onGetLibraryRoot(
                 session: MediaLibraryService.MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
