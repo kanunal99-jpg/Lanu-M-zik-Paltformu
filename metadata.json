@@ -1,6 +1,8 @@
 {
   "name": "LANU Müzik",
-  "description": "LANU Müzik Platformu - Tüm Türkçe ve yabancı şarkılar, senkronize şarkı sözleri, gelişmiş ekolayzır, çalma listeleri ve çevrimdışı dinleme.",
+  "description": "Cihazdaki müzikler ve erişim koşulları doğrulanmış katalog kaynakları için Android müzik oynatıcısı; çalma listeleri, çevrimdışı kütüphane ve ekolayzır. Tüm eserlerin ücretsiz tam oynatımı garanti edilmez.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
