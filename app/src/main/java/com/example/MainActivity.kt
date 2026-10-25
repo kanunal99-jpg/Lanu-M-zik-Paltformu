@@ -147,7 +147,6 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
     val isShuffle by viewModel.isShuffle.collectAsStateWithLifecycle()
     val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
     val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
-    val audioQuality by viewModel.audioQuality.collectAsStateWithLifecycle()
     val allSongs by viewModel.allSongs.collectAsStateWithLifecycle()
     // Reclassify only the displayed catalog; never delete or migrate user libraries.
     val categorizedSongs = remember(allSongs) { allSongs.map(MusicGenreResolver::resolve) }
@@ -258,7 +257,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel(), updates: UpdateViewMod
         }
 
         AnimatedVisibility(visible = isNowPlayingExpanded && currentSong != null, enter = slideInVertically(initialOffsetY = { it }), exit = slideOutVertically(targetOffsetY = { it })) {
-            currentSong?.let { song -> NowPlayingSheet(song = song, isPlaying = isPlaying, currentPositionMs = currentPositionMs, durationMs = durationMs, isShuffle = isShuffle, repeatMode = repeatMode, isFavorite = favoriteIds.contains(song.id), isDownloaded = downloadedSongIds.contains(song.id), audioQuality = audioQuality, showLyrics = showLyricsInNowPlaying, onTogglePlayPause = { viewModel.togglePlayPause() }, onNext = { viewModel.nextSong() }, onPrevious = { viewModel.prevSong() }, onSeekTo = { viewModel.seekTo(it) }, onToggleShuffle = { viewModel.toggleShuffle() }, onToggleRepeat = { viewModel.toggleRepeat() }, onToggleFavorite = { viewModel.toggleFavorite(song.id) }, onToggleDownload = { viewModel.toggleDownload(song) }, onToggleLyrics = { viewModel.toggleLyricsInNowPlaying() }, onSelectAudioQuality = { viewModel.setAudioQuality(it) }, onOpenEqualizer = { viewModel.closeNowPlaying(); viewModel.setTab(MainTab.EQUALIZER) }, onAddToPlaylist = { viewModel.openAddToPlaylist(song) }, onShare = { viewModel.shareSong(context, song) }, onClose = { viewModel.closeNowPlaying() }) }
+            currentSong?.let { song -> NowPlayingSheet(song = song, isPlaying = isPlaying, currentPositionMs = currentPositionMs, durationMs = durationMs, isShuffle = isShuffle, repeatMode = repeatMode, isFavorite = favoriteIds.contains(song.id), isDownloaded = downloadedSongIds.contains(song.id), showLyrics = showLyricsInNowPlaying, onTogglePlayPause = { viewModel.togglePlayPause() }, onNext = { viewModel.nextSong() }, onPrevious = { viewModel.prevSong() }, onSeekTo = { viewModel.seekTo(it) }, onToggleShuffle = { viewModel.toggleShuffle() }, onToggleRepeat = { viewModel.toggleRepeat() }, onToggleFavorite = { viewModel.toggleFavorite(song.id) }, onToggleDownload = { viewModel.toggleDownload(song) }, onToggleLyrics = { viewModel.toggleLyricsInNowPlaying() }, onOpenEqualizer = { viewModel.closeNowPlaying(); viewModel.setTab(MainTab.EQUALIZER) }, onAddToPlaylist = { viewModel.openAddToPlaylist(song) }, onShare = { viewModel.shareSong(context, song) }, onClose = { viewModel.closeNowPlaying() }) }
         }
 
         if (showCreatePlaylistDialog) CreatePlaylistDialog(onDismiss = { viewModel.closeCreatePlaylistDialog() }, onCreate = { name, desc -> viewModel.createPlaylist(name, desc) })

@@ -45,8 +45,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -73,7 +71,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.model.AudioQuality
 import com.example.model.Song
 import com.example.model.SongSourceType
 import com.example.model.PlaybackKind
@@ -102,7 +99,6 @@ fun NowPlayingSheet(
     repeatMode: RepeatMode,
     isFavorite: Boolean,
     isDownloaded: Boolean,
-    audioQuality: AudioQuality,
     showLyrics: Boolean,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -113,7 +109,6 @@ fun NowPlayingSheet(
     onToggleFavorite: () -> Unit,
     onToggleDownload: () -> Unit,
     onToggleLyrics: () -> Unit,
-    onSelectAudioQuality: (AudioQuality) -> Unit,
     onOpenEqualizer: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onShare: () -> Unit,
@@ -122,7 +117,6 @@ fun NowPlayingSheet(
 ) {
     var isSeeking by remember { mutableStateOf(false) }
     var seekFraction by remember { mutableFloatStateOf(0f) }
-    var showQualityMenu by remember { mutableStateOf(false) }
     var showSourceInfo by remember { mutableStateOf(false) }
 
     val currentFraction = if (durationMs > 0) {
@@ -217,46 +211,24 @@ fun NowPlayingSheet(
                 )
             }
 
-            // Audio Quality Selector Chip & Share
+            // Playback uses the provider's real encoded source as-is.
+            // Do not offer 128/320 kbps or FLAC buttons without variant streams
+            // or a measured lossless source; they previously changed no audio.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box {
-                    Surface(
-                        color = LanuDarkSurfaceElevated,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(enabled = song.playbackKind() != PlaybackKind.PREVIEW) { showQualityMenu = true }
-                            .border(1.dp, LanuGreen.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = if (song.playbackKind() == PlaybackKind.PREVIEW) "30 sn örnek" else audioQuality.title,
-                            color = LanuGreen,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showQualityMenu && song.playbackKind() != PlaybackKind.PREVIEW,
-                        onDismissRequest = { showQualityMenu = false },
-                        modifier = Modifier.background(LanuDarkSurfaceElevated)
-                    ) {
-                        AudioQuality.values().forEach { quality ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(quality.title, color = LanuTextPrimary, fontWeight = FontWeight.Bold)
-                                        Text(quality.bitRate, color = LanuTextSecondary, fontSize = 11.sp)
-                                    }
-                                },
-                                onClick = {
-                                    onSelectAudioQuality(quality)
-                                    showQualityMenu = false
-                                }
-                            )
-                        }
-                    }
+                Surface(
+                    color = LanuDarkSurfaceElevated,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .border(1.dp, LanuGreen.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .testTag("source_quality_badge")
+                ) {
+                    Text(
+                        text = if (song.playbackKind() == PlaybackKind.PREVIEW) "30 sn örnek" else "Kaynak kalitesi",
+                        color = LanuGreen,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
