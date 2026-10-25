@@ -1,8 +1,14 @@
 package com.example.player
 
 import android.net.Uri
+import com.example.model.Song
+import com.example.model.SongSourceType
 
 object OfflineSourcePolicy {
+    /** Both provenance and scheme must be locally trusted, never scheme alone. */
+    fun isAuthorized(song: Song): Boolean =
+        song.sourceType == SongSourceType.LOCAL && isAuthorized(song.audioUrl)
+
     fun isAuthorized(uri: Uri): Boolean = isAuthorized(uri.toString())
 
     /**
