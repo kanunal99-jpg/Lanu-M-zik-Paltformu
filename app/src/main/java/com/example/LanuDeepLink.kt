@@ -37,7 +37,7 @@ sealed interface LanuDeepLink {
             val rawId = uri.rawPath?.removePrefix("/").orEmpty()
             if (rawId.length > MAX_ID_LENGTH * 3 || rawId.contains('/')) return null
             val id = decodeSafely(rawId) ?: return null
-            if (id.length > MAX_ID_LENGTH || id.any { it.isISOControl() }) return null
+            if (id.length > MAX_ID_LENGTH || id.any { Character.isISOControl(it) }) return null
 
             return when (host) {
                 "home" -> Home
@@ -46,7 +46,7 @@ sealed interface LanuDeepLink {
                     val params = parseQuery(uri.rawQuery) ?: return null
                     val query = params["q"].orEmpty()
                     if (query.length > MAX_SEARCH_LENGTH ||
-                        query.any { it.isISOControl() }) return null
+                        query.any { Character.isISOControl(it) }) return null
                     Search(query)
                 }
                 "track" -> id.takeIf { it.isNotBlank() }?.let(::Track)
