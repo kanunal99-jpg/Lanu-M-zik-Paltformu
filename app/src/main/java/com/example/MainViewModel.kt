@@ -27,6 +27,7 @@ import com.example.search.SongSearchPolicy
 import com.example.model.toSettings
 import com.example.service.AudioPlayerController
 import com.example.service.RepeatMode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -157,6 +158,18 @@ class MainViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { allSongs.collect { songs -> playerController.restoreStateFromCatalog(songs) } }
+        // Don't claim a listen until Media3 reports actual playback.
+        viewModelScope.launch {
+            playerController.actualPlaybackStarts.collect { songId ->
+                try {
+                    repository.recordPlayedSong(songId)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Log.e("MainViewModel", "Playback history write failed", error)
+                }
+            }
+        }
         viewModelScope.launch {
             _searchQuery.map(::normalizeSearch).distinctUntilChanged().debounce(350).collectLatest { query ->
                 artistDiscoveryJob?.cancel()
@@ -220,7 +233,10 @@ class MainViewModel @Inject constructor(
     fun setTab(tab: MainTab) { _currentTab.value = tab }
     fun openNowPlaying() { _isNowPlayingExpanded.value = true }
     fun closeNowPlaying() { _isNowPlayingExpanded.value = false }
-    fun playSong(song: Song, queue: List<Song> = listOf(song)) { val index = queue.indexOfFirst { it.id == song.id }.coerceAtLeast(0); playerController.setQueue(queue, index, autoPlay = true); viewModelScope.launch { repository.recordPlayedSong(song.id) } }
+    fun playSong(song: Song, queue: List<Song> = listOf(song)) {
+        val index = queue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        playerController.setQueue(queue, index, autoPlay = true)
+    }
     fun togglePlayPause() { if (currentSong.value == null) { val firstSong = allSongs.value.firstOrNull(); if (firstSong != null) { playSong(firstSong, allSongs.value); return } }; playerController.togglePlayPause() }
     fun nextSong() { playerController.next() }
     fun prevSong() { playerController.previous() }
