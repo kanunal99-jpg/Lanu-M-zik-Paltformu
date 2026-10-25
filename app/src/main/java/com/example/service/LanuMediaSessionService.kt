@@ -116,10 +116,10 @@ class LanuMediaSessionService : MediaLibraryService() {
         .build()
 
     private fun childrenFor(parentId: String, page: Int, pageSize: Int): List<MediaItem> = when (parentId) {
-        ROOT_ID -> listOf(
+        ROOT_ID -> paginate(listOf(
             browsableItem(LOCAL_ID, "Cihazımdaki Müzikler"),
             browsableItem(CATALOG_ID, "LANU Kataloğu")
-        )
+        ), page, pageSize)
         LOCAL_ID -> paginate(MediaLibrarySongPolicy.localSongs(repository.songs.value).map(::toMediaItem), page, pageSize)
         CATALOG_ID -> paginate(MediaLibrarySongPolicy.catalogSongs(repository.songs.value).map(::toMediaItem), page, pageSize)
         else -> emptyList()
