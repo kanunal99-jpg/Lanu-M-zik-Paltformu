@@ -45,3 +45,12 @@ Bu repo için ayrıntılı kalite ve üretim kabul listesi **docs/LANU_PREMIUM_P
 - Her geliştirme platform API sınırlarına, MediaStore/Media3/Room/Compose ve Android standart kurulum iznine göre yapılır; OEM/Google servisleri zorunlu hale getirilemez. GMS'siz cihazlarda temel yerel müzik ve arşiv açılabilmeli; servis özellikleri güvenli fallback vermelidir.
 - `minSdk 24` korunur; Android 17 / API37 dahil sürüm matrisi, yatay/tablet/katlanır, GMS'siz AOSP ve çok üreticili gerçek cihaz smoke ayrı kabul şartıdır.
 - Kaynak: [Android OEM Uyumluluk Matrisi](docs/ANDROID_OEM_UYUMLULUK_MATRISI.md). CI statik denetimi ile cihazda çalıştı kanıtı karıştırılmaz. Üretim yayınından önce kalıcı APK signing, **silmeden OTA** ve gerçek cihazlarda kimlik/favori/playlist korunumu şarttır.
+
+
+## 14. DEĞİŞMEZ SÜREKLİ SAĞLAMLAŞTIRMA DÖNGÜSÜ (25.10.2026)
+
+**Kullanıcı emri: “Çalış; devam et; her zaman sağlamlaştır, yapılan işe dön bak, eksikleri tamamla.”** Her görevde önce `PROJE_ANAYASASI_VE_DUZELTILECEKLER.md` üstündeki güncel protokol gözden geçirilir. Yeni istek, teknik gelişme veya denetimde eksik kural bulunursa **önce anayasa PR'si**, ardından açık P0/P1 regresyonlar, geçmiş PR'lar, testler ve yayın varlıkları tekrar incelenir. “Önceden düzeltildi” sözü, güncel HEAD ve başarısız durum testiyle tekrar teyit edilmeden kabul değildir.
+
+Zorunlu sıra: **Anayasa → öncekileri incele → kök neden → küçük PR → adversarial Unit/Robolectric/Lint/R8 → güvenli merge → yeni main CI → SHA-256'lı indirilebilir Release → gerçek cihaz/veri koruma kabulü → tekrar denetim.** İptal edilmiş/atlanan adım ve debug APK üretim kabulü sayılmaz. P0 gizlilik, kullanıcı verisi, offline URI sahteciliği, harici Media3 kontrolcüsü, OTA imzası, telif ve yanlış kalite vaadi yeni özelliklerden önce gelir.
+
+Tüm kritik zincirler **ana servis → alternatif → gerçek fallback → hata → güvenli varsayılan → log → smoke test** kuralını uygular. Uygulama silinmez, `applicationId` değiştirilmez, eski Room/favori/playlist/kimlik ve offline dosyalar korunur; yeni maliyet yalnız onayla başlatılır. Gerçek cihaz/signed üretim/OTA kanıtı yoksa bu durum açıkça “engelli” gösterilir. Kapanışta alan bazlı kanıtlı puan /100 ve 100/100 hedef açığı ile Issue #34 güncellenir.
