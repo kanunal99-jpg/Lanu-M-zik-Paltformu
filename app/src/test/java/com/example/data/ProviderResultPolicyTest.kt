@@ -37,7 +37,10 @@ class ProviderResultPolicyTest {
         var wasRethrown = false
         try {
             ProviderResultPolicy.call<String> {
-                throw kotlinx.coroutines.TimeoutCancellationException("timed out")
+                kotlinx.coroutines.withTimeout(1L) {
+                    kotlinx.coroutines.delay(1_000L)
+                    Result.success("should never complete")
+                }
             }
         } catch (_: CancellationException) {
             wasRethrown = true
