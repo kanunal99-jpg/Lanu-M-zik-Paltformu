@@ -20,6 +20,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +36,16 @@ class AudioPlayerController(private val context: Context) {
     private var audioEffects: AudioEffectsController? = null
     private var pendingRestore: PlayerStateStore.Snapshot? = null
     private var hasAttemptedRestore = false
+    private var latestCatalogForRestore: List<Song> = emptyList()
+    private val queuedBeforeConnection = StartupPlaybackQueue<PendingQueueRequest>()
+    private var released = false
     var mediaController: MediaController? = null
+
+    private data class PendingQueueRequest(
+        val songs: List<Song>,
+        val startIndex: Int,
+        val autoPlay: Boolean
+    )
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -61,21 +71,32 @@ class AudioPlayerController(private val context: Context) {
         val sessionToken = SessionToken(context, ComponentName(context, LanuMediaSessionService::class.java))
         controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
         controllerFuture?.addListener({
+            if (released) return@addListener
             mediaController = runCatching { controllerFuture?.get() }.getOrNull()
+            if (mediaController == null) return@addListener
             setupControllerListener()
             ensureAudioEffects()
+            // Explicit playback taps win over a persisted resume snapshot.
+            val queued = queuedBeforeConnection.drain()
+            if (queued != null) setQueue(queued.songs, queued.startIndex, queued.autoPlay)
+            else restoreStateFromCatalog(latestCatalogForRestore)
         }, ContextCompat.getMainExecutor(context))
     }
 
     fun restoreStateFromCatalog(catalog: List<Song>) {
-        if (hasAttemptedRestore || catalog.isEmpty()) return
+        if (released) return
+        latestCatalogForRestore = catalog
+        if (hasAttemptedRestore || catalog.isEmpty() || queuedBeforeConnection.hasPending()) return
         val snapshot = pendingRestore ?: run {
             hasAttemptedRestore = true
             return
         }
         val song = catalog.firstOrNull { it.id == snapshot.songId }
-        if (song == null || playableUri(song) == null || mediaController == null) {
-            if (song == null) return
+        if (song == null) return
+        // Media3 may connect after the first Room/MediaStore emission.
+        // Keep the snapshot for a retry instead of discarding it prematurely.
+        if (mediaController == null) return
+        if (playableUri(song) == null) {
             hasAttemptedRestore = true
             pendingRestore = null
             return
@@ -147,7 +168,7 @@ class AudioPlayerController(private val context: Context) {
     }
 
     fun setQueue(songs: List<Song>, startIndex: Int = 0, autoPlay: Boolean = true) {
-        if (songs.isEmpty()) return
+        if (released || songs.isEmpty()) return
         val requestedSong = songs.getOrNull(startIndex)
         if (requestedSong == null || playableUri(requestedSong) == null) {
             showUnavailablePlayback()
@@ -165,6 +186,16 @@ class AudioPlayerController(private val context: Context) {
         }
         _queue.value = playableSongs
         _queueIndex.value = validIndex
+        if (mediaController == null) {
+            // User tapped play before MediaController.Builder.buildAsync completed.
+            // Only the newest request is retained; never persist an empty song.
+            hasAttemptedRestore = true
+            pendingRestore = null
+            queuedBeforeConnection.submit(PendingQueueRequest(playableSongs, validIndex, autoPlay))
+            return
+        }
+        hasAttemptedRestore = true
+        pendingRestore = null
         val mediaItems = playableSongs.map { song ->
             MediaItem.Builder()
                 .setMediaId(song.id)
@@ -214,6 +245,12 @@ class AudioPlayerController(private val context: Context) {
     fun playSong(song: Song, autoPlay: Boolean = true) {
         val existingIndex = _queue.value.indexOfFirst { it.id == song.id }
         if (existingIndex >= 0) {
+            if (mediaController == null) {
+                setQueue(_queue.value, existingIndex, autoPlay)
+                return
+            }
+            hasAttemptedRestore = true
+            pendingRestore = null
             _queueIndex.value = existingIndex
             mediaController?.seekTo(existingIndex, 0L)
             if (autoPlay) mediaController?.play()
@@ -343,8 +380,14 @@ class AudioPlayerController(private val context: Context) {
     }
 
     fun release() {
-        persistState()
+        if (released) return
+        released = true
+        // If connection never completed, don't erase the persisted last song.
+        if (_currentSong.value != null) persistState()
+        queuedBeforeConnection.close()
+        latestCatalogForRestore = emptyList()
         stopProgressTracker()
+        scope.cancel()
         audioEffects?.release()
         audioEffects = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
