@@ -18,6 +18,7 @@ import com.example.model.AudioQuality
 import com.example.model.FriendActivity
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.search.SongSearchPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -526,7 +527,7 @@ class MusicRepository(context: Context) {
     fun searchCachedSongs(query: String): Flow<List<Song>> { val q = normalizeSearch(query); return dao.getAllCachedSongs().map { items -> val songs = items.map { it.toSong() }.filter { it.sourceType != com.example.model.SongSourceType.UNKNOWN }; if (q.isEmpty()) songs else songs.filter { matchesQuery(it, q) } } }
     suspend fun cacheSongs(songsToCache: List<Song>) = dao.insertCachedSongs(songsToCache.map { it.toCachedEntity() })
     fun searchSongs(query: String, categoryFilter: MusicCategory? = null, languageFilter: String? = null): List<Song> { val q = normalizeSearch(query); return _songs.value.filter { song -> val matches = q.isEmpty() || matchesQuery(song, q); matches && (categoryFilter == null || song.category == categoryFilter) && (languageFilter == null || song.language == languageFilter) } }
-    private fun matchesQuery(song: Song, normalizedQuery: String): Boolean = listOf(song.title, song.artist, song.album).any { normalizeSearch(it).contains(normalizedQuery) } || song.lyrics.any { normalizeSearch(it.text).contains(normalizedQuery) }
+    private fun matchesQuery(song: Song, normalizedQuery: String): Boolean = SongSearchPolicy.matchesAll(song, normalizedQuery)
     private fun normalizeSearch(value: String): String = value.trim().lowercase().replace('ı','i').replace('İ','i').replace('ş','s').replace('Ş','s').replace('ğ','g').replace('Ğ','g').replace('ü','u').replace('Ü','u').replace('ö','o').replace('Ö','o').replace('ç','c').replace('Ç','c')
     fun likeFriendActivity(activityId: String) { _friendActivities.value = _friendActivities.value.map { if (it.id == activityId) it.copy(recommendationLikes = it.recommendationLikes + 1) else it } }
     fun shareRecommendationToFriends(friendName: String, song: Song, note: String) { val newActivity = FriendActivity("act_${UUID.randomUUID().toString().take(6)}", friendName, "", song, "Şimdi paylaştı", false, note, 1); _friendActivities.value = listOf(newActivity) + _friendActivities.value }

@@ -49,6 +49,8 @@ import coil.compose.AsyncImage
 import com.example.model.Artist
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.search.SongSearchPolicy
+import com.example.search.TypoTolerantSearch
 import com.example.model.PlaybackKind
 import com.example.model.playbackKind
 import com.example.model.playbackBadge
@@ -70,7 +72,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
     var browseAll by remember { mutableStateOf(false) }
     var fullStreamsOnly by remember { mutableStateOf(false) }
     var showYouTubeDialog by remember { mutableStateOf(false) }
-    val q = searchQuery.trim().lowercase()
+    val q = TypoTolerantSearch.normalize(searchQuery)
     if (showYouTubeDialog) LanuYouTubePlayerDialog(onDismiss = { showYouTubeDialog = false }, initialQuery = searchQuery)
     Column(modifier = modifier.fillMaxSize().background(LanuDarkBg).statusBarsPadding().testTag("search_screen")) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
@@ -88,12 +90,11 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                 Spacer(modifier = Modifier.height(6.dp))
                 val searchResults = if (searchQuery.isNotEmpty() || selectedCategory != null) {
                     allSongs.filter { song ->
-                        val songTitle = song.title.lowercase(); val songArtist = song.artist.lowercase(); val songAlbum = song.album.lowercase()
                         val matchesScope = when (selectedScope) {
-                            SearchFilterScope.ALL -> q.isEmpty() || songTitle.contains(q) || songArtist.contains(q) || songAlbum.contains(q) || song.lyrics.any { it.text.lowercase().contains(q) }
-                            SearchFilterScope.SONGS -> q.isEmpty() || songTitle.contains(q) || songArtist.contains(q) || song.lyrics.any { it.text.lowercase().contains(q) }
-                            SearchFilterScope.ARTISTS -> q.isEmpty() || songArtist.contains(q)
-                            SearchFilterScope.ALBUMS -> q.isEmpty() || songAlbum.contains(q)
+                            SearchFilterScope.ALL -> SongSearchPolicy.matchesAll(song, q)
+                            SearchFilterScope.SONGS -> SongSearchPolicy.matchesSongs(song, q)
+                            SearchFilterScope.ARTISTS -> SongSearchPolicy.matchesArtist(song, q)
+                            SearchFilterScope.ALBUMS -> SongSearchPolicy.matchesAlbum(song, q)
                         }
                         matchesScope && (selectedCategory == null || song.category == selectedCategory)
                     }
@@ -142,8 +143,8 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                             if (visibleResults.isEmpty() && !searchIsLoading) item { Text(if (fullStreamsOnly) "Bu aramada izinli tam kayıt bulunamadı. 30 sn örnekleri görmek için filtreyi kaldırın." else "Bu aramada veya kategoride henüz kayıt yok. Bu, dünyada böyle bir şarkı olmadığı anlamına gelmez.", color = LanuTextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 20.dp)) }
                             if (searchError != null) item { Text(searchError, color = LanuTextSecondary, fontSize = 12.sp) }
                             items(visibleResults, key = { it.id }) { song ->
-                                val matchingLyric = if (q.isNotEmpty()) song.lyrics.firstOrNull { it.text.lowercase().contains(q) } else null
-                                val isAlbumMatch = q.isNotEmpty() && song.album.lowercase().contains(q)
+                                val matchingLyric = if (q.isNotEmpty()) song.lyrics.firstOrNull { TypoTolerantSearch.normalize(it.text).contains(q) } else null
+                                val isAlbumMatch = q.isNotEmpty() && SongSearchPolicy.matchesAlbum(song, q)
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, visibleResults) }.padding(10.dp).testTag("search_result_${song.id}")) {
                                     AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))
                                     Spacer(modifier = Modifier.width(12.dp))
