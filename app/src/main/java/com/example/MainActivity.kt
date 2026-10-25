@@ -82,7 +82,7 @@ import com.example.ui.theme.MyApplicationTheme
 class MainActivity : ComponentActivity() {
     // Compose-observed event. Never recreate the Activity just to handle a link:
     // recreation drops current UI state and releases the scoped media controller.
-    var incomingLinkEvent by mutableStateOf(LanuIncomingLinkEvent(null, 0L))
+    internal var incomingLinkEvent by mutableStateOf(LanuIncomingLinkEvent(null, 0L))
         private set
 
     override fun onCreate(savedInstanceState: Bundle?) {
