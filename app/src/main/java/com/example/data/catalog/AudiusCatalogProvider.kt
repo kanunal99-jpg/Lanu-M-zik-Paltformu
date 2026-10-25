@@ -39,7 +39,7 @@ class AudiusCatalogProvider(
                 val request = Request.Builder().url(url).get().build()
                 httpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) error("AUDIUS_HTTP_${response.code}")
-                    return@withContext Result.success(JSONObject(response.body?.string().orEmpty()))
+                    return@withContext Result.success(CatalogJsonResponsePolicy.parse(response))
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

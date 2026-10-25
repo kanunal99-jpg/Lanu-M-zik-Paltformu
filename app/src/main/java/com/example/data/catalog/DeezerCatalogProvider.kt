@@ -34,7 +34,7 @@ class DeezerCatalogProvider(private val httpClient: OkHttpClient = OkHttpClient(
             httpClient.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
                 if (!response.isSuccessful) error("DEEZER_HTTP_${response.code}")
                 currentCoroutineContext().ensureActive()
-                JSONObject(response.body?.string().orEmpty()).also { json ->
+                CatalogJsonResponsePolicy.parse(response).also { json ->
                     if (json.has("error")) error("DEEZER_API_${json.optJSONObject("error")?.optString("type").orEmpty()}")
                 }
             }
