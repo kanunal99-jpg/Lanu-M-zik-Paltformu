@@ -92,8 +92,8 @@ class OfflineSourcePolicyTest {
             "file:",
             "file://",
             "file:///storage/emulated/0/%broken",
-            "file:///storage/emulated/0/line\\nsecret",
-            "file:///storage/emulated/0/stray\\u0000byte",
+            "file:///storage/emulated/0/line\nsecret",
+            "file:///storage/emulated/0/stray\u0000byte",
             "content://media/external/audio/media/12#fragment",
             "file:///storage/emulated/0/" + "a".repeat(9000)
         )
