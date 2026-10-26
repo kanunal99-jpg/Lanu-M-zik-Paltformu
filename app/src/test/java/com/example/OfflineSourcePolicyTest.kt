@@ -12,8 +12,9 @@ class OfflineSourcePolicyTest {
     }
 
     @Test
-    fun `file uri is authorized`() {
-        assertTrue(OfflineSourcePolicy.isAuthorized("file:///data/user/0/com.example/audio.mp3"))
+    fun `shared media file uri is authorized but private app files are not`() {
+        assertTrue(OfflineSourcePolicy.isAuthorized("file:///storage/emulated/0/Music/audio.mp3"))
+        assertFalse(OfflineSourcePolicy.isAuthorized("file:///data/user/0/com.example/audio.mp3"))
     }
 
     @Test
