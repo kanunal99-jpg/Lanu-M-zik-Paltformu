@@ -127,7 +127,7 @@ jobs:
           exit "${outcome}"
       - name: Archive Lint findings
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lanu-android-lint-${{ github.sha }}
           if-no-files-found: ignore
@@ -193,7 +193,7 @@ jobs:
         shell: bash
         run: sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
       - name: Upload Debug APK Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lanu-music-debug-${{ github.sha }}
           path: |
