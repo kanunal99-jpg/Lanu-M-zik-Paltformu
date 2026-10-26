@@ -1,29 +1,16 @@
 package com.example.service
 
-import com.example.data.catalog.CatalogLicensePolicy
 import com.example.model.Song
 import com.example.model.SongSourceType
+import com.example.player.PlaybackUriPolicy
 
 /**
- * Media3 library is another playback entry point. Apply the same provenance
- * boundary as the main player before publishing a playable URI to external
- * media browsers, Android Auto, or headset clients.
+ * Media3 is a separate playback entry point, not a separate trust authority.
+ * Use the SAME provenance and license gate as the in-app player to prevent
+ * future divergence that could expose blocked URIs to external controllers.
  */
 internal object MediaLibrarySongPolicy {
-    fun playableUri(song: Song): String? {
-        val raw = song.audioUrl.trim()
-        return when (song.sourceType) {
-            SongSourceType.LOCAL ->
-                raw.takeIf { it.startsWith("content://") || it.startsWith("file://") }
-            SongSourceType.VERIFIED_REMOTE ->
-                raw.takeIf {
-                    it.startsWith("https://") &&
-                        CatalogLicensePolicy.isPermittedRemoteLicense(song.license)
-                }
-            SongSourceType.VERIFIED_PREVIEW -> raw.takeIf { it.startsWith("https://") }
-            SongSourceType.UNKNOWN -> null
-        }
-    }
+    fun playableUri(song: Song): String? = PlaybackUriPolicy.verifiedSource(song)
 
     fun localSongs(songs: List<Song>): List<Song> =
         songs.filter { it.sourceType == SongSourceType.LOCAL && playableUri(it) != null }
