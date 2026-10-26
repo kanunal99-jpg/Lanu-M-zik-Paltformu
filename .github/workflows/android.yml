@@ -99,6 +99,7 @@ jobs:
           set -euo pipefail
           python3 scripts/check_repository_hygiene.py
           python3 -m unittest discover -s scripts -p 'test_repository_hygiene.py'
+          python3 -m unittest discover -s scripts -p 'test_release_workflow_integrity.py'
       - name: Android OEM compatibility policy and read-only device script validation
         shell: bash
         run: |
