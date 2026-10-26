@@ -3,6 +3,7 @@ package com.example.service
 import com.example.model.MusicCategory
 import com.example.model.Song
 import com.example.model.SongSourceType
+import com.example.player.PlaybackUriPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -54,6 +55,47 @@ class MediaLibrarySongPolicyTest {
         val preview = song("preview", SongSourceType.VERIFIED_PREVIEW,
             "https://example.com/preview.mp3")
         assertEquals(preview.audioUrl, MediaLibrarySongPolicy.playableUri(preview))
+    }
+
+
+    @Test fun everyMedia3SourceUsesExactlyTheInAppPlaybackTrustDecision() {
+        val sources = SongSourceType.values()
+        val uris = listOf(
+            "content://media/external/audio/5",
+            "file:///storage/emulated/0/Music/example.mp3",
+            "https://example.com/song.mp3",
+            "http://example.com/cleartext.mp3",
+            "https://example.com/preview.mp3",
+            "",
+            "  https://example.com/spaces.mp3  ",
+            "https://example.com/unlicensed.mp3"
+        )
+        val licenses = listOf("", "CC BY 4.0", "CC BY-NC 4.0", "all rights reserved")
+        for (source in sources) {
+            for (uri in uris) {
+                for (license in licenses) {
+                    val candidate = song("regression", source, uri, license)
+                    assertEquals(
+                        "Source=$source URL=$uri license=$license",
+                        PlaybackUriPolicy.verifiedSource(candidate),
+                        MediaLibrarySongPolicy.playableUri(candidate)
+                    )
+                }
+            }
+        }
+    }
+
+    @Test fun media3SectionsCannotExposeUntrustedProvenance() {
+        val malicious = song("spoofed", SongSourceType.UNKNOWN,
+            "file:///data/user/0/com.example/private.db")
+        val unlicensed = song("unlicensed", SongSourceType.VERIFIED_REMOTE,
+            "https://example.com/full.mp3", "CC BY-NC 4.0")
+        val valid = song("valid", SongSourceType.VERIFIED_PREVIEW,
+            "https://example.com/official-preview.mp3")
+        val tracks = listOf(malicious, unlicensed, valid)
+        assertEquals(listOf("valid"), MediaLibrarySongPolicy.catalogSongs(tracks).map { it.id })
+        assertEquals(listOf("valid"), MediaLibrarySongPolicy.searchableSongs(tracks).map { it.id })
+        assertEquals(emptyList<String>(), MediaLibrarySongPolicy.localSongs(tracks).map { it.id })
     }
 
     @Test fun plaintextHttpAndForeignLocalSourceAreBlocked() {
