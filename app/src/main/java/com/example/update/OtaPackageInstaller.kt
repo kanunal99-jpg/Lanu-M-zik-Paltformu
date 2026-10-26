@@ -39,6 +39,9 @@ internal object OtaPackageInstaller {
                 .apply {
                     setAppPackageName(context.packageName)
                     setSize(apk.length())
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+                    }
                 }
             val sessionId = installer.createSession(params)
             var committed = false
@@ -67,13 +70,17 @@ internal object OtaPackageInstaller {
                         !actualSha.equals(expectedSha256, ignoreCase = true)
                     ) throw IOException("APK kurulum sırasında değişti. Veri güvenliği için işlem durduruldu.")
 
-                    val receiver = Intent(context, OtaInstallStatusReceiver::class.java)
+                    // The system sends its installation-result PendingIntent to
+                    // an Activity, not to a background BroadcastReceiver which
+                    // attempts to open an Activity (blocked on modern Android).
+                    val receiver = Intent(context, OtaInstallResultActivity::class.java)
                         .setAction(STATUS_ACTION)
                         .setPackage(context.packageName)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         .putExtra(PackageInstaller.EXTRA_SESSION_ID, sessionId)
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                         (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
-                    val sender = PendingIntent.getBroadcast(context, sessionId, receiver, flags)
+                    val sender = PendingIntent.getActivity(context, sessionId, receiver, flags)
                         .intentSender
                     session.commit(sender)
                     committed = true
