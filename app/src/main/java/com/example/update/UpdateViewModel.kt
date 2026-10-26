@@ -6,7 +6,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.core.content.FileProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import androidx.lifecycle.AndroidViewModel
@@ -34,6 +33,7 @@ sealed interface UpdateScreenState {
     data class Cancelling(val release: VerifiedRelease) : UpdateScreenState
     data class ReadyToInstall(val release: VerifiedRelease, val file: File, val expectedSha256: String, val permissionsNeeded: Boolean = false) : UpdateScreenState
     data object VerifyingInstaller : UpdateScreenState
+    data object WaitingForAndroidApproval : UpdateScreenState
     data class Failed(val reason: String) : UpdateScreenState
 }
 
@@ -163,15 +163,11 @@ class UpdateViewModel @Inject constructor(application: Application) : AndroidVie
                     context.startActivity(settingsIntent)
                     return@launch
                 }
-                _screen.value = ready.copy(permissionsNeeded = false)
-                val uri = FileProvider.getUriForFile(
-                    context, context.packageName + ".ota.fileprovider", ready.file
-                )
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW)
-                        .setDataAndType(uri, "application/vnd.android.package-archive")
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
+                // Install into the existing package using Android's own update
+                // session. The platform prompts for approval; no uninstall,
+                // data-clear or hidden APK replacement is attempted.
+                OtaPackageInstaller.stageVerifiedUpdate(context, ready.file, ready.expectedSha256)
+                _screen.value = UpdateScreenState.WaitingForAndroidApproval
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 // A missing installer app / permission settings activity is NOT
