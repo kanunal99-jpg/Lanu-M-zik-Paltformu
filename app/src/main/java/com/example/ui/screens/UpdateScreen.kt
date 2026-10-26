@@ -198,6 +198,10 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
                         .semantics { liveRegion = LiveRegionMode.Polite })
                 Text(stringResource(R.string.ota_no_uninstall_warning),
                     color = LanuTextMuted, fontSize = 12.sp)
+                OutlinedButton(
+                    onClick = { updates.openAlternativeAndroidInstaller(context) },
+                    modifier = Modifier.fillMaxWidth().testTag("ota_legacy_installer")
+                ) { Text(stringResource(R.string.ota_alternative_installer)) }
             }
             is UpdateScreenState.Failed -> {
                 Text(current.reason, color = LanuTextPrimary, modifier = Modifier.testTag("update_error").semantics { liveRegion = LiveRegionMode.Polite })
