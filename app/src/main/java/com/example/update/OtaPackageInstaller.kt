@@ -72,7 +72,7 @@ internal object OtaPackageInstaller {
                         .setPackage(context.packageName)
                         .putExtra(PackageInstaller.EXTRA_SESSION_ID, sessionId)
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+                        (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
                     val sender = PendingIntent.getBroadcast(context, sessionId, receiver, flags)
                         .intentSender
                     session.commit(sender)
