@@ -42,4 +42,5 @@
     <string name="youtube_browser_fallback">Resmî YouTube videosunu tarayıcıda aç</string>
     <string name="ota_awaiting_android_approval">Güncelleme Android yükleyicisine aktarıldı. Sistem onay ekranında kurulumu onaylayın; uygulama kaldırılmaz.</string>
     <string name="ota_no_uninstall_warning">LANU uygulamasını kaldırmayın. Android güncellemeyi engellerse çalma listeleriniz ve çevrimdışı dosyalarınız korunmalıdır.</string>
+    <string name="ota_alternative_installer">Android onay ekranı açılmadı mı? Sistem yükleyicisini aç</string>
 </resources>
