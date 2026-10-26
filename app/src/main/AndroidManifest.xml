@@ -41,6 +41,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".update.OtaInstallResultActivity"
+            android:exported="false"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.MyApplication" />
+
         <receiver
             android:name=".update.OtaInstallStatusReceiver"
             android:exported="false" />
