@@ -101,6 +101,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_repository_hygiene.py'
           python3 -m unittest discover -s scripts -p 'test_release_workflow_integrity.py'
           python3 -m unittest discover -s scripts -p 'test_debug_apk_installability_workflow.py'
+          python3 -m unittest discover -s scripts -p 'test_bootstrap_ota_signing.py'
       - name: Android OEM compatibility policy and read-only device script validation
         shell: bash
         run: |
