@@ -10,7 +10,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.IOException
@@ -71,8 +70,6 @@ class OtaPackageInstallerTest {
                 .putExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE_CONFLICT)
             OtaInstallStatusReceiver().onReceive(context, intent)
             assertEquals("preserve-me", prefs.getString("saved-playlist", null))
-            val lastToast = shadowOf(android.widget.Toast.makeText(
-                context, "", android.widget.Toast.LENGTH_SHORT))
             // The receiver never invokes PackageManager uninstall, clearData,
             // or a replacement with a differently signed APK.
             assertTrue(OtaPackageInstaller.STATUS_ACTION.contains("OTA_INSTALL_STATUS"))
