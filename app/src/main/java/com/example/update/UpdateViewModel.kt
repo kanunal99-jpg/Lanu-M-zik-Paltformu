@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
 import android.os.Build
 import android.provider.Settings
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -178,6 +179,55 @@ class UpdateViewModel @Inject constructor(application: Application) : AndroidVie
                 }
                 _screen.value = UpdateScreenState.Failed(
                     "Android kurulumu başlatılamadı: " + (e.message ?: "Bilinmeyen hata.")
+                )
+            }
+        }
+    }
+
+    /**
+     * OEM fallback when an installation session was committed but Android's
+     * confirmation UI did not appear. Repeat cryptographic verification on the
+     * cached APK before offering the traditional system package viewer.
+     * NEVER force an uninstall and NEVER weaken signature checks.
+     */
+    fun openAlternativeAndroidInstaller(context: Context) {
+        val stored = sessions.restore(installedCode)
+        if (stored == null) {
+            _screen.value = UpdateScreenState.Failed(
+                "Doğrulanmış güncelleme kaydı bulunamadı. Güncellemeleri yeniden denetleyin."
+            )
+            return
+        }
+        _screen.value = UpdateScreenState.VerifyingInstaller
+        viewModelScope.launch {
+            try {
+                updater.verifyForInstall(stored.apk, stored.release.versionCode, stored.expectedSha256)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                    !context.packageManager.canRequestPackageInstalls()
+                ) {
+                    _screen.value = UpdateScreenState.ReadyToInstall(
+                        stored.release, stored.apk, stored.expectedSha256, permissionsNeeded = true
+                    )
+                    context.startActivity(Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + context.packageName)
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    return@launch
+                }
+                val uri = FileProvider.getUriForFile(
+                    context, context.packageName + ".ota.fileprovider", stored.apk
+                )
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, "application/vnd.android.package-archive")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                _screen.value = UpdateScreenState.WaitingForAndroidApproval
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                _screen.value = UpdateScreenState.Failed(
+                    "Alternatif Android yükleyici açılamadı: " +
+                        (error.message ?: "Lütfen güncellemeyi tekrar deneyin.")
                 )
             }
         }
