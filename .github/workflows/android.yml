@@ -440,7 +440,22 @@ jobs:
           expected_checksum_digest="sha256:$(sha256sum app/build/outputs/apk/release/app-release.apk.sha256 | cut -d ' ' -f1)"
           [[ "${remote_digest}" == "${expected_digest}" ]]
           [[ "${remote_checksum_digest}" == "${expected_checksum_digest}" ]]
-          echo "Remote GitHub signed APK and checksum assets match runner SHA-256."
+          # GitHub API metadata alone cannot prove assets are downloadable or
+          # match the original bytes. Re-download BOTH signed release assets.
+          verification_dir="$(mktemp -d)"
+          trap 'rm -rf "${verification_dir}"' EXIT
+          gh release download --repo "${GH_REPO}" "${TAG_NAME}" \
+            --pattern 'app-release.apk' --pattern 'app-release.apk.sha256' \
+            --dir "${verification_dir}"
+          [[ -s "${verification_dir}/app-release.apk" ]]
+          [[ -s "${verification_dir}/app-release.apk.sha256" ]]
+          cmp app/build/outputs/apk/release/app-release.apk "${verification_dir}/app-release.apk"
+          cmp app/build/outputs/apk/release/app-release.apk.sha256 "${verification_dir}/app-release.apk.sha256"
+          published_sha="$(awk 'NR==1 {print $1}' "${verification_dir}/app-release.apk.sha256")"
+          [[ "${published_sha}" =~ ^[0-9a-f]{64}$ ]]
+          calculated_sha="$(sha256sum "${verification_dir}/app-release.apk" | cut -d ' ' -f1)"
+          [[ "${published_sha}" == "${calculated_sha}" ]]
+          echo "Downloaded signed APK, checksum sidecar and public release bytes verified."
       - name: Report verified signed release
         if: steps.signing.outputs.enabled == 'true'
         shell: bash
