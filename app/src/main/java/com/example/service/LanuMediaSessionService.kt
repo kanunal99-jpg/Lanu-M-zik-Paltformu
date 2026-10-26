@@ -185,7 +185,7 @@ class LanuMediaSessionService : MediaLibraryService() {
                     .setTitle(song.title)
                     .setArtist(song.artist)
                     .setAlbumTitle(song.album)
-                    .setArtworkUri(song.coverUrl.takeIf { it.isNotBlank() }?.let(android.net.Uri::parse))
+                    .setArtworkUri(MediaLibraryArtworkPolicy.authorizedUri(song)?.let(android.net.Uri::parse))
                     .setIsBrowsable(false)
                     .setIsPlayable(playableUri != null)
                     .build()
