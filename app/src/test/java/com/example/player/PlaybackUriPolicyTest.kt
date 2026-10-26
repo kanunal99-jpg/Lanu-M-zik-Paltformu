@@ -70,6 +70,43 @@ class PlaybackUriPolicyTest {
         }
     }
 
+    @Test fun malformedOrCredentialedRemoteUrlsNeverReachMedia3OrPlayer() {
+        val rejected = listOf(
+            "https://",
+            "https:///track.mp3",
+            "https://?track=1",
+            "https://user:secret@cdn.example.com/full.mp3",
+            "https://cdn.example.com/a b.mp3",
+            "https://cdn.example.com/line\nfeed.mp3",
+            "https://cdn.example.com/a\u0000.mp3",
+            "https://cdn.example.com/%broken",
+            "https://cdn.example.com/" + "a".repeat(9000),
+            "https://%31invalid.example.com/track.mp3"
+        )
+        for (url in rejected) {
+            assertNull("remote accepted malformed URL: ${url.take(80)}",
+                PlaybackUriPolicy.verifiedSource(song(
+                    uri = url, type = SongSourceType.VERIFIED_REMOTE, license = "CC BY 4.0")))
+            assertNull("preview accepted malformed URL: ${url.take(80)}",
+                PlaybackUriPolicy.verifiedSource(song(
+                    uri = url, type = SongSourceType.VERIFIED_PREVIEW)))
+        }
+    }
+
+    @Test fun officialSignedHttpsUrlsRemainUnchanged() {
+        val urls = listOf(
+            "https://cdn.example.com/music.mp3?Expires=1860000000&Signature=abc%2Fdef%3D",
+            "https://api.audius.co/v1/tracks/123/stream",
+            "https://cdn.example.com:443/sample.mp3?token=abc-123"
+        )
+        for (url in urls) {
+            assertEquals(url, PlaybackUriPolicy.verifiedSource(song(
+                uri = url, type = SongSourceType.VERIFIED_REMOTE, license = "CC BY 4.0")))
+            assertEquals(url, PlaybackUriPolicy.verifiedSource(song(
+                uri = url, type = SongSourceType.VERIFIED_PREVIEW)))
+        }
+    }
+
     @Test fun licensedHttpsPreviewAndLocalContentStillWork() {
         val full = "https://example.com/full.mp3"
         assertEquals(full, PlaybackUriPolicy.verifiedSource(song(
