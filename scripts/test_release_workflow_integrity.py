@@ -50,18 +50,23 @@ class SignedReleaseWorkflowIntegrityTest(unittest.TestCase):
 
 
     def test_signing_secrets_are_step_scoped_not_job_wide(self):
-        job = self.workflow.split("  signed_release:\n", 1)[1]
-        header = job.split("    steps:", 1)[0]
-        self.assertNotIn("    env:", header, "Do not expose signing secrets to every job step")
+        readiness_job = self.workflow.split("  signing_readiness:\n", 1)[1].split(
+            "  signed_release:\n", 1
+        )[0]
+        signed_job = self.workflow.split("  signed_release:\n", 1)[1]
+        for name, job in (("signing_readiness", readiness_job),
+                          ("signed_release", signed_job)):
+            header = job.split("    steps:", 1)[0]
+            self.assertNotIn("    env:", header, name + ": no job-wide signing secrets")
 
-        def step(name):
+        def step(job, name):
             portion = job.split("      - name: " + name + "\n", 1)[1]
             return portion.split("      - name:", 1)[0]
 
-        check = step("Check signing credentials without exposing secrets")
-        restore = step("Restore signing key outside repository")
-        assemble = step("Assemble signed release")
-        checkout = step("Checkout verified main commit")
+        check = step(readiness_job, "Check signing credentials without exposing secrets")
+        restore = step(signed_job, "Restore signing key outside repository")
+        assemble = step(signed_job, "Assemble signed release")
+        checkout = step(signed_job, "Checkout verified main commit")
         for field in (
             "LANU_SIGNING_KEYSTORE_BASE64",
             "LANU_SIGNING_STORE_PASSWORD",
@@ -78,6 +83,19 @@ class SignedReleaseWorkflowIntegrityTest(unittest.TestCase):
         self.assertIn("KEY_PASSWORD: ${{ secrets.LANU_SIGNING_KEY_PASSWORD }}", assemble)
         self.assertIn("KEY_ALIAS: ${{ secrets.LANU_SIGNING_KEY_ALIAS }}", assemble)
         self.assertNotIn("LANU_SIGNING_KEYSTORE_BASE64", assemble)
+
+    def test_unsigned_production_job_is_skipped_not_green(self):
+        readiness = self.workflow.split("  signing_readiness:\n", 1)[1].split(
+            "  signed_release:\n", 1
+        )[0]
+        signed = self.workflow.split("  signed_release:\n", 1)[1]
+        self.assertIn("      enabled: ${{ steps.signing.outputs.enabled }}", readiness)
+        self.assertIn('echo "enabled=false" >> "${GITHUB_OUTPUT}"', readiness)
+        self.assertIn('echo "enabled=true" >> "${GITHUB_OUTPUT}"', readiness)
+        self.assertIn("    needs: [build, release, signing_readiness]", signed)
+        self.assertIn("needs.signing_readiness.outputs.enabled == 'true'", signed)
+        self.assertNotIn("steps.signing.outputs.enabled", signed)
+        self.assertIn("      - name: Erase temporary signing key\n        if: always()", signed)
 
 
 if __name__ == "__main__":
