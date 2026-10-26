@@ -8,11 +8,11 @@ import android.content.pm.PackageInstaller
 import android.os.Build
 import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
-import java.util.Locale
 
 /**
  * Stream an already-verified OTA APK into Android's real in-place package installer.
