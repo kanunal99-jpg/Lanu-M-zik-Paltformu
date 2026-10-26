@@ -42,4 +42,5 @@
     <string name="youtube_browser_fallback">Open official YouTube video in browser</string>
     <string name="ota_awaiting_android_approval">Update handed to Android. Confirm the installation on the system screen; the app is not uninstalled.</string>
     <string name="ota_no_uninstall_warning">Keep LANU installed. If Android blocks the update, your playlists and offline files must remain in place.</string>
+    <string name="ota_alternative_installer">No Android confirmation screen? Open the system installer</string>
 </resources>
