@@ -8,6 +8,10 @@ package com.example.service
 internal object MediaLibraryPaginationPolicy {
     const val MAX_PAGE_SIZE = 500
 
+    /** Allocate media metadata for only the requested, bounded page. */
+    fun <T, R> mapPage(items: List<T>, page: Int, pageSize: Int, transform: (T) -> R): List<R> =
+        this.page(items, page, pageSize).map(transform)
+
     fun <T> page(items: List<T>, page: Int, pageSize: Int): List<T> {
         if (items.isEmpty()) return emptyList()
         val safePage = page.coerceAtLeast(0).toLong()
