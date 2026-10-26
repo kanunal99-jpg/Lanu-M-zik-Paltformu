@@ -43,7 +43,66 @@ class OfflineSourcePolicyTest {
     @Test
     fun allowsAuthorizedLocalSchemes() {
         assertTrue(OfflineSourcePolicy.isAuthorized("content://media/external/audio/1"))
-        assertTrue(OfflineSourcePolicy.isAuthorized("file:///data/user/0/com.example/files/audio.bin"))
+        assertTrue(OfflineSourcePolicy.isAuthorized("file:///storage/emulated/0/Music/my song.mp3"))
+    }
+
+    @Test
+    fun privateAppAndPlatformFilesAreNeverOfflineCopySources() {
+        val blocked = listOf(
+            "file:///data/user/0/com.aistudio.lanumusic.kpxzqa/shared_prefs/lanu_auth.xml",
+            "file:///data/data/com.example/databases/music.db",
+            "file:///data/system/users/0/accounts.xml",
+            "content://com.aistudio.lanumusic.kpxzqa.ota.fileprovider/lanu_updates/app-release.apk",
+            "content://COM.AISTUDIO.LANUMUSIC.KPXZQA.OTA.FILEPROVIDER/lanu_updates/app-release.apk",
+            "file:///proc/self/environ",
+            "file:///etc/hosts",
+            "file:///sdcard/../../../data/user/0/com.example/private.db",
+            "file:///storage/emulated/0/../../../../data/user/0/com.example/secret.xml",
+            "file://evil.example.com/storage/emulated/0/song.mp3",
+            "file:///storage/emulated/0/song.mp3?token=secret",
+            "file:///storage/emulated/0/song.mp3#fragment"
+        )
+        blocked.forEach { source ->
+            assertFalse("Private file source accepted: $source", OfflineSourcePolicy.isAuthorized(source))
+            assertFalse("Private LOCAL song accepted: $source",
+                OfflineSourcePolicy.isAuthorized(song(source, SongSourceType.LOCAL)))
+        }
+    }
+
+    @Test
+    fun existingSharedAndEncodedFileSourcesStayUsable() {
+        val allowed = listOf(
+            "file:///storage/emulated/0/Music/recording.mp3",
+            "file:///storage/emulated/0/Music/My Song.mp3",
+            "file:///storage/emulated/0/Music/My%20Song.mp3",
+            "file:///storage/ABCD-1234/Music/recording.mp3",
+            "file:///sdcard/Music/recording.mp3",
+            "content://media/external/audio/media/12",
+            "content://com.android.providers.media.documents/document/audio%3A123"
+        )
+        allowed.forEach { source ->
+            assertTrue("Normal device source rejected: $source",
+                OfflineSourcePolicy.isAuthorized(source))
+        }
+    }
+
+    @Test
+    fun malformedLocalUrisAreSafelyRejected() {
+        val invalid = listOf(
+            "content:",
+            "content://",
+            "file:",
+            "file://",
+            "file:///storage/emulated/0/%broken",
+            "file:///storage/emulated/0/line\nsecret",
+            "file:///storage/emulated/0/stray\u0000byte",
+            "content://media/external/audio/media/12#fragment",
+            "file:///storage/emulated/0/" + "a".repeat(9000)
+        )
+        invalid.forEach { source ->
+            assertFalse("Malformed local source accepted: ${source.take(60)}",
+                OfflineSourcePolicy.isAuthorized(source))
+        }
     }
 
     @Test
