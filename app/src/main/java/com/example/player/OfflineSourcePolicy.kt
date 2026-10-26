@@ -1,6 +1,7 @@
 package com.example.player
 
 import android.net.Uri
+import com.example.BuildConfig
 import com.example.model.Song
 import com.example.model.SongSourceType
 import java.io.File
@@ -39,7 +40,14 @@ object OfflineSourcePolicy {
         if (parsed.isOpaque || parsed.rawUserInfo != null ||
             parsed.rawFragment != null || parsed.rawQuery != null) return false
         return when (parsed.scheme?.lowercase(Locale.ROOT)) {
-            "content" -> !parsed.host.isNullOrBlank() && !parsed.path.isNullOrBlank()
+            "content" -> {
+                val authority = parsed.host?.lowercase(Locale.ROOT) ?: return false
+                val ownAuthority = BuildConfig.APPLICATION_ID.lowercase(Locale.ROOT)
+                // A corrupt LOCAL row must not copy the app's own FileProvider
+                // cache/OTA or any other private content provider into offline music.
+                authority.isNotBlank() && !parsed.path.isNullOrBlank() &&
+                    authority != ownAuthority && !authority.startsWith("$ownAuthority.")
+            }
             "file" -> {
                 // A file://hostname/path may designate a remote share.
                 if (!parsed.host.isNullOrEmpty()) return false
