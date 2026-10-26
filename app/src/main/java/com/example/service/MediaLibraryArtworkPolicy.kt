@@ -3,6 +3,7 @@ package com.example.service
 import com.example.model.Song
 import com.example.model.SongSourceType
 import java.net.URI
+import java.net.URISyntaxException
 
 /**
  * Artwork supplied by remote catalogs or restored local metadata is untrusted.
@@ -21,7 +22,7 @@ internal object MediaLibraryArtworkPolicy {
         ) return null
         val uri = try {
             URI(raw)
-        } catch (_: IllegalArgumentException) {
+        } catch (_: URISyntaxException) {
             return null
         }
         if (uri.isOpaque) return null
