@@ -52,6 +52,8 @@ class OfflineSourcePolicyTest {
             "file:///data/user/0/com.aistudio.lanumusic.kpxzqa/shared_prefs/lanu_auth.xml",
             "file:///data/data/com.example/databases/music.db",
             "file:///data/system/users/0/accounts.xml",
+            "content://com.aistudio.lanumusic.kpxzqa.ota.fileprovider/lanu_updates/app-release.apk",
+            "content://COM.AISTUDIO.LANUMUSIC.KPXZQA.OTA.FILEPROVIDER/lanu_updates/app-release.apk",
             "file:///proc/self/environ",
             "file:///etc/hosts",
             "file:///sdcard/../../../data/user/0/com.example/private.db",
