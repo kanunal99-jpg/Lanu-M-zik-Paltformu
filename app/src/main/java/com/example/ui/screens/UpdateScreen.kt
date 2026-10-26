@@ -191,6 +191,14 @@ fun UpdateScreen(updates: UpdateViewModel = viewModel()) {
                     modifier = Modifier.fillMaxWidth().testTag("install_verified_update")
                 ) { Text(stringResource(R.string.ota_install)) }
             }
+            UpdateScreenState.WaitingForAndroidApproval -> {
+                Text(stringResource(R.string.ota_awaiting_android_approval),
+                    color = LanuTextPrimary,
+                    modifier = Modifier.testTag("ota_wait_android_approval")
+                        .semantics { liveRegion = LiveRegionMode.Polite })
+                Text(stringResource(R.string.ota_no_uninstall_warning),
+                    color = LanuTextMuted, fontSize = 12.sp)
+            }
             is UpdateScreenState.Failed -> {
                 Text(current.reason, color = LanuTextPrimary, modifier = Modifier.testTag("update_error").semantics { liveRegion = LiveRegionMode.Polite })
             }
