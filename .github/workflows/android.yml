@@ -100,6 +100,7 @@ jobs:
           python3 scripts/check_repository_hygiene.py
           python3 -m unittest discover -s scripts -p 'test_repository_hygiene.py'
           python3 -m unittest discover -s scripts -p 'test_release_workflow_integrity.py'
+          python3 -m unittest discover -s scripts -p 'test_debug_apk_installability_workflow.py'
       - name: Android OEM compatibility policy and read-only device script validation
         shell: bash
         run: |
@@ -189,6 +190,26 @@ jobs:
           [[ "${package}" == *"versionCode='${GITHUB_RUN_NUMBER}'"* ]]
           echo "R8, shrinking, APK signing and version identity smoke checks passed."
 
+      - name: Verify debug APK installability before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          [[ -s "${apk}" ]]
+          unzip -t "${apk}" >/dev/null
+          signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          aapt="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          [[ -x "${signer}" && -x "${aapt}" ]]
+          # Validate the APK delivered to users, not just the separate temporary R8 APK.
+          "${signer}" verify --verbose --print-certs --min-sdk-version 24 "${apk}"
+          "${signer}" verify --verbose --min-sdk-version 36 "${apk}"
+          badging="$("${aapt}" dump badging "${apk}")"
+          package="$(grep -m 1 '^package: ' <<<"${badging}")"
+          [[ "${package}" == *"name='com.aistudio.lanumusic.kpxzqa'"* ]]
+          [[ "${package}" == *"versionCode='${GITHUB_RUN_NUMBER}'"* ]]
+          grep -Fxq "sdkVersion:'24'" <<<"${badging}"
+          grep -Fxq "targetSdkVersion:'36'" <<<"${badging}"
+          echo "Distributed debug APK archive, signer, SDK and package/version identity verified."
       - name: Generate APK SHA-256
         shell: bash
         run: sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
