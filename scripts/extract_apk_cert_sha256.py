@@ -17,7 +17,7 @@ class CertificateParseError(ValueError):
 
 
 CERTIFICATE_PATTERN = re.compile(
-    r"^(?:V(?:2|3|3\.1|3\.2) Signer(?: #\d+)?|Signer #\d+): "
+    r"^(?:V(?:2|3|3\.1|3\.2) Signer(?: #\d+)?:|Signer #\d+) "
     r"certificate SHA-256 digest: ([a-fA-F0-9]{64})\s*$",
     re.MULTILINE,
 )
