@@ -1,6 +1,7 @@
 """Offline safety tests for new-install-only persistent signer bootstrap."""
 import importlib.util
 import os
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -51,6 +52,17 @@ class FreshSignerSafetyTests(unittest.TestCase):
                 with self.assertRaises(fresh.SetupError):
                     fresh.initialize_new_signer(directory)
                 self.assertEqual(result, fresh.verify_owned_material(directory))
+
+    @unittest.skipUnless(shutil.which("keytool"), "JDK keytool required")
+    def test_generated_real_pkcs12_keystore_is_recoverable_locally(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp) / "real-new-signing"
+            created = fresh.initialize_new_signer(directory)
+            self.assertRegex(created["fingerprint"], r"^[a-f0-9]{64}$")
+            recovered = fresh.verify_owned_material(directory)
+            self.assertEqual(created["fingerprint"], recovered["fingerprint"])
+            self.assertEqual(created["alias"], recovered["alias"])
+            self.assertEqual(created["password"], recovered["password"])
 
     def test_public_fingerprint_verified_before_any_secret_upload(self):
         with tempfile.TemporaryDirectory() as temp:
