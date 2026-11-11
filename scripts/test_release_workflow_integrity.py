@@ -84,6 +84,20 @@ class SignedReleaseWorkflowIntegrityTest(unittest.TestCase):
         self.assertIn("KEY_ALIAS: ${{ secrets.LANU_SIGNING_KEY_ALIAS }}", assemble)
         self.assertNotIn("LANU_SIGNING_KEYSTORE_BASE64", assemble)
 
+    def test_manual_dispatch_uses_same_signed_release_guards(self):
+        workflow = self.workflow
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertEqual(
+            3,
+            workflow.count(
+                "if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch')"
+                " && github.ref == 'refs/heads/main'"
+            ),
+        )
+        self.assertIn("LANU_INSTALLED_APP_CERT_SHA256", workflow)
+        self.assertIn("LANU_SIGNING_CERT_SHA256", workflow)
+        self.assertIn("needs.signing_readiness.outputs.enabled == 'true'", workflow)
+
     def test_unsigned_production_job_is_skipped_not_green(self):
         readiness = self.workflow.split("  signing_readiness:\n", 1)[1].split(
             "  signed_release:\n", 1
