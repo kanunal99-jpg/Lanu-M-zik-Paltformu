@@ -86,8 +86,8 @@ class SignedReleaseWorkflowIntegrityTest(unittest.TestCase):
 
     def test_debug_only_release_stays_prerelease_until_production_signing_verified(self):
         workflow = self.workflow
-        debug_job = workflow.split("  release:\\n", 1)[1].split("  signing_readiness:\\n", 1)[0]
-        signed_job = workflow.split("  signed_release:\\n", 1)[1]
+        debug_job = workflow.split("  release:\n", 1)[1].split("  signing_readiness:\n", 1)[0]
+        signed_job = workflow.split("  signed_release:\n", 1)[1]
         self.assertIn("--generate-notes", debug_job)
         self.assertIn("--prerelease", debug_job)
         self.assertIn("--prerelease=false --latest", signed_job)
