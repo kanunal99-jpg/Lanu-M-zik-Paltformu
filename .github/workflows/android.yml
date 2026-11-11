@@ -428,21 +428,36 @@ jobs:
         env:
           INSTALLED_FINGERPRINT: ${{ vars.LANU_INSTALLED_APP_CERT_SHA256 }}
           PINNED_FINGERPRINT: ${{ vars.LANU_SIGNING_CERT_SHA256 }}
+          OTA_CHANNEL: ${{ vars.LANU_OTA_CHANNEL }}
         run: |
           set -euo pipefail
           apk="app/build/outputs/apk/release/app-release.apk"
           signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
           actual="$("${signer}" verify --print-certs "${apk}" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}')"
-          python3 scripts/verify_installed_signing_certificate.py \
-            --installed "${INSTALLED_FINGERPRINT}" \
-            --pinned "${PINNED_FINGERPRINT}" \
-            --actual "${actual}"
+          if [[ "${OTA_CHANNEL}" == "NEW_INSTALL_ONLY" ]]; then
+            # Fresh permanent signer proves only NEW installation. Older installed
+            # apps may have different signers; do NOT claim in-place compatibility.
+            [[ "${actual}" == "${PINNED_FINGERPRINT,,}" ]] || {
+              echo "::error::Fresh channel public signing certificate mismatch."
+              exit 1
+            }
+            echo "::warning::NEW_INSTALL_ONLY: signed baseline is NOT an OTA for prior installations."
+          elif [[ -z "${OTA_CHANNEL}" || "${OTA_CHANNEL}" == "EXISTING_INSTALL" ]]; then
+            python3 scripts/verify_installed_signing_certificate.py \
+              --installed "${INSTALLED_FINGERPRINT}" \
+              --pinned "${PINNED_FINGERPRINT}" \
+              --actual "${actual}"
+          else
+            echo "::error::Unknown LANU_OTA_CHANNEL: publication blocked."
+            exit 1
+          fi
       - name: Attach signed APK only after verification
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG_NAME: lanu-music-${{ github.run_number }}-${{ github.sha }}
+          OTA_CHANNEL: ${{ vars.LANU_OTA_CHANNEL }}
         run: |
           set -euo pipefail
           gh release view --repo "${GH_REPO}" "${TAG_NAME}" > /dev/null
@@ -481,20 +496,35 @@ jobs:
           calculated_sha="$(sha256sum "${verification_dir}/app-release.apk" | cut -d ' ' -f1)"
           [[ "${published_sha}" == "${calculated_sha}" ]]
           echo "Downloaded signed APK, checksum sidecar and public release bytes verified."
-          # A debug-only release must not be a stable OTA candidate. Promote
-          # ONLY after the production-signed APK and downloaded SHA256 match.
-          gh release edit --repo "${GH_REPO}" "${TAG_NAME}" \
-            --prerelease=false --latest \
-            --title "LANU Music Build ${GITHUB_RUN_NUMBER} (verified signed APK)"
-          echo "Published verified production-signed release as stable/latest."
+          # Fresh installation: signed APK is available but must remain a PRE-RELEASE.
+          # Existing devices cannot assume it upgrades their old signing identity.
+          if [[ "${OTA_CHANNEL}" == "NEW_INSTALL_ONLY" ]]; then
+            gh release edit --repo "${GH_REPO}" "${TAG_NAME}" \
+              --prerelease \
+              --title "LANU Music Build ${GITHUB_RUN_NUMBER} (SIGNED new-install baseline; NO OTA from old APK)"
+            echo "::notice::New installation signer bootstrap: prerelease only, NOT latest."
+          else
+            # Production OTA promotion requires both pinned and installed signer
+            # match, and downloaded APK/checksum byte verification above.
+            gh release edit --repo "${GH_REPO}" "${TAG_NAME}" \
+              --prerelease=false --latest \
+              --title "LANU Music Build ${GITHUB_RUN_NUMBER} (verified signed APK)"
+            echo "Published verified production-signed release as stable/latest."
+          fi
       - name: Report verified signed release
         shell: bash
+        env:
+          OTA_CHANNEL: ${{ vars.LANU_OTA_CHANNEL }}
         run: |
           {
             echo "### Signed APK: signing checks passed"
             echo
             echo "APK signing, pinned and installed signer, versionCode and release SHA-256 matched."
-            echo "Real-device data-preserving OTA testing remains separately required."
+            if [[ "${OTA_CHANNEL}" == "NEW_INSTALL_ONLY" ]]; then
+              echo "NEW INSTALL ONLY: old installed APK cannot be upgraded without matching signer; no existing-device OTA asserted."
+            else
+              echo "Real-device data-preserving OTA testing remains separately required."
+            fi
           } >> "${GITHUB_STEP_SUMMARY}"
       - name: Erase temporary signing key
         if: always()
