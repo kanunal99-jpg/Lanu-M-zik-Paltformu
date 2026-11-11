@@ -131,6 +131,10 @@ jobs:
           exit "${outcome}"
       - name: Archive Lint findings
         if: always()
+        # Noncritical diagnostic archive: GitHub's artifact service can return 404
+        # "workflow run not found" even when gradle lintDebug has succeeded.
+        # Preserve the actual Android Lint gate above as required.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: lanu-android-lint-${{ github.sha }}
