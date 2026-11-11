@@ -96,6 +96,20 @@ class SignedReleaseWorkflowIntegrityTest(unittest.TestCase):
         self.assertGreater(promote, verify_hash)
         self.assertIn("gh release edit --repo", signed_job)
 
+    def test_new_install_only_never_promotes_to_stable_ota(self):
+        signed = self.workflow.split("  signed_release:\n", 1)[1]
+        self.assertIn("OTA_CHANNEL: ${{ vars.LANU_OTA_CHANNEL }}", signed)
+        self.assertIn('if [[ "${OTA_CHANNEL}" == "NEW_INSTALL_ONLY" ]]; then', signed)
+        self.assertIn("gh release edit --repo", signed)
+        self.assertIn("NEW INSTALL ONLY", signed)
+        self.assertIn("SIGNED new-install baseline; NO OTA from old APK", signed)
+        attach = signed.index("Downloaded signed APK, checksum sidecar and public release bytes verified.")
+        decision = signed.index('if [[ "${OTA_CHANNEL}" == "NEW_INSTALL_ONLY" ]]; then', attach)
+        self.assertGreater(decision, attach)
+        self.assertIn("--prerelease=false --latest", signed)
+        self.assertIn("python3 scripts/verify_installed_signing_certificate.py", signed)
+        self.assertIn("Unknown LANU_OTA_CHANNEL: publication blocked", signed)
+
     def test_manual_dispatch_uses_same_signed_release_guards(self):
         workflow = self.workflow
         self.assertIn("  workflow_dispatch:", workflow)

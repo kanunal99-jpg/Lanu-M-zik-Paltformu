@@ -22,6 +22,10 @@ Son yayımlanan derlemeler: [GitHub Releases](https://github.com/kanunal99-jpg/L
 
 **Depo sahibi / anahtar yetkilisi için adım adım kurulum:** [OTA İmzalı Yayın Kurulumu](docs/OTA_IMZALI_YAYIN_KURULUMU.md). Var olan güvenli `scripts/bootstrap_ota_signing.py` komutuyla önce dry-run sertifika kontrolü yapılır; `--apply` yalnız eşleşmeden ve interaktif onaydan sonra GitHub Actions sırlarını kurar. İmza dosyalarını veya parolaları iletişim kanallarında paylaşmayın. Bu kapı kapanana kadar kullanıcıya OTA yayımlandı denmemelidir.
 
+## Yeni kalıcı imza ile yeni APK başlangıcı
+
+Eski imzayı devralmak yerine **yeni bir kalıcı üretim imzası** ile başlanacaksa, depo sahibinin bilgisayarında çalıştırabileceği güvenli anahtar üretim aracı ve `NEW_INSTALL_ONLY` yayın hattı hazırlandı: **[Yeni imzalı APK başlangıç rehberi](docs/YENI_IMZALI_APK_BASLANGIC.md)**. Bu yeni APK eski farklı imzalı kurulumların üzerine yüklenmez; uygulamayı silmeyin, veri aktarımı ayrı bir işlemdir. İmza GitHub Secrets içinde kalıcı hale getirilip test edilince sonraki sürümler **aynı** anahtardan üretilebilir. **Geliştirme APK'sı kalıcı OTA imzası değildir.**
+
 ## Sağlayıcılar ve telif
 
 - Audius: API ve yayın haklarının izin verdiği gerçek katalog/parçalar; ağ, bölge ve kullanılabilirlik değişebilir.
