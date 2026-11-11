@@ -67,7 +67,9 @@ fun ArtistDetailSheet(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val verifiedSongs = songs.filter { it.artistId == artist.id }.distinctBy { it.id }.preferFullStreams()
+    val verifiedSongs = songs.filter {
+        it.artistId == artist.id && it.playbackKind() == PlaybackKind.FULL
+    }.distinctBy { it.id }.preferFullStreams()
     val albums = verifiedSongs
         .groupBy { it.album.trim().ifBlank { "Single" } }
         .map { (title, tracks) ->
@@ -110,7 +112,7 @@ fun ArtistDetailSheet(
                     Text("Doğrulanmış Sanatçı", color = LanuCyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Text(artist.name, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                Text("${verifiedSongs.count { it.playbackKind() == PlaybackKind.FULL }} tam • ${verifiedSongs.count { it.playbackKind() == PlaybackKind.PREVIEW }} önizleme", color = LanuTextSecondary, fontSize = 13.sp)
+                Text("${verifiedSongs.size} izinli tam kayıt", color = LanuTextSecondary, fontSize = 13.sp)
             }
         }
 
