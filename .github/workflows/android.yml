@@ -225,7 +225,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -307,7 +307,7 @@ jobs:
   signing_readiness:
     name: Check production signing availability (not a signed APK)
     needs: [build, release]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       enabled: ${{ steps.signing.outputs.enabled }}
@@ -347,7 +347,7 @@ jobs:
   signed_release:
     name: Publish verified production-signed APK
     needs: [build, release, signing_readiness]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.signing_readiness.outputs.enabled == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.signing_readiness.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
