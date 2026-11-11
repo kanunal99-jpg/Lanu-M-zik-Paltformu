@@ -243,6 +243,8 @@ class AudioPlayerController(private val context: Context) {
      * Static/legacy catalog entries therefore cannot accidentally become playable.
      */
     private fun playableUri(song: Song): Uri? {
+        // Even a previously cached preview cannot become a full track.
+        if (song.sourceType == com.example.model.SongSourceType.VERIFIED_PREVIEW) return null
         // Use the same stable filename allowlist as DownloadManager. Legacy
         // valid IDs still map to their original .bin bytes; no files are moved,
         // rewritten or deleted by this security change.
@@ -251,16 +253,20 @@ class AudioPlayerController(private val context: Context) {
 
         // A remote catalog entry must not spoof file/content URIs or downgrade
         // encrypted HTTPS playback to plaintext HTTP.
-        return PlaybackUriPolicy.verifiedSource(song)?.let(Uri::parse)
+        return PlaybackUriPolicy.continuousSource(song)?.let(Uri::parse)
     }
 
     private fun showUnavailablePlayback() {
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(context, "Bu parçanın doğrulanmış bir yayın kaynağı bulunmuyor.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Bu parçada izinli tam kayıt yok. Kısa önizleme oynatılmayacak.", Toast.LENGTH_LONG).show()
         }
     }
 
     fun playSong(song: Song, autoPlay: Boolean = true) {
+        if (playableUri(song) == null) {
+            showUnavailablePlayback()
+            return
+        }
         val existingIndex = _queue.value.indexOfFirst { it.id == song.id }
         if (existingIndex >= 0) {
             if (mediaController == null) {

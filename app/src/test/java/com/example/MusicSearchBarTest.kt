@@ -142,6 +142,8 @@ class MusicSearchBarTest {
             }
         }
 
+        // Test catalog metadata search explicitly; demo fixture has no playable audio.
+        composeTestRule.onNodeWithTag("full_stream_filter").performClick()
         // Ben Bazen is the album of song_3 (Aşkın Olayım)
         composeTestRule.onNodeWithTag("search_result_song_3").assertIsDisplayed()
         composeTestRule.onNodeWithText("Aşkın Olayım").assertIsDisplayed()
@@ -163,6 +165,7 @@ class MusicSearchBarTest {
                 )
             }
         }
+        composeTestRule.onNodeWithTag("full_stream_filter").performClick()
         composeTestRule.onNodeWithTag("search_filter_chip_SONGS").performClick()
         composeTestRule.onNodeWithTag("search_result_song_1").assertIsDisplayed()
         composeTestRule.onNodeWithTag("search_result_song_2").assertIsDisplayed()
@@ -185,8 +188,29 @@ class MusicSearchBarTest {
             }
         }
 
+        // The demo songs are metadata-only until a verified audio source is supplied.
+        composeTestRule.onNodeWithTag("full_stream_filter").performClick()
         // Both song_1 and song_2 are by Mert Demir
         composeTestRule.onNodeWithTag("search_result_song_1").assertIsDisplayed()
         composeTestRule.onNodeWithTag("search_result_song_2").assertIsDisplayed()
     }
+    @Test
+    fun testSearchDefaultsToFullOnlyAndMetadataMustBeExplicitlyRevealed() {
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                SearchScreen(
+                    searchQuery = "Mert Demir",
+                    selectedCategory = null,
+                    allSongs = sampleSongs,
+                    onQueryChange = {},
+                    onSelectCategory = {},
+                    onPlaySong = { _, _ -> error("Metadata-only track must not start playback") }
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag("search_result_song_1").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("full_stream_filter").performClick()
+        composeTestRule.onNodeWithTag("search_result_song_1").assertIsDisplayed()
+    }
+
 }

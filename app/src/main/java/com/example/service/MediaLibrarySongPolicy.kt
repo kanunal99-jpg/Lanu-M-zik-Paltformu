@@ -10,7 +10,7 @@ import com.example.player.PlaybackUriPolicy
  * future divergence that could expose blocked URIs to external controllers.
  */
 internal object MediaLibrarySongPolicy {
-    fun playableUri(song: Song): String? = PlaybackUriPolicy.verifiedSource(song)
+    fun playableUri(song: Song): String? = PlaybackUriPolicy.continuousSource(song)
 
     fun localSongs(songs: List<Song>): List<Song> =
         songs.filter { it.sourceType == SongSourceType.LOCAL && playableUri(it) != null }

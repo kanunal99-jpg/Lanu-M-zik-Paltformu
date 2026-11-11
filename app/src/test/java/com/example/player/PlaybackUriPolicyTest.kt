@@ -107,6 +107,19 @@ class PlaybackUriPolicyTest {
         }
     }
 
+    @Test fun continuousPlaybackNeverPromotesOfficialPreviewToFullMusic() {
+        val preview = song(id = "deezer:123", uri = "https://cdn.example.com/sample.mp3",
+            type = SongSourceType.VERIFIED_PREVIEW)
+        assertEquals(preview.audioUrl, PlaybackUriPolicy.verifiedSource(preview))
+        assertNull(PlaybackUriPolicy.continuousSource(preview))
+        val full = song(id = "audius:123", uri = "https://cdn.example.com/full.mp3",
+            type = SongSourceType.VERIFIED_REMOTE, license = "CC BY 4.0")
+        assertEquals(full.audioUrl, PlaybackUriPolicy.continuousSource(full))
+        val local = song(id = "local:1", uri = "content://media/external/audio/1",
+            type = SongSourceType.LOCAL)
+        assertEquals(local.audioUrl, PlaybackUriPolicy.continuousSource(local))
+    }
+
     @Test fun licensedHttpsPreviewAndLocalContentStillWork() {
         val full = "https://example.com/full.mp3"
         assertEquals(full, PlaybackUriPolicy.verifiedSource(song(

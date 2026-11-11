@@ -84,6 +84,32 @@ class SignedReleaseWorkflowIntegrityTest(unittest.TestCase):
         self.assertIn("KEY_ALIAS: ${{ secrets.LANU_SIGNING_KEY_ALIAS }}", assemble)
         self.assertNotIn("LANU_SIGNING_KEYSTORE_BASE64", assemble)
 
+    def test_debug_only_release_stays_prerelease_until_production_signing_verified(self):
+        workflow = self.workflow
+        debug_job = workflow.split("  release:\n", 1)[1].split("  signing_readiness:\n", 1)[0]
+        signed_job = workflow.split("  signed_release:\n", 1)[1]
+        self.assertIn("--generate-notes", debug_job)
+        self.assertIn("--prerelease", debug_job)
+        self.assertIn("--prerelease=false --latest", signed_job)
+        verify_hash = signed_job.index('[[ "${published_sha}" == "${calculated_sha}" ]]')
+        promote = signed_job.index("--prerelease=false --latest")
+        self.assertGreater(promote, verify_hash)
+        self.assertIn("gh release edit --repo", signed_job)
+
+    def test_manual_dispatch_uses_same_signed_release_guards(self):
+        workflow = self.workflow
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertEqual(
+            3,
+            workflow.count(
+                "if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch')"
+                " && github.ref == 'refs/heads/main'"
+            ),
+        )
+        self.assertIn("LANU_INSTALLED_APP_CERT_SHA256", workflow)
+        self.assertIn("LANU_SIGNING_CERT_SHA256", workflow)
+        self.assertIn("needs.signing_readiness.outputs.enabled == 'true'", workflow)
+
     def test_unsigned_production_job_is_skipped_not_green(self):
         readiness = self.workflow.split("  signing_readiness:\n", 1)[1].split(
             "  signed_release:\n", 1

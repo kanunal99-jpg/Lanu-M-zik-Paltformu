@@ -45,6 +45,8 @@ import coil.compose.AsyncImage
 import com.example.model.Artist
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.model.PlaybackKind
+import com.example.model.playbackKind
 import com.example.ui.theme.LanuDarkBg
 import com.example.ui.theme.LanuDarkBorder
 import com.example.ui.theme.LanuDarkSurface
@@ -65,7 +67,8 @@ fun HomeScreen(
     onDismissNewReleaseAlert: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val actualArtists = songs
+    val continuousSongs = songs.filter { it.playbackKind() == PlaybackKind.FULL }
+    val actualArtists = continuousSongs
         .filter { it.artistId.isNotBlank() && it.artist.isNotBlank() }
         .distinctBy { it.artistId }
         .map {
@@ -78,7 +81,7 @@ fun HomeScreen(
                 monthlyListeners = ""
             )
         }
-    val genreCounts = songs.groupingBy { it.category }.eachCount()
+    val genreCounts = continuousSongs.groupingBy { it.category }.eachCount()
     val categories = genreCounts.keys.sortedByDescending { genreCounts[it] ?: 0 }
 
     Column(
@@ -107,16 +110,16 @@ fun HomeScreen(
                 Spacer(Modifier.height(6.dp))
                 Text("Müziğini keşfet", color = LanuTextPrimary, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(5.dp))
-                Text("${songs.size} erişilebilir kayıt • ${actualArtists.size} sanatçı", color = LanuTextSecondary, fontSize = 13.sp)
+                Text("${continuousSongs.size} tam kayıt • ${actualArtists.size} sanatçı", color = LanuTextSecondary, fontSize = 13.sp)
             }
         }
 
-        if (songs.isEmpty()) {
+        if (continuousSongs.isEmpty()) {
             EmptyHomeState()
         } else {
             HomeSectionTitle("Keşfe başla", "Cihazındaki ve izinli kaynaklardan indekslenen parçalar")
             LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                items(songs.take(20), key = { it.id }) { song -> LocalSongCard(song, { onPlaySong(song, songs) }) }
+                items(continuousSongs.take(20), key = { it.id }) { song -> LocalSongCard(song, { onPlaySong(song, continuousSongs) }) }
             }
 
             if (categories.isNotEmpty()) {

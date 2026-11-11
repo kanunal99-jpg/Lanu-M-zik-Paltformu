@@ -23,6 +23,8 @@ import com.example.model.EqualizerState
 import com.example.model.FriendActivity
 import com.example.model.MusicCategory
 import com.example.model.Song
+import com.example.model.PlaybackKind
+import com.example.model.playbackKind
 import com.example.search.SongSearchPolicy
 import com.example.model.toSettings
 import com.example.service.AudioPlayerController
@@ -237,7 +239,15 @@ class MainViewModel @Inject constructor(
         val index = queue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
         playerController.setQueue(queue, index, autoPlay = true)
     }
-    fun togglePlayPause() { if (currentSong.value == null) { val firstSong = allSongs.value.firstOrNull(); if (firstSong != null) { playSong(firstSong, allSongs.value); return } }; playerController.togglePlayPause() }
+    fun togglePlayPause() {
+        if (currentSong.value == null) {
+            val playable = allSongs.value.filter { it.playbackKind() == PlaybackKind.FULL }
+            val firstSong = playable.firstOrNull() ?: return
+            playSong(firstSong, playable)
+            return
+        }
+        playerController.togglePlayPause()
+    }
     fun nextSong() { playerController.next() }
     fun prevSong() { playerController.previous() }
     fun seekTo(positionMs: Long) { playerController.seekTo(positionMs) }

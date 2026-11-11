@@ -29,8 +29,8 @@ class MediaLibrarySongPolicyTest {
         val unknown = song("unknown", SongSourceType.UNKNOWN, "https://example.com/unknown.mp3")
         val all = listOf(local, remote, preview, unknown)
         assertEquals(listOf("local"), MediaLibrarySongPolicy.localSongs(all).map { it.id })
-        assertEquals(listOf("remote", "preview"), MediaLibrarySongPolicy.catalogSongs(all).map { it.id })
-        assertEquals(listOf("local", "remote", "preview"),
+        assertEquals(listOf("remote"), MediaLibrarySongPolicy.catalogSongs(all).map { it.id })
+        assertEquals(listOf("local", "remote"),
             MediaLibrarySongPolicy.searchableSongs(all).map { it.id })
     }
 
@@ -48,13 +48,13 @@ class MediaLibrarySongPolicyTest {
         }
     }
 
-    @Test fun licensedHttpsRemoteAndVerifiedPreviewsArePlayable() {
+    @Test fun licensedHttpsRemoteIsPlayableButPreviewIsMetadataOnly() {
         val remote = song("permitted", SongSourceType.VERIFIED_REMOTE,
             "https://example.com/music.mp3", "CC BY 4.0")
         assertEquals(remote.audioUrl, MediaLibrarySongPolicy.playableUri(remote))
         val preview = song("preview", SongSourceType.VERIFIED_PREVIEW,
             "https://example.com/preview.mp3")
-        assertEquals(preview.audioUrl, MediaLibrarySongPolicy.playableUri(preview))
+        assertNull(MediaLibrarySongPolicy.playableUri(preview))
     }
 
 
@@ -77,7 +77,7 @@ class MediaLibrarySongPolicyTest {
                     val candidate = song("regression", source, uri, license)
                     assertEquals(
                         "Source=$source URL=$uri license=$license",
-                        PlaybackUriPolicy.verifiedSource(candidate),
+                        PlaybackUriPolicy.continuousSource(candidate),
                         MediaLibrarySongPolicy.playableUri(candidate)
                     )
                 }
@@ -93,8 +93,8 @@ class MediaLibrarySongPolicyTest {
         val valid = song("valid", SongSourceType.VERIFIED_PREVIEW,
             "https://example.com/official-preview.mp3")
         val tracks = listOf(malicious, unlicensed, valid)
-        assertEquals(listOf("valid"), MediaLibrarySongPolicy.catalogSongs(tracks).map { it.id })
-        assertEquals(listOf("valid"), MediaLibrarySongPolicy.searchableSongs(tracks).map { it.id })
+        assertEquals(emptyList<String>(), MediaLibrarySongPolicy.catalogSongs(tracks).map { it.id })
+        assertEquals(emptyList<String>(), MediaLibrarySongPolicy.searchableSongs(tracks).map { it.id })
         assertEquals(emptyList<String>(), MediaLibrarySongPolicy.localSongs(tracks).map { it.id })
     }
 

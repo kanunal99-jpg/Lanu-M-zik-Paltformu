@@ -7,8 +7,8 @@ Kotlin + Jetpack Compose tabanlı, **yerel müzik ve izin verilen katalog kaynak
 - MediaStore üzerinden kullanıcının cihazındaki müzikleri okuma; Media3/MediaSession oynatıcı altyapısı.
 - Room ve yerel kullanıcı kütüphanesi üzerinden favoriler, çalma listeleri, geçmiş ve çevrimdışı kaynakları yönetme.
 - Jetpack Compose arayüz, Hilt ile enjekte edilen `MainViewModel`, Coroutines/Flow.
-- Audius, Deezer (uygun olduğu durumda yalnızca önizleme), Jamendo (kimlik/lisans kapısı), MusicBrainz (metadata) ve YouTube (yapılandırmaya bağlı arama/gömülü oynatıcı) adapterları. Bir kaynağın kodda bulunması canlı çalışmasını veya her eserin oynatma hakkını **garanti etmez**.
-- GitHub tabanlı güncelleme ekranı ve SHA-256/imza denetimleri; **üretim OTA kabulü henüz tamamlanmamıştır**.
+- Audius, Deezer (resmî önizlemeleri yalnızca katalog bilgisi; uygulama 30 sn örnekleri oynatmaz), Jamendo (kimlik/lisans kapısı), MusicBrainz (metadata) ve YouTube (yapılandırmaya bağlı arama/gömülü oynatıcı) adapterları. Bir kaynağın kodda bulunması canlı çalışmasını veya her eserin oynatma hakkını **garanti etmez**.
+- GitHub tabanlı güncelleme ekranı ve SHA-256/imza denetimleri; **üretim OTA kabulü henüz tamamlanmamıştır**. Kalıcı imzalı APK ve cihazdaki kurulu imza eşleşmesi zorunludur.
 
 ## Android'de deneme ve geliştirici kurulumu
 

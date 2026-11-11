@@ -47,6 +47,11 @@ internal object PlaybackUriPolicy {
             null
         }
 
+    /** Only complete, verified music is admitted to continuous playback.
+     * Official preview samples remain discoverable catalog metadata. */
+    fun continuousSource(song: Song): String? =
+        if (song.sourceType == SongSourceType.VERIFIED_PREVIEW) null else verifiedSource(song)
+
     fun verifiedSource(song: Song): String? {
         val raw = song.audioUrl.trim()
         return when (song.sourceType) {

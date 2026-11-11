@@ -70,7 +70,7 @@ import com.example.ui.theme.LanuTextSecondary
 fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs: List<Song>, onQueryChange: (String) -> Unit, onSelectCategory: (MusicCategory?) -> Unit, onPlaySong: (Song, List<Song>) -> Unit, modifier: Modifier = Modifier, cachedSongs: List<Song> = allSongs, remoteArtists: List<Artist> = emptyList(), onSelectArtist: (Artist) -> Unit = {}, isCatalogExpanding: Boolean = false, onExpandCatalog: () -> Unit = {}, searchIsLoading: Boolean = false, searchHasMore: Boolean = false, searchError: String? = null, onLoadMoreResults: () -> Unit = {}, onOpenYouTube: () -> Unit = {}) {
     var selectedScope by remember { mutableStateOf(SearchFilterScope.ALL) }
     var browseAll by remember { mutableStateOf(false) }
-    var fullStreamsOnly by remember { mutableStateOf(false) }
+    var fullStreamsOnly by remember { mutableStateOf(true) }
     var showYouTubeDialog by remember { mutableStateOf(false) }
     val q = TypoTolerantSearch.normalize(searchQuery)
     if (showYouTubeDialog) LanuYouTubePlayerDialog(onDismiss = { showYouTubeDialog = false }, initialQuery = searchQuery)
@@ -140,12 +140,14 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                         }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
                             if (searchIsLoading) item { Text("Yeni şarkılar getiriliyor…", color = LanuTextSecondary, fontSize = 12.sp) }
-                            if (visibleResults.isEmpty() && !searchIsLoading) item { Text(if (fullStreamsOnly) "Bu aramada izinli tam kayıt bulunamadı. 30 sn örnekleri görmek için filtreyi kaldırın." else "Bu aramada veya kategoride henüz kayıt yok. Bu, dünyada böyle bir şarkı olmadığı anlamına gelmez.", color = LanuTextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 20.dp)) }
+                            if (visibleResults.isEmpty() && !searchIsLoading) item { Text(if (fullStreamsOnly) "Bu aramada izinli tam kayıt bulunamadı. Diğer katalog kayıtları görüntülenebilir ama kısa örnekler oynatılmaz." else "Bu aramada veya kategoride henüz kayıt yok. Bu, dünyada böyle bir şarkı olmadığı anlamına gelmez.", color = LanuTextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 20.dp)) }
                             if (searchError != null) item { Text(searchError, color = LanuTextSecondary, fontSize = 12.sp) }
                             items(visibleResults, key = { it.id }) { song ->
                                 val matchingLyric = if (q.isNotEmpty()) song.lyrics.firstOrNull { TypoTolerantSearch.normalize(it.text).contains(q) } else null
                                 val isAlbumMatch = q.isNotEmpty() && SongSearchPolicy.matchesAlbum(song, q)
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, visibleResults) }.padding(10.dp).testTag("search_result_${song.id}")) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable(enabled = song.playbackKind() == PlaybackKind.FULL) {
+                                    onPlaySong(song, visibleResults.filter { it.playbackKind() == PlaybackKind.FULL })
+                                }.padding(10.dp).testTag("search_result_${song.id}")) {
                                     AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
@@ -157,7 +159,15 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                                         Text(text = song.playbackBadge(), color = if (song.playbackKind() == PlaybackKind.FULL) LanuGreen else LanuTextSecondary, fontSize = 11.sp)
                                     }
                                     if (song.lyrics.isNotEmpty()) Icon(imageVector = Icons.Default.Mic, contentDescription = "Sözler", tint = LanuGreen, modifier = Modifier.padding(end = 8.dp).size(16.dp))
-                                    Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) { Box(contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) } }
+                                    if (song.playbackKind() == PlaybackKind.FULL) {
+                                        Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Tam parçayı çal", tint = LanuGreen, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    } else {
+                                        Text("Örnek", color = LanuTextMuted, fontSize = 11.sp)
+                                    }
                                 }
                             }
                             if (q.isNotBlank() && searchHasMore) {
@@ -199,7 +209,7 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                     }
                     Spacer(Modifier.height(8.dp))
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 120.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        items(allSongs.preferFullStreams(), key = { it.id }) { song ->
+                        items(allSongs.filter { it.playbackKind() == PlaybackKind.FULL }.preferFullStreams(), key = { it.id }) { song ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LanuDarkSurface).clickable { onPlaySong(song, allSongs) }.padding(10.dp)) {
                                 AsyncImage(model = song.coverUrl, contentDescription = song.title, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))
                                 Spacer(modifier = Modifier.width(12.dp))
