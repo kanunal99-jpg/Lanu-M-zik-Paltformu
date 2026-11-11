@@ -54,3 +54,7 @@ Bu repo için ayrıntılı kalite ve üretim kabul listesi **docs/LANU_PREMIUM_P
 Zorunlu sıra: **Anayasa → öncekileri incele → kök neden → küçük PR → adversarial Unit/Robolectric/Lint/R8 → güvenli merge → yeni main CI → SHA-256'lı indirilebilir Release → gerçek cihaz/veri koruma kabulü → tekrar denetim.** İptal edilmiş/atlanan adım ve debug APK üretim kabulü sayılmaz. P0 gizlilik, kullanıcı verisi, offline URI sahteciliği, harici Media3 kontrolcüsü, OTA imzası, telif ve yanlış kalite vaadi yeni özelliklerden önce gelir.
 
 Tüm kritik zincirler **ana servis → alternatif → gerçek fallback → hata → güvenli varsayılan → log → smoke test** kuralını uygular. Uygulama silinmez, `applicationId` değiştirilmez, eski Room/favori/playlist/kimlik ve offline dosyalar korunur; yeni maliyet yalnız onayla başlatılır. Gerçek cihaz/signed üretim/OTA kanıtı yoksa bu durum açıkça “engelli” gösterilir. Kapanışta alan bazlı kanıtlı puan /100 ve 100/100 hedef açığı ile Issue #34 güncellenir.
+
+## 15. TAM KAYIT VE OTA KABULÜ (11.11.2026)
+
+30 saniyelik Deezer önizlemeleri tam şarkı diye sunulmaz veya otomatik oynatılmaz. Yalnız lisanslı tam akış ve kullanıcıya ait yerel sesler oynatılabilir; telif, DRM ve veri koruma kuralları değişmez. OTA'nın kodda bulunması, üretimde çalıştığı anlamına gelmez: aynı sertifika, artan versionCode, imzalı ve SHA-256 doğrulanmış Release APK, gerçek cihazda silmeden veri-koruma testi zorunludur. Detay: docs/OTA_AND_CONTINUOUS_PLAYBACK_20261111.md
