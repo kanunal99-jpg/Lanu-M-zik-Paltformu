@@ -103,6 +103,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_debug_apk_installability_workflow.py'
           python3 -m unittest discover -s scripts -p 'test_bootstrap_ota_signing.py'
           python3 -m unittest discover -s scripts -p 'test_bootstrap_fresh_ota_signing.py'
+          python3 -m unittest discover -s scripts -p 'test_extract_apk_cert_sha256.py'
       - name: Android OEM compatibility policy and read-only device script validation
         shell: bash
         run: |
@@ -415,7 +416,7 @@ jobs:
           else
             apk="app/build/outputs/apk/release/app-release.apk"
             signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
-            actual="$("${signer}" verify --print-certs "${apk}" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}')"
+            actual="$("${signer}" verify --verbose --print-certs "${apk}" | python3 scripts/extract_apk_cert_sha256.py)"
             expected="$(tr '[:upper:]' '[:lower:]' <<<"${EXPECTED_FINGERPRINT}" | tr -d ':[:space:]')"
             [[ "${expected}" =~ ^[0-9a-f]{64}$ ]]
             [[ "${actual}" == "${expected}" ]] || {
@@ -434,7 +435,7 @@ jobs:
           set -euo pipefail
           apk="app/build/outputs/apk/release/app-release.apk"
           signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
-          actual="$("${signer}" verify --print-certs "${apk}" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}')"
+          actual="$("${signer}" verify --verbose --print-certs "${apk}" | python3 scripts/extract_apk_cert_sha256.py)"
           if [[ "${OTA_CHANNEL}" == "NEW_INSTALL_ONLY" ]]; then
             # Fresh permanent signer proves only NEW installation. Older installed
             # apps may have different signers; do NOT claim in-place compatibility.
