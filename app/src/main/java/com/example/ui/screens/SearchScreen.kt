@@ -159,7 +159,15 @@ fun SearchScreen(searchQuery: String, selectedCategory: MusicCategory?, allSongs
                                         Text(text = song.playbackBadge(), color = if (song.playbackKind() == PlaybackKind.FULL) LanuGreen else LanuTextSecondary, fontSize = 11.sp)
                                     }
                                     if (song.lyrics.isNotEmpty()) Icon(imageVector = Icons.Default.Mic, contentDescription = "Sözler", tint = LanuGreen, modifier = Modifier.padding(end = 8.dp).size(16.dp))
-                                    Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) { Box(contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Çal", tint = LanuGreen, modifier = Modifier.size(18.dp)) } }
+                                    if (song.playbackKind() == PlaybackKind.FULL) {
+                                        Surface(shape = CircleShape, color = LanuGreen.copy(alpha = 0.2f), modifier = Modifier.size(34.dp)) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Tam parçayı çal", tint = LanuGreen, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    } else {
+                                        Text("Örnek", color = LanuTextMuted, fontSize = 11.sp)
+                                    }
                                 }
                             }
                             if (q.isNotBlank() && searchHasMore) {
