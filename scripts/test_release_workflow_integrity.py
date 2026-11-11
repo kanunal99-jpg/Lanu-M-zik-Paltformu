@@ -84,6 +84,18 @@ class SignedReleaseWorkflowIntegrityTest(unittest.TestCase):
         self.assertIn("KEY_ALIAS: ${{ secrets.LANU_SIGNING_KEY_ALIAS }}", assemble)
         self.assertNotIn("LANU_SIGNING_KEYSTORE_BASE64", assemble)
 
+    def test_debug_only_release_stays_prerelease_until_production_signing_verified(self):
+        workflow = self.workflow
+        debug_job = workflow.split("  release:\\n", 1)[1].split("  signing_readiness:\\n", 1)[0]
+        signed_job = workflow.split("  signed_release:\\n", 1)[1]
+        self.assertIn("--generate-notes", debug_job)
+        self.assertIn("--prerelease", debug_job)
+        self.assertIn("--prerelease=false --latest", signed_job)
+        verify_hash = signed_job.index('[[ "${published_sha}" == "${calculated_sha}" ]]')
+        promote = signed_job.index("--prerelease=false --latest")
+        self.assertGreater(promote, verify_hash)
+        self.assertIn("gh release edit --repo", signed_job)
+
     def test_manual_dispatch_uses_same_signed_release_guards(self):
         workflow = self.workflow
         self.assertIn("  workflow_dispatch:", workflow)
