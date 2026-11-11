@@ -16,6 +16,12 @@ Gereksinimler: JDK 21, Android SDK, Gradle 9.3.1 ve Android Studio/uyumlu build 
 
 Son yayımlanan derlemeler: [GitHub Releases](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/latest) · [CI](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/workflows/android.yml). **`app-debug.apk` yalnız önizlemedir.** Rastgele CI/debug imzaları önceki kurulu sürümle eşleşmeyebilir. Var olan uygulamayı kaldırmayın, kullanıcı verilerini riske atacak şekilde üzerine yükleme denemeyin. İmzalı üretim APK'sı için önce cihazdaki mevcut imzanın kalıcı anahtarla eşleşmesi ve silmeden yükseltme testleri gerekir.
 
+## İmzalı OTA üretim yayını — son adım
+
+**11 Kasım 2026:** Build 601 kodu ve testleri geçti; debug APK yalnız *ön sürüm* olarak yayımlandı. Kurulu uygulama üzerine silmeden güncelleme için orijinal keystore ve cihaz sertifikası eşleşmesi hâlâ gerekli; `signed_release` işi imzalama bilgileri olmadığı için atlandı.
+
+**Depo sahibi / anahtar yetkilisi için adım adım kurulum:** [OTA İmzalı Yayın Kurulumu](docs/OTA_IMZALI_YAYIN_KURULUMU.md). Var olan güvenli `scripts/bootstrap_ota_signing.py` komutuyla önce dry-run sertifika kontrolü yapılır; `--apply` yalnız eşleşmeden ve interaktif onaydan sonra GitHub Actions sırlarını kurar. İmza dosyalarını veya parolaları iletişim kanallarında paylaşmayın. Bu kapı kapanana kadar kullanıcıya OTA yayımlandı denmemelidir.
+
 ## Sağlayıcılar ve telif
 
 - Audius: API ve yayın haklarının izin verdiği gerçek katalog/parçalar; ağ, bölge ve kullanılabilirlik değişebilir.
