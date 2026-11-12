@@ -16,11 +16,13 @@ Gereksinimler: JDK 21, Android SDK, Gradle 9.3.1 ve Android Studio/uyumlu build 
 
 Son yayımlanan derlemeler: [GitHub Releases](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/latest) · [CI](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/workflows/android.yml). **`app-debug.apk` yalnız önizlemedir.** Rastgele CI/debug imzaları önceki kurulu sürümle eşleşmeyebilir. Var olan uygulamayı kaldırmayın, kullanıcı verilerini riske atacak şekilde üzerine yükleme denemeyin. İmzalı üretim APK'sı için önce cihazdaki mevcut imzanın kalıcı anahtarla eşleşmesi ve silmeden yükseltme testleri gerekir.
 
-## İmzalı OTA üretim yayını — son adım
+## İmzalı APK ve OTA üretim durumu — 12 Kasım 2026
 
-**11 Kasım 2026:** Build 601 kodu ve testleri geçti; debug APK yalnız *ön sürüm* olarak yayımlandı. Kurulu uygulama üzerine silmeden güncelleme için orijinal keystore ve cihaz sertifikası eşleşmesi hâlâ gerekli; `signed_release` işi imzalama bilgileri olmadığı için atlandı.
+**Doğrulanmış yeni imza başlangıcı:** [Build 610](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/releases/tag/lanu-music-610-e7dc17bd2bc43409d0b576f1c0d6c7ca10259858) bir **prerelease / NEW_INSTALL_ONLY** yayınıdır. `app-release.apk` ve `app-release.apk.sha256` GitHub Release varlıklarına eklenmiştir. [Main CI #610](https://github.com/kanunal99-jpg/Lanu-M-zik-Paltformu/actions/runs/43095085848) başarılıdır; yayın APK SHA-256'sı `c60785ceced392c60522cef4f180701af5ca92aa5962f49149243767be553eea`, imza sertifikası SHA-256'sı `dc949667ed0219ac64e0870b2dbef644ac94a08ca6ee6b13fe78bf7904f5d822` olarak doğrulanmıştır. Bu özetler **gizli anahtar veya parola değildir**.
 
-**Depo sahibi / anahtar yetkilisi için adım adım kurulum:** [OTA İmzalı Yayın Kurulumu](docs/OTA_IMZALI_YAYIN_KURULUMU.md). Var olan güvenli `scripts/bootstrap_ota_signing.py` komutuyla önce dry-run sertifika kontrolü yapılır; `--apply` yalnız eşleşmeden ve interaktif onaydan sonra GitHub Actions sırlarını kurar. İmza dosyalarını veya parolaları iletişim kanallarında paylaşmayın. Bu kapı kapanana kadar kullanıcıya OTA yayımlandı denmemelidir.
+**OTA henüz kullanıcı cihazında kanıtlanmadı:** Yeni anahtar, eski debug/başka sertifikalı kurulumun üzerine geçemez. Eski kurulu uygulamayı kaldırmayın; favori, Room/playlist, hesap ve offline dosyalar kaybolabilir. Gerçek cihazda *aynı imzalı iki ardışık sürüm* ile silmeden kurulum, Android kullanıcı onayı ve verilerin korunduğu ölçülmeden `LANU_OTA_CHANNEL=EXISTING_INSTALL` ayarlanmaz, stable/latest OTA ilan edilmez. Bu kapıya kadar yeni imzalı APK **yalnızca temiz/yeni kurulum için ön sürümdür**.
+
+Yeni imza kurulumu ve güvenli yedekleme için [Yeni imzalı APK başlangıç rehberi](docs/YENI_IMZALI_APK_BASLANGIC.md); eski sertifikayı devralmak için ayrı [İmzalı OTA kurulum rehberi](docs/OTA_IMZALI_YAYIN_KURULUMU.md) kullanılır. İmza dosyalarını ve parolalarını sohbet veya git içine koymayın.
 
 ## Yeni kalıcı imza ile yeni APK başlangıcı
 
