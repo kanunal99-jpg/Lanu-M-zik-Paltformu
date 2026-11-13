@@ -8,6 +8,8 @@ plugins {
 }
 
 android {
+  // Genuine signed release APK instrumentation is required for OTA data-retention CI.
+  testBuildType = "release"
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
