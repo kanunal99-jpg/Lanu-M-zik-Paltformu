@@ -24,6 +24,15 @@ class MusicOtaAcceptanceContractTest(unittest.TestCase):
                          "old_signer", "new_signer", "previously published"):
             self.assertIn(required, body)
 
+    def test_device_is_verified_as_isolated_android14_emulator_before_installing(self):
+        body = (ROOT / "scripts/ci_music_ota_upgrade_acceptance.sh").read_text()
+        first_install = body.index('adb install -r "$old"')
+        for required in ("adb get-serialno", "ro.kernel.qemu", "ro.build.version.sdk",
+                         'emulator-[0-9]+', '"34"'):
+            self.assertIn(required, body)
+            self.assertLess(body.index(required), first_install,
+                            "Device safety must be checked before any adb install")
+
     def test_signed_release_publish_requires_real_ota_emulator_gate(self):
         workflow = (ROOT / ".github/workflows/android.yml").read_text()
         signed = workflow.split("  signed_release:\n", 1)[1]
