@@ -59,10 +59,10 @@ class UpdateReleasePolicyTest {
             UpdateReleasePolicy.choose(list(entry(350, malicious = true)), 339))
     }
 
-    @Test fun choosesNewestAvailableSignedReleaseRatherThanDebugBuild() {
+    @Test fun neverHidesNewerIncompleteReleaseBehindOlderSignedOne() {
         val releases = list(entry(345, signed = false), entry(344), entry(343))
-        val result = UpdateReleasePolicy.choose(releases, 340) as UpdateAvailability.Available
-        assertEquals(344, result.release.versionCode)
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(releases, 340))
     }
 
     @Test fun malformedTagsAreNeverConsidered() {
