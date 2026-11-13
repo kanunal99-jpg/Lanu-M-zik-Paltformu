@@ -580,10 +580,15 @@ jobs:
           target = Path(sys.argv[1])
           source = target.read_text()
           assert source.count("android {") == 1
-          assert 'testBuildType = "release"' not in source
-          target.write_text(source.replace("android {", 'android {\n  testBuildType = "release"', 1))
+          if "testBuildType" not in source:
+              source = source.replace("android {", 'android {\n  testBuildType = "release"', 1)
+              target.write_text(source)
+          elif "LANU_OTA_INSTRUMENTATION" not in source:
+              raise ValueError("Previous source has an unknown AndroidTest build-type policy")
+          # Newer published baselines already use the opt-in switch; never
+          # inject a duplicate assignment that would override the release type.
           PY
-          (cd "${old_source}" && GITHUB_RUN_NUMBER="${OLD_CODE}" gradle --no-daemon :app:assembleReleaseAndroidTest --stacktrace)
+          (cd "${old_source}" && LANU_OTA_INSTRUMENTATION=true GITHUB_RUN_NUMBER="${OLD_CODE}" gradle --no-daemon :app:assembleReleaseAndroidTest --stacktrace)
           LANU_OTA_INSTRUMENTATION=true gradle --no-daemon :app:assembleReleaseAndroidTest --stacktrace
           old_unsigned="$(find "${old_source}/app/build/outputs/apk/androidTest" -type f -name '*.apk' | head -n 1)"
           new_unsigned="$(find app/build/outputs/apk/androidTest -type f -name '*.apk' | head -n 1)"
