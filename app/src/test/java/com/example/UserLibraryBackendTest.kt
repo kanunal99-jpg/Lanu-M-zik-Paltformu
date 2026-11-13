@@ -191,6 +191,52 @@ class UserLibraryBackendTest {
     }
 
     @Test
+    fun `malformed nested playlist songs fail closed without erasing the original bytes`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("lanu_user_library", Context.MODE_PRIVATE)
+        val prefix = """[{"id":"pl-1","name":"Gece","createdAtMs":10,"updatedAtMs":20,"songIds":"""
+        val invalidValues = listOf(
+            "\"song-1\"",
+            "null",
+            "{}",
+            "[\"song-1\",123]",
+            "[\"song-1\",null]",
+            "[\"song-1\",{}]"
+        )
+        for (invalid in invalidValues) {
+            val original = prefix + invalid + "}]"
+            assertTrue(prefs.edit().putString("playlists::user-a", original).commit())
+            assertTrue(runCatching { backend.snapshot("user-a") }.exceptionOrNull() is IOException)
+            assertTrue(
+                runCatching { backend.renamePlaylist("user-a", "pl-1", "Yeni ad") }
+                    .exceptionOrNull() is IOException
+            )
+            assertTrue(
+                runCatching { backend.addSongToPlaylist("user-a", "pl-1", "new-song") }
+                    .exceptionOrNull() is IOException
+            )
+            assertEquals(original, prefs.getString("playlists::user-a", null))
+        }
+        // Corruption in one account must not prevent unrelated account writes.
+        val other = backend.createPlaylist("user-b", "Temiz")
+        assertEquals(other.id, backend.snapshot("user-b").playlists.single().id)
+    }
+
+    @Test
+    fun `legacy playlist without songIds remains readable and editable`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("lanu_user_library", Context.MODE_PRIVATE)
+        val old = """[{"id":"pl-old","name":"Eski","createdAtMs":10,"updatedAtMs":20}]"""
+        assertTrue(prefs.edit().putString("playlists::user-a", old).commit())
+        assertTrue(backend.snapshot("user-a").playlists.single().songIds.isEmpty())
+        backend.renamePlaylist("user-a", "pl-old", "Yeni")
+        backend.addSongToPlaylist("user-a", "pl-old", "song-1")
+        val restored = LocalUserLibraryBackend(context).snapshot("user-a").playlists.single()
+        assertEquals("Yeni", restored.name)
+        assertEquals(listOf("song-1"), restored.songIds)
+    }
+
+    @Test
     fun `corrupt playlists or history never become an empty saved library`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = context.getSharedPreferences("lanu_user_library", Context.MODE_PRIVATE)
