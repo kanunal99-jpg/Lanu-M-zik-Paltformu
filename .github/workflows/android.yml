@@ -490,7 +490,7 @@ jobs:
           [[ -s "${old_apk}" && -s "${old_hash}" ]]
           declared="$(awk 'NR==1 {print $1}' "${old_hash}")"
           [[ "${declared}" =~ ^[a-f0-9]{64}$ ]]
-          [[ "${declared}" == "$(sha256sum "${old_apk" | cut -d ' ' -f1)" ]]
+          [[ "${declared}" == "$(sha256sum "${old_apk}" | cut -d ' ' -f1)" ]]
           aapt="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
           package="$("${aapt}" dump badging "${old_apk}" | grep -m1 '^package: ')"
           [[ "${package}" == *"name='com.aistudio.lanumusic.kpxzqa'"* ]]
