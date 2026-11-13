@@ -200,6 +200,19 @@ jobs:
           [[ "${package}" == *"versionCode='${GITHUB_RUN_NUMBER}'"* ]]
           echo "R8, shrinking, APK signing and version identity smoke checks passed."
 
+      - name: Compile real-release OTA instrumentation with temporary CI signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          temporary="$(mktemp -d "${RUNNER_TEMP}/lanu-ota-compile-XXXXXX")"
+          trap 'rm -rf "${temporary}"' EXIT
+          keytool -genkeypair -noprompt -alias ota-ci -keyalg RSA -keysize 3072 -validity 2 \
+            -dname "CN=LANU OTA build check only" -keystore "${temporary}/ci.jks" \
+            -storepass "temporary-ota-compile-2026" -keypass "temporary-ota-compile-2026"
+          KEYSTORE_PATH="${temporary}/ci.jks" STORE_PASSWORD="temporary-ota-compile-2026" \
+          KEY_PASSWORD="temporary-ota-compile-2026" KEY_ALIAS="ota-ci" \
+          gradle --no-daemon :app:assembleReleaseAndroidTest --stacktrace
+          find app/build/outputs/apk/androidTest -type f -name '*.apk' -size +0c | grep -q .
       - name: Verify debug APK installability before publishing
         shell: bash
         run: |
