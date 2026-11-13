@@ -8,6 +8,8 @@ plugins {
 }
 
 android {
+  // Keep normal debug unit tests available. Only dedicated OTA acceptance compiles release instrumentation.
+  testBuildType = if (System.getenv("LANU_OTA_INSTRUMENTATION") == "true") "release" else "debug"
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
