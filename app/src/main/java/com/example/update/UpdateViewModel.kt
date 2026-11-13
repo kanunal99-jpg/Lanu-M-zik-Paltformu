@@ -85,6 +85,7 @@ class UpdateViewModel @Inject constructor(application: Application) : AndroidVie
                     is UpdateAvailability.Available -> UpdateScreenState.Available(result.release)
                     UpdateAvailability.UpToDate -> UpdateScreenState.UpToDate
                     UpdateAvailability.AwaitingSignedRelease -> UpdateScreenState.WaitingForSignedApk
+                    is UpdateAvailability.Incompatible -> UpdateScreenState.Failed(result.reason)
                 }
                 getApplication<Application>()
                     .getSharedPreferences("lanu_ota_check", Context.MODE_PRIVATE)
