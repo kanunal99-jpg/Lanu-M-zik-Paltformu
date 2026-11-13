@@ -24,6 +24,17 @@ class MusicOtaAcceptanceContractTest(unittest.TestCase):
                          "old_signer", "new_signer", "previously published"):
             self.assertIn(required, body)
 
+    def test_signer_probe_requests_verified_signature_metadata(self):
+        """Regression for Build 633: bare --print-certs omits verified signer count."""
+        script = (ROOT / "scripts/ci_music_ota_upgrade_acceptance.sh").read_text()
+        self.assertIn('"$apksigner" verify --verbose --print-certs "$1" |', script)
+        # Keep the fail-closed production certificate parser; never weaken it
+        # to accept a digest without verified v2/v3 signature evidence.
+        parser = (ROOT / "scripts/extract_apk_cert_sha256.py").read_text()
+        self.assertIn('SIGNER_COUNT_PATTERN', parser)
+        self.assertIn('VERIFIED_PATTERN', parser)
+        self.assertIn('CERTIFICATE_PATTERN', parser)
+
     def test_device_is_verified_as_isolated_android14_emulator_before_installing(self):
         body = (ROOT / "scripts/ci_music_ota_upgrade_acceptance.sh").read_text()
         first_install = body.index('adb install -r "$old"')
