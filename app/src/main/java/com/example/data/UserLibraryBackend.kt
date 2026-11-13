@@ -314,14 +314,26 @@ class LocalUserLibraryBackend(context: Context) : UserLibraryBackend {
         val array = JSONArray(preferences.getString(playlistsKey(userId), "[]"))
         (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
-            val songs = item.optJSONArray("songIds") ?: JSONArray()
+            // Older records may omit this field, but a PRESENT malformed field
+            // must not be treated as an empty playlist. A subsequent rename or
+            // insert would otherwise silently destroy the existing song membership.
+            val songs = if (!item.has("songIds")) {
+                JSONArray()
+            } else {
+                item.optJSONArray("songIds")
+                    ?: throw org.json.JSONException("Invalid playlist songIds array")
+            }
+            val songIds = (0 until songs.length()).map { songIndex ->
+                (songs.opt(songIndex) as? String)
+                    ?: throw org.json.JSONException("Invalid playlist songIds entry")
+            }
             PlaylistRecord(
                 id = item.getString("id"),
                 name = item.getString("name"),
                 description = item.optString("description"),
                 createdAtMs = item.getLong("createdAtMs"),
                 updatedAtMs = item.getLong("updatedAtMs"),
-                songIds = (0 until songs.length()).map(songs::getString)
+                songIds = songIds
             )
         }
     }.getOrElse { cause ->
