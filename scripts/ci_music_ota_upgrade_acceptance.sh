@@ -24,7 +24,9 @@ runner="$package.test/androidx.test.runner.AndroidJUnitRunner"
 pkg() { "$aapt" dump badging "$1" | sed -nE "s/^package: name='([^']+)'.*/\\1/p" | head -n 1; }
 version() { "$aapt" dump badging "$1" | sed -nE "s/^package:.*versionCode='([0-9]+)'.*/\\1/p" | head -n 1; }
 signer() {
-  "$apksigner" verify --print-certs "$1" |
+  # Certificate parser requires signed-APK verification metadata (v2/v3 + signer count).
+  # apksigner --print-certs alone omits that evidence and must fail closed.
+  "$apksigner" verify --verbose --print-certs "$1" |
     python3 scripts/extract_apk_cert_sha256.py
 }
 [[ "$(pkg "$old")" == "$package" && "$(pkg "$candidate")" == "$package" ]] ||
