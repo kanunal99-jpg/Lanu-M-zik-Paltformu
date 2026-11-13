@@ -45,6 +45,33 @@ class MusicOtaAcceptanceContractTest(unittest.TestCase):
         self.assertIn("app-release.apk.sha256", signed)
         self.assertIn('[[ "${declared}" == "$(sha256sum "${old_apk}"', signed)
 
+    def test_emulator_runner_invokes_acceptance_with_all_six_args_on_one_line(self):
+        """Regression for Build 631: multiline YAML script ran bash without six arguments."""
+        workflow = (ROOT / ".github/workflows/android.yml").read_text()
+        signed = workflow.split("  signed_release:\n", 1)[1]
+        emulator = signed.split(
+            "      - name: Real signed APK OTA preservation (Android 14 emulator)\n", 1
+        )[1].split("      - name: Attach signed APK only after verification\n", 1)[0]
+        invocation = [
+            line.strip() for line in emulator.splitlines()
+            if line.strip().startswith("bash scripts/ci_music_ota_upgrade_acceptance.sh ")
+        ]
+        self.assertEqual(1, len(invocation))
+        command = invocation[0]
+        self.assertFalse(command.endswith("\\"),
+                         "Emulator runner passes only the first script line to bash")
+        for required in (
+            '"$RUNNER_TEMP/lanu-ota-baseline/app-release.apk"',
+            '"app/build/outputs/apk/release/app-release.apk"',
+            '"$RUNNER_TEMP/lanu-ota-baseline-test.apk"',
+            '"$RUNNER_TEMP/lanu-ota-new-test.apk"',
+            'steps.music_ota_baseline.outputs.version',
+            'github.run_number',
+        ):
+            self.assertIn(required, command)
+        self.assertEqual(6, command.count('" "'),
+                         "All six OTA arguments must appear on one command line")
+
     def test_seed_and_verify_target_private_music_library(self):
         source = (ROOT / "app/src/androidTest/java/com/example/RoomActualOtaUpgradeTest.kt").read_text()
         for required in ("LocalAuthBackend", "LocalUserLibraryBackend", "AppDatabase",
