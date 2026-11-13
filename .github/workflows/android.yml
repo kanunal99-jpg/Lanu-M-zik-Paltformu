@@ -458,6 +458,98 @@ jobs:
             echo "::error::Unknown LANU_OTA_CHANNEL: publication blocked."
             exit 1
           fi
+      - name: Select authentic previously signed APK for preservation test
+        id: music_ota_baseline
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURRENT_TAG: lanu-music-${{ github.run_number }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          response="$(gh api "repos/${GH_REPO}/releases?per_page=100")"
+          previous="$(jq -r '.[] | select(.draft == false) | select(.published_at != null) | select(.tag_name | test("^lanu-music-[0-9]+-[0-9a-f]{40}$")) | select([.assets[].name] | index("app-release.apk")) | select([.assets[].name] | index("app-release.apk.sha256")) | .tag_name' <<<"${response}" | grep -Fvx "${CURRENT_TAG}" | head -n 1 || true)"
+          [[ "${previous}" =~ ^lanu-music-([0-9]+)-([0-9a-f]{40})$ ]] || {
+            echo "::error::No genuine previous public signed release for OTA emulator test"; exit 1;
+          }
+          old_code="${BASH_REMATCH[1]}"
+          old_sha="${BASH_REMATCH[2]}"
+          (( old_code < GITHUB_RUN_NUMBER )) || {
+            echo "::error::Invalid version order for OTA emulator acceptance"; exit 1;
+          }
+          old_source="$(jq -r --arg tag "${previous}" '.[] | select(.tag_name == $tag) | .target_commitish' <<<"${response}")"
+          [[ "${old_source}" == "${old_sha}" ]] || {
+            echo "::error::Previous release commit identity does not match tag"; exit 1;
+          }
+          mkdir -p "${RUNNER_TEMP}/lanu-ota-baseline"
+          gh release download --repo "${GH_REPO}" "${previous}" \
+            --pattern 'app-release.apk' --pattern 'app-release.apk.sha256' \
+            --dir "${RUNNER_TEMP}/lanu-ota-baseline"
+          old_apk="${RUNNER_TEMP}/lanu-ota-baseline/app-release.apk"
+          old_hash="${RUNNER_TEMP}/lanu-ota-baseline/app-release.apk.sha256"
+          [[ -s "${old_apk}" && -s "${old_hash}" ]]
+          declared="$(awk 'NR==1 {print $1}' "${old_hash}")"
+          [[ "${declared}" =~ ^[a-f0-9]{64}$ ]]
+          [[ "${declared}" == "$(sha256sum "${old_apk" | cut -d ' ' -f1)" ]]
+          aapt="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          package="$("${aapt}" dump badging "${old_apk}" | grep -m1 '^package: ')"
+          [[ "${package}" == *"name='com.aistudio.lanumusic.kpxzqa'"* ]]
+          [[ "${package}" == *"versionCode='${old_code}'"* ]]
+          git fetch --no-tags --depth=1 origin "${old_sha}"
+          git worktree add --detach "${RUNNER_TEMP}/lanu-ota-baseline-src" "${old_sha}"
+          echo "version=${old_code}" >> "${GITHUB_OUTPUT}"
+          echo "previous_sha=${old_sha}" >> "${GITHUB_OUTPUT}"
+      - name: Build two matching-signer Android instrumentation APKs
+        shell: bash
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/lanu-release.jks
+          STORE_PASSWORD: ${{ secrets.LANU_SIGNING_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.LANU_SIGNING_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LANU_SIGNING_KEY_ALIAS }}
+          OLD_CODE: ${{ steps.music_ota_baseline.outputs.version }}
+        run: |
+          set -euo pipefail
+          old_source="${RUNNER_TEMP}/lanu-ota-baseline-src"
+          cp app/src/androidTest/java/com/example/RoomActualOtaUpgradeTest.kt \
+             "${old_source}/app/src/androidTest/java/com/example/"
+          python3 - "${old_source}/app/build.gradle.kts" <<'PY'
+          from pathlib import Path
+          import sys
+          target = Path(sys.argv[1])
+          source = target.read_text()
+          assert source.count("android {") == 1
+          assert 'testBuildType = "release"' not in source
+          target.write_text(source.replace("android {", 'android {\n  testBuildType = "release"', 1))
+          PY
+          (cd "${old_source}" && GITHUB_RUN_NUMBER="${OLD_CODE}" gradle --no-daemon :app:assembleReleaseAndroidTest --stacktrace)
+          gradle --no-daemon :app:assembleReleaseAndroidTest --stacktrace
+          old_unsigned="$(find "${old_source}/app/build/outputs/apk/androidTest" -type f -name '*.apk' | head -n 1)"
+          new_unsigned="$(find app/build/outputs/apk/androidTest -type f -name '*.apk' | head -n 1)"
+          [[ -s "${old_unsigned}" && -s "${new_unsigned}" ]]
+          signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          "${signer}" sign --ks "${KEYSTORE_PATH}" --ks-type PKCS12 \
+            --ks-key-alias "${KEY_ALIAS}" --ks-pass env:STORE_PASSWORD \
+            --key-pass env:KEY_PASSWORD \
+            --out "${RUNNER_TEMP}/lanu-ota-baseline-test.apk" "${old_unsigned}"
+          "${signer}" sign --ks "${KEYSTORE_PATH}" --ks-type PKCS12 \
+            --ks-key-alias "${KEY_ALIAS}" --ks-pass env:STORE_PASSWORD \
+            --key-pass env:KEY_PASSWORD \
+            --out "${RUNNER_TEMP}/lanu-ota-new-test.apk" "${new_unsigned}"
+          "${signer}" verify "${RUNNER_TEMP}/lanu-ota-baseline-test.apk"
+          "${signer}" verify "${RUNNER_TEMP}/lanu-ota-new-test.apk"
+      - name: Real signed APK OTA preservation (Android 14 emulator)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            bash scripts/ci_music_ota_upgrade_acceptance.sh \
+              "$RUNNER_TEMP/lanu-ota-baseline/app-release.apk" \
+              "app/build/outputs/apk/release/app-release.apk" \
+              "$RUNNER_TEMP/lanu-ota-baseline-test.apk" \
+              "$RUNNER_TEMP/lanu-ota-new-test.apk" \
+              "${{ steps.music_ota_baseline.outputs.version }}" "${{ github.run_number }}"
       - name: Attach signed APK only after verification
         shell: bash
         env:
