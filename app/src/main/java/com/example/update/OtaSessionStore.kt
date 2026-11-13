@@ -41,7 +41,9 @@ class OtaSessionStore(private val context: Context) {
         val prefix = releases + "/download/" + release.tag + "/"
         require(release.pageUrl == releases + "/tag/" + release.tag &&
             release.apkUrl == prefix + "app-release.apk" &&
-            release.sha256Url == prefix + "app-release.apk.sha256"
+            release.sha256Url == prefix + "app-release.apk.sha256" &&
+            (release.signerUrl == null ||
+                release.signerUrl == prefix + "app-release.apk.signer.txt")
         ) { "OTA kaynak bağlantısı güvenilir değil." }
         val saved = prefs.edit()
             .putString("tag", release.tag)
