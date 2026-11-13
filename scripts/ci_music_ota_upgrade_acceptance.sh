@@ -60,6 +60,16 @@ probe() {
   echo "OTA emulator $phase: passed."
 }
 
+# Never let this destructive-to-test-fixture upgrade harness touch a physical phone.
+# The instrumentation gate alone is insufficient: refuse before any adb install.
+serial="$(adb get-serialno | tr -d '\r[:space:]')"
+sdk_level="$(adb shell getprop ro.build.version.sdk | tr -d '\r[:space:]')"
+is_emulator="$(adb shell getprop ro.kernel.qemu | tr -d '\r[:space:]')"
+if [[ ! "${serial}" =~ ^emulator-[0-9]+$ || "${is_emulator}" != "1" || "${sdk_level}" != "34" ]]; then
+  echo "::error::OTA acceptance must run on the isolated Android 14 emulator only; no APK was installed." >&2
+  exit 1
+fi
+
 echo "OTA: installing previously published signed RELEASE (no data wipe)"
 adb install -r "$old" > /dev/null
 adb install -r -t "$old_test" > /dev/null
