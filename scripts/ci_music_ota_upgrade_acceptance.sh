@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Guarded Android 14 CI acceptance: install previous RELEASE, seed real Room and
 # local library data using same-signed instrumentation, then adb install -r new
-# RELEASE and verify unchanged data. Never uninstall, pm clear, or expose secrets.
+# RELEASE and verify unchanged data. Never erase local app data or expose secrets.
 set -Eeuo pipefail
 if (( $# != 6 )); then
   echo "usage: ci_music_ota_upgrade_acceptance.sh OLD.apk NEW.apk OLD_TEST.apk NEW_TEST.apk OLD_CODE NEW_CODE" >&2
