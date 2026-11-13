@@ -5,6 +5,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import com.android.apksig.ApkVerifier
 import android.os.Build
+import com.example.update.InstalledSigningIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
@@ -31,13 +32,15 @@ data class VerifiedRelease(
     val sha256Url: String,
     val sizeBytes: Long,
     val githubDigest: String? = null,
-    val notes: String = ""
+    val notes: String = "",
+    val signerUrl: String? = null
 )
 
 sealed interface UpdateAvailability {
     data class Available(val release: VerifiedRelease) : UpdateAvailability
     data object UpToDate : UpdateAvailability
     data object AwaitingSignedRelease : UpdateAvailability
+    data class Incompatible(val reason: String) : UpdateAvailability
 }
 
 /** Only accept signed APKs from this repository's official GitHub Releases. */
@@ -49,15 +52,17 @@ object UpdateReleasePolicy {
 
     fun choose(json: String, installedCode: Int): UpdateAvailability {
         val releases = JSONArray(json)
-        var hasNewer = false
+        var newestPublishedCode = installedCode
         val signed = mutableListOf<VerifiedRelease>()
         for (i in 0 until releases.length()) {
             val release = releases.optJSONObject(i) ?: continue
-            if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue
+            // A signed pre-release may be an in-place update ONLY for a handset
+            // already using its identical signer. The user data is never reset.
+            if (release.optBoolean("draft")) continue
             val tag = release.optString("tag_name")
             val version = tagPattern.matchEntire(tag)?.groupValues?.get(1)?.toIntOrNull() ?: continue
             if (version <= installedCode) continue
-            hasNewer = true
+            newestPublishedCode = maxOf(newestPublishedCode, version)
             val page = release.optString("html_url")
             if (page != releasesPage + "/tag/" + tag) continue
             val assets = release.optJSONArray("assets") ?: continue
@@ -80,14 +85,42 @@ object UpdateReleasePolicy {
             }
             val apk = assetUrl("app-release.apk") ?: continue
             val hash = assetUrl("app-release.apk.sha256") ?: continue
+            // A verified signing certificate is mandatory: debug assets or
+            // older signed releases without public signer proof are not OTA.
+            val signer = assetUrl("app-release.apk.signer.txt") ?: continue
+            if (signer.second > 2048L) continue
             val notes = release.optString("body").trim().take(1500)
-            signed.add(VerifiedRelease(version, tag, page, apk.first, hash.first, apk.second, apk.third, notes))
+            signed.add(VerifiedRelease(version, tag, page, apk.first, hash.first,
+                apk.second, apk.third, notes, signer.first))
         }
+        val best = signed.maxByOrNull { it.versionCode }
         return when {
-            signed.isNotEmpty() -> UpdateAvailability.Available(signed.maxBy { it.versionCode })
-            hasNewer -> UpdateAvailability.AwaitingSignedRelease
+            best != null && best.versionCode == newestPublishedCode ->
+                UpdateAvailability.Available(best)
+            newestPublishedCode > installedCode -> UpdateAvailability.AwaitingSignedRelease
             else -> UpdateAvailability.UpToDate
         }
+    }
+
+    /** Public sidecar is a certificate identity, not a private signing key. */
+    fun parseSignerEvidence(raw: String): String {
+        val fields = mutableMapOf<String, String>()
+        for (line in raw.lineSequence().filter { it.isNotBlank() }) {
+            val parts = line.split("=", limit = 2)
+            if (parts.size != 2 || fields.put(parts[0], parts[1]) != null)
+                throw IOException("Yayın imza doğrulama kaydı geçersiz.")
+        }
+        if (fields.keys != setOf(
+                "apk", "signing_mode", "certificate_sha256", "upgrade_verified_on_device"
+            ) ||
+            fields["apk"] != "app-release.apk" ||
+            fields["signing_mode"] != "stable" ||
+            fields["upgrade_verified_on_device"] !in setOf("true", "false")
+        ) throw IOException("Güvenilir OTA imza bilgisi eksik.")
+        val certificate = fields["certificate_sha256"].orEmpty().lowercase(Locale.ROOT)
+        if (!Regex("[a-f0-9]{64}").matches(certificate))
+            throw IOException("OTA sertifika kimliği geçersiz.")
+        return certificate
     }
 
     /** GitHub Actions sha256sum output: <hex>  app/build/outputs/apk/release/app-release.apk */
@@ -193,27 +226,36 @@ class GithubUpdateClient(private val context: Context) {
         }
         val newest = JSONArray()
         if (latest != null) newest.put(latest)
-        val latestResult = UpdateReleasePolicy.choose(newest.toString(), installedCode)
-        if (latestResult is UpdateAvailability.Available) {
-            return@withContext latestResult
-        }
-        // Previous signed stable builds may remain installable even when newest
-        // publish only has a debug preview. Best effort; do not discard /latest
-        // if listing is temporarily rate limited.
+        // /latest excludes pre-releases. Always inspect the published list
+        // before deciding the installed app is current; fall back to /latest
+        // ONLY when the list endpoint fails (never pretend it covers previews).
         val historyResult = runCatching {
             get(root + "/releases?per_page=100").use { response ->
                 val history = JSONArray(responseBody(response))
-                val result = JSONArray()
-                if (latest != null) result.put(latest)
-                for (i in 0 until history.length()) result.put(history.getJSONObject(i))
-                UpdateReleasePolicy.choose(result.toString(), installedCode)
+                if (latest != null) history.put(latest)
+                UpdateReleasePolicy.choose(history.toString(), installedCode)
             }
         }
-        // Never report "up to date" if neither endpoint returned trustworthy data.
-        historyResult.exceptionOrNull()?.let { error ->
+        val chosen = historyResult.getOrElse { error ->
             if (error is CancellationException) throw error
+            if (latest == null) throw error
+            UpdateReleasePolicy.choose(newest.toString(), installedCode)
         }
-        if (latest == null) historyResult.getOrThrow() else historyResult.getOrDefault(latestResult)
+        if (chosen !is UpdateAvailability.Available) return@withContext chosen
+
+        val signerUrl = chosen.release.signerUrl
+            ?: return@withContext UpdateAvailability.AwaitingSignedRelease
+        val publishedSigner = get(signerUrl).use { response ->
+            UpdateReleasePolicy.parseSignerEvidence(responseBody(response, 2048))
+        }
+        val installed = InstalledSigningIdentity.read(context).map { it.sha256 }
+        if (installed.size != 1 || installed.single() != publishedSigner) {
+            // Important: report incompatible, NEVER "up to date" or ask to uninstall.
+            UpdateAvailability.Incompatible(
+                "Yeni LANU sürümünün imzası kurulu uygulamayla eşleşmiyor. " +
+                    "Verilerinizi korumak için güncelleme engellendi. Uygulamayı kaldırmayın."
+            )
+        } else chosen
     }
 
     /** Resume interrupted downloads using HTTP Range, never without checking Content-Range. */
