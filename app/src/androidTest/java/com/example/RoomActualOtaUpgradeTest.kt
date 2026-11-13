@@ -62,7 +62,7 @@ class RoomActualOtaUpgradeTest {
             id = "ota-ci-local-song", title = "CI Offline", artist = "CI Fixture",
             localAudioPath = "ci-private-marker", isAvailableOffline = true
         ))
-        dao.addDownloadedSong(DownloadedSongEntity("ota-ci-downloaded", "test", "5", 204L))
+        dao.addDownload(DownloadedSongEntity("ota-ci-downloaded", "test", "5", 204L))
 
         val privateAudio = File(context.filesDir, "offline_audio/ota-ci-sentinel.bin")
         assertTrue(privateAudio.parentFile!!.isDirectory || privateAudio.parentFile!!.mkdirs())
