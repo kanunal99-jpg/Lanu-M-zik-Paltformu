@@ -69,7 +69,7 @@ class MusicOtaAcceptanceContractTest(unittest.TestCase):
             'github.run_number',
         ):
             self.assertIn(required, command)
-        self.assertEqual(6, command.count('" "'),
+        self.assertEqual(5, command.count('" "'),
                          "All six OTA arguments must appear on one command line")
 
     def test_seed_and_verify_target_private_music_library(self):
