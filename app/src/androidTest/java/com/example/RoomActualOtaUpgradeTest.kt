@@ -35,7 +35,7 @@ class RoomActualOtaUpgradeTest {
     private val evidence get() = context.getSharedPreferences("lanu_ota_ci_fixture", Context.MODE_PRIVATE)
 
     private fun gate(phase: String) {
-        val args = instrumentation.arguments
+        val args = InstrumentationRegistry.getArguments()
         assertEquals("isolated-emulator-v1", args.getString("lanu_ota_ci"))
         assertEquals(phase, args.getString("lanu_ota_phase"))
         val expected = args.getString("lanu_expected_version")?.toIntOrNull()
@@ -55,7 +55,8 @@ class RoomActualOtaUpgradeTest {
 
         val dao = AppDatabase.getDatabase(context).musicDao()
         dao.addFavorite(FavoriteSongEntity("ota-ci-room-favorite", 201L))
-        dao.insertPlaylist(PlaylistEntity(id = "ota-ci-room-playlist", name = "OTA Room", createdAt = 202L))
+        dao.insertPlaylist(PlaylistEntity(id = "ota-ci-room-playlist", name = "OTA Room",
+            description = "CI fixture", createdAt = 202L))
         dao.addSongToPlaylist(PlaylistSongEntity("ota-ci-room-playlist", "ota-ci-song", orderIndex = 0))
         dao.addToHistory(HistoryEntity(songId = "ota-ci-room-history", playedAt = 203L))
         dao.insertLocalSong(LocalSongEntity(
