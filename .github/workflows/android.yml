@@ -458,6 +458,53 @@ jobs:
             echo "::error::Unknown LANU_OTA_CHANNEL: publication blocked."
             exit 1
           fi
+      - name: Publish public signer identity (not a signing key)
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          actual="$("${signer}" verify --verbose --print-certs "${apk}" | python3 scripts/extract_apk_cert_sha256.py)"
+          [[ "${actual}" =~ ^[0-9a-f]{64}$ ]]
+          {
+            echo "apk=app-release.apk"
+            echo "signing_mode=stable"
+            echo "certificate_sha256=${actual}"
+            echo "upgrade_verified_on_device=false"
+          } > "${apk}.signer.txt"
+      - name: Verify certificate continuity against preceding public signed APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURRENT_TAG: lanu-music-${{ github.run_number }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          response="$(gh api "repos/${GH_REPO}/releases?per_page=100")"
+          previous="$(jq -r '.[] | select(.draft == false) | select(.tag_name | test("^lanu-music-[0-9]+-[0-9a-f]{40}$")) | select([.assets[].name] | index("app-release.apk")) | select([.assets[].name] | index("app-release.apk.sha256")) | .tag_name' <<<"${response}" | grep -Fvx "${CURRENT_TAG}" | head -n 1 || true)"
+          if [[ -z "${previous}" ]]; then
+            echo "::notice::First public signed APK baseline; no prior certificate to compare."
+          else
+            [[ "${previous}" =~ ^lanu-music-([0-9]+)-[0-9a-f]{40}$ ]] || exit 1
+            previous_code="${BASH_REMATCH[1]}"
+            (( previous_code < GITHUB_RUN_NUMBER )) || {
+              echo "::error::Previous signed baseline is not an older version"; exit 1;
+            }
+            directory="$(mktemp -d)"
+            trap 'rm -rf "${directory}"' EXIT
+            gh release download --repo "${GH_REPO}" "${previous}"               --pattern 'app-release.apk' --pattern 'app-release.apk.sha256' --dir "${directory}"
+            [[ -s "${directory}/app-release.apk" && -s "${directory}/app-release.apk.sha256" ]]
+            previous_hash="$(awk 'NR==1 {print $1}' "${directory}/app-release.apk.sha256")"
+            [[ "${previous_hash}" =~ ^[0-9a-f]{64}$ ]]
+            [[ "${previous_hash}" == "$(sha256sum "${directory}/app-release.apk" | cut -d ' ' -f1)" ]]
+            signer="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+            prior_cert="$("${signer}" verify --verbose --print-certs "${directory}/app-release.apk" | python3 scripts/extract_apk_cert_sha256.py)"
+            current_cert="$(sed -n 's/^certificate_sha256=//p' app/build/outputs/apk/release/app-release.apk.signer.txt)"
+            [[ "${prior_cert}" == "${current_cert}" ]] || {
+              echo "::error::Previous publicly signed APK certificate changed; publishing blocked."; exit 1;
+            }
+            echo "Previous public signed release certificate continuity confirmed."
+          fi
       - name: Attach signed APK only after verification
         shell: bash
         env:
@@ -471,7 +518,8 @@ jobs:
           for attempt in 1 2 3; do
             if gh release upload --repo "${GH_REPO}" "${TAG_NAME}" \
               app/build/outputs/apk/release/app-release.apk \
-              app/build/outputs/apk/release/app-release.apk.sha256 --clobber; then
+              app/build/outputs/apk/release/app-release.apk.sha256 \
+              app/build/outputs/apk/release/app-release.apk.signer.txt --clobber; then
               break
             fi
             if [[ "${attempt}" -eq 3 ]]; then exit 1; fi
@@ -480,6 +528,7 @@ jobs:
           assets="$(gh release view --repo "${GH_REPO}" "${TAG_NAME}" --json assets --jq '.assets[].name')"
           grep -Fxq 'app-release.apk' <<<"${assets}"
           grep -Fxq 'app-release.apk.sha256' <<<"${assets}"
+          grep -Fxq 'app-release.apk.signer.txt' <<<"${assets}"
           # Read the digest BACK from the public GitHub release, not only the runner.
           remote_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-release.apk") | .digest')"
           remote_checksum_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-release.apk.sha256") | .digest')"
@@ -487,22 +536,28 @@ jobs:
           expected_checksum_digest="sha256:$(sha256sum app/build/outputs/apk/release/app-release.apk.sha256 | cut -d ' ' -f1)"
           [[ "${remote_digest}" == "${expected_digest}" ]]
           [[ "${remote_checksum_digest}" == "${expected_checksum_digest}" ]]
+          remote_signer_digest="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[] | select(.name == "app-release.apk.signer.txt") | .digest')"
+          expected_signer_digest="sha256:$(sha256sum app/build/outputs/apk/release/app-release.apk.signer.txt | cut -d ' ' -f1)"
+          [[ "${remote_signer_digest}" == "${expected_signer_digest}" ]]
           # GitHub API metadata alone cannot prove assets are downloadable or
           # match the original bytes. Re-download BOTH signed release assets.
           verification_dir="$(mktemp -d)"
           trap 'rm -rf "${verification_dir}"' EXIT
           gh release download --repo "${GH_REPO}" "${TAG_NAME}" \
             --pattern 'app-release.apk' --pattern 'app-release.apk.sha256' \
-            --dir "${verification_dir}"
+            --pattern 'app-release.apk.signer.txt' --dir "${verification_dir}"
           [[ -s "${verification_dir}/app-release.apk" ]]
           [[ -s "${verification_dir}/app-release.apk.sha256" ]]
+          [[ -s "${verification_dir}/app-release.apk.signer.txt" ]]
           cmp app/build/outputs/apk/release/app-release.apk "${verification_dir}/app-release.apk"
           cmp app/build/outputs/apk/release/app-release.apk.sha256 "${verification_dir}/app-release.apk.sha256"
+          cmp app/build/outputs/apk/release/app-release.apk.signer.txt "${verification_dir}/app-release.apk.signer.txt"
           published_sha="$(awk 'NR==1 {print $1}' "${verification_dir}/app-release.apk.sha256")"
           [[ "${published_sha}" =~ ^[0-9a-f]{64}$ ]]
           calculated_sha="$(sha256sum "${verification_dir}/app-release.apk" | cut -d ' ' -f1)"
           [[ "${published_sha}" == "${calculated_sha}" ]]
           echo "Downloaded signed APK, checksum sidecar and public release bytes verified."
+          echo "Public signer identity evidence was also downloaded and compared."
           # Fresh installation: signed APK is available but must remain a PRE-RELEASE.
           # Existing devices cannot assume it upgrades their old signing identity.
           if [[ "${OTA_CHANNEL}" == "NEW_INSTALL_ONLY" ]]; then

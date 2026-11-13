@@ -22,6 +22,7 @@ class UpdateReleasePolicyTest {
         if (signed) {
             assets.put(asset("app-release.apk", 25000000))
             assets.put(asset("app-release.apk.sha256", 100))
+            assets.put(asset("app-release.apk.signer.txt", 155))
         } else {
             assets.put(asset("app-debug.apk", 25000000))
         }
@@ -58,10 +59,10 @@ class UpdateReleasePolicyTest {
             UpdateReleasePolicy.choose(list(entry(350, malicious = true)), 339))
     }
 
-    @Test fun choosesNewestAvailableSignedReleaseRatherThanDebugBuild() {
+    @Test fun neverHidesNewerIncompleteReleaseBehindOlderSignedOne() {
         val releases = list(entry(345, signed = false), entry(344), entry(343))
-        val result = UpdateReleasePolicy.choose(releases, 340) as UpdateAvailability.Available
-        assertEquals(344, result.release.versionCode)
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(releases, 340))
     }
 
     @Test fun malformedTagsAreNeverConsidered() {
@@ -83,13 +84,63 @@ class UpdateReleasePolicyTest {
         assertEquals(340, (result as UpdateAvailability.Available).release.versionCode)
     }
 
-    @Test fun doesNotSelectAnUnpublishedDraftOrPreRelease() {
-        assertEquals(UpdateAvailability.UpToDate,
-            UpdateReleasePolicy.choose(list(
-                entry(400).put("draft", true),
-                entry(399).put("prerelease", true)
-            ), 350)
-        )
+    @Test fun draftIsRejectedButVerifiedSignedPrereleaseIsDiscoverable() {
+        val result = UpdateReleasePolicy.choose(list(
+            entry(400).put("draft", true),
+            entry(399).put("prerelease", true)
+        ), 350) as UpdateAvailability.Available
+        assertEquals(399, result.release.versionCode)
+        assertEquals(base + "/download/" + result.release.tag + "/app-release.apk.signer.txt",
+            result.release.signerUrl)
+    }
+
+    @Test fun signedReleaseWithoutSignerProofDoesNotBecomeOta() {
+        val release = entry(405).put("prerelease", true)
+        release.getJSONArray("assets").remove(2)
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(list(release), 404))
+    }
+
+    @Test fun refusesToDowngradeWhenNewerReleaseLacksProof() {
+        val latest = entry(410, signed = false)
+        val previous = entry(409, signed = true).put("prerelease", true)
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(list(latest, previous), 408))
+    }
+
+    @Test fun rejectsForgedSignerSidecarUrlAndOversizedEvidence() {
+        val candidate = entry(411).put("prerelease", true)
+        val sidecar = candidate.getJSONArray("assets").getJSONObject(2)
+        sidecar.put("browser_download_url", "https://evil.example/signer.txt")
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(list(candidate), 410))
+        sidecar.put("browser_download_url",
+            base + "/download/" + candidate.getString("tag_name") + "/app-release.apk.signer.txt")
+        sidecar.put("size", 3000)
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(list(candidate), 410))
+    }
+
+    @Test fun sidecarMustBeStableExactAndSingleSignerHash() {
+        val good = listOf(
+            "apk=app-release.apk",
+            "signing_mode=stable",
+            "certificate_sha256=" + "a".repeat(64),
+            "upgrade_verified_on_device=false"
+        ).joinToString("\n") + "\n"
+        assertEquals("a".repeat(64), UpdateReleasePolicy.parseSignerEvidence(good))
+        for (bad in listOf(
+            good.replace("stable", "ephemeral"),
+            good.replace("app-release.apk", "app-debug.apk"),
+            good.replace("a".repeat(64), "abc"),
+            good.replace("upgrade_verified_on_device=false", "upgrade_verified_on_device=maybe"),
+            good + "certificate_sha256=" + "b".repeat(64) + "\n",
+            good + "extra=value\n",
+            "not-an-ini"
+        )) {
+            assertTrue(runCatching { UpdateReleasePolicy.parseSignerEvidence(bad) }
+                .exceptionOrNull() is IOException)
+        }
     }
 
     @Test fun refusesIncompleteSignatureOrApkAssets() {
@@ -105,10 +156,10 @@ class UpdateReleasePolicyTest {
             UpdateReleasePolicy.choose(list(broken), 340))
     }
 
-    @Test fun choosesOlderSignedIfLatestDebugOnlyInSameBatch() {
+    @Test fun newerDebugOnlyBuildDoesNotHideIncompleteUpdate() {
         val releases = list(entry(360, signed = false), entry(359, signed = true))
-        val result = UpdateReleasePolicy.choose(releases, 350) as UpdateAvailability.Available
-        assertEquals(359, result.release.versionCode)
+        assertEquals(UpdateAvailability.AwaitingSignedRelease,
+            UpdateReleasePolicy.choose(releases, 350))
     }
 
     @Test fun partialTransfersRequireCorrectByteRangeAndTotal() {
