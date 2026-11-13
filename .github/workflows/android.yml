@@ -105,6 +105,8 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_bootstrap_fresh_ota_signing.py'
           python3 -m unittest discover -s scripts -p 'test_extract_apk_cert_sha256.py'
           python3 -m unittest discover -s scripts -p 'test_ci_artifact_resilience.py'
+          bash -n scripts/ci_music_ota_upgrade_acceptance.sh
+          python3 -m unittest discover -s scripts -p 'test_ci_music_ota_contract.py'
       - name: Android OEM compatibility policy and read-only device script validation
         shell: bash
         run: |
