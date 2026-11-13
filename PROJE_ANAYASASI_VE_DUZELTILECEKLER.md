@@ -1,5 +1,16 @@
 # BAĞLAYICI EK PROTOKOL — 25.10.2026: ÖNCE ANAYASA, SONRA YENİDEN DENETİM VE SÜREKLİ SAĞLAMLAŞTIRMA
 
+## OTA davranış eşitliği ek protokolü — 13.11.2026: LANU Hesap Makinesi referansı
+
+Kullanıcı isteği: LANU Hesap Makinesi güncelleme deneyimini LANU Müzik'e **güvenli biçimde** taşı. Referans: `LANU-Hesap-Makinesi/app/src/main/java/com/example/core/update/SecureOtaUpdater.kt`, `.github/workflows/android.yml`, `scripts/ci_ota_upgrade_acceptance.sh`. Hesap Makinesi'ndeki sabit imza ve gerçek Android emülatörüyle `adb install -r` / veri korunumu kapıları örnek alınır; APK adları ve uygulama kimliği **Müzik'e özgü** kalır.
+
+1. **Sürüm keşfi:** GitHub `/releases/latest` yalnız stable sürüm içindir ve `NEW_INSTALL_ONLY` ön sürümlerini görmeyebilir. Taslaklar reddedilir; ön sürüm, yalnız resmî etiket + **imzalı `app-release.apk`, hash ve açık sertifika kanıt dosyası** varsa OTA adayı olur. Salt debug ya da imza kanıtı eksik olan ön sürüm indirilmez. Liste en yüksek güvenilir `versionCode` ile değerlendirilir; sabit imzalı yeni sürüm gizlenmez.
+2. **Kurulu sürüm kimliği:** Güncelleme kontrolünde ve kurulumdan önce yeni sürümün sertifika SHA-256'sı cihazdaki kurulu paketin sertifikasıyla karşılaştırılır. Uyuşmazlık `güncel` değil, **güvenli güncelleme engellendi** durumudur. Farklı imzalı eskiler için uninstall, veri sıfırlama, imza kontrolünü kaldırma veya otomatik geçiş yoktur.
+3. **OTA zinciri:** Resmî HTTPS/tag/asset → daha yüksek sürüm → yayınlanmış sertifika kanıtı → kurulu imza → tam APK checksum + gerçek APK imzası/paketi/sürümü → kısıtlı ve devam edebilir indirme → Android PackageInstaller veya güvenli sistem yükleyicisi → kullanıcı onayı. Her aşamada hatada güvenli varsayılan, gizli veri koruması ve test şart.
+4. **Yayın bağı:** CI yalnız sabit üretim anahtarı ve pinlenen fingerprint ile `app-release.apk`, `.sha256` ve `app-release.apk.signer.txt` üretir; üç asset'in public geri indirilmesi, içerik/özet eşitliği ve önceki signed release ile sertifika sürekliliği doğrulanır. Sır veya key asla commit/issue/log'a girmez. `NEW_INSTALL_ONLY` etiketi gerçek fiziksel OTA testine kadar korunur. Ön sürümün eşleşen imzalı kurulumlar için *aday* olması, eski farklı imzalı kurulumlar için güvenli yükseltme vaadi değildir.
+5. **Test kapısı:** Normal/bulanamayan/bozuk/taslak/debug/çift etiket, 403/429/offline/redirect, imza uyuşmazlığı, düşürülen sürüm ve kısmi indirme Robolectric/unit; ayrıca imzalı önceki public APK üzerine `adb install -r` ve Room/favori/playlist/hesap/çevrimdışı verileri iki aşamalı Android emülatör testleri ile kanıtlanır. Bu job başarısız/atlandıysa production-ready otomatik ilan edilmez. Samsung A55 ve diğer üretici üzerinde fiziksel test hâlâ ayrı zorunludur.
+
+
 ## Veri bütünlüğü ek kuralı — 13.11.2026: iç içe playlist kayıtları
 
 - Kullanıcı çalma listesinde `songIds` alanı mevcutsa yalnız JSON dizisi kabul edilir. `null`, düz metin, nesne veya karışık türdeki üyeler sessizce `[]` ya da string'e çevrilmez. Bozuk alan tespit edilirse okuma ve sonraki düzenleme güvenli şekilde başarısız olur; mevcut SharedPreferences baytları ve kullanıcı arşivi korunur.
