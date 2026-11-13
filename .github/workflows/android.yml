@@ -610,13 +610,10 @@ jobs:
           api-level: 34
           arch: x86_64
           profile: pixel_6
+          # android-emulator-runner executes script lines separately.
+          # Use one physical command line, otherwise bash sees fewer than six args.
           script: |
-            bash scripts/ci_music_ota_upgrade_acceptance.sh \
-              "$RUNNER_TEMP/lanu-ota-baseline/app-release.apk" \
-              "app/build/outputs/apk/release/app-release.apk" \
-              "$RUNNER_TEMP/lanu-ota-baseline-test.apk" \
-              "$RUNNER_TEMP/lanu-ota-new-test.apk" \
-              "${{ steps.music_ota_baseline.outputs.version }}" "${{ github.run_number }}"
+            bash scripts/ci_music_ota_upgrade_acceptance.sh "$RUNNER_TEMP/lanu-ota-baseline/app-release.apk" "app/build/outputs/apk/release/app-release.apk" "$RUNNER_TEMP/lanu-ota-baseline-test.apk" "$RUNNER_TEMP/lanu-ota-new-test.apk" "${{ steps.music_ota_baseline.outputs.version }}" "${{ github.run_number }}"
       - name: Attach signed APK only after verification
         shell: bash
         env:
