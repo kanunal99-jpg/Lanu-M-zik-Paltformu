@@ -1,5 +1,11 @@
 # BAĞLAYICI EK PROTOKOL — 25.10.2026: ÖNCE ANAYASA, SONRA YENİDEN DENETİM VE SÜREKLİ SAĞLAMLAŞTIRMA
 
+## Veri bütünlüğü ek kuralı — 13.11.2026: iç içe playlist kayıtları
+
+- Kullanıcı çalma listesinde `songIds` alanı mevcutsa yalnız JSON dizisi kabul edilir. `null`, düz metin, nesne veya karışık türdeki üyeler sessizce `[]` ya da string'e çevrilmez. Bozuk alan tespit edilirse okuma ve sonraki düzenleme güvenli şekilde başarısız olur; mevcut SharedPreferences baytları ve kullanıcı arşivi korunur.
+- Daha eski ve `songIds` alanı hiç içermeyen kayıtlar için geriye uyumlu boş üyelik davranışı korunabilir; bu istisna mevcut fakat bozuk tür taşıyan alanı kapsamamalıdır.
+- Hata mesajı hassas şarkı/playlist isimlerini veya JSON içeriğini loglara dökmez. Önce hatalı iç içe JSON ile gerçek silinme senaryosu için Robolectric regresyonu, ardından normal veri/eksik eski alan/bozuk alan/uç değerler, PR CI Lint + Unit + R8, merge sonrası main CI, imzalı Release ve fiziksel cihaz yükseltme doğrulaması gerekir. CI başarısı cihazdaki verinin korunduğunun kanıtı değildir.
+
 Bu protokol kullanıcı talebiyle yürürlüğe girer ve aşağıdaki eski tarihli durum anlık görüntülerinden önceliklidir. Geçmiş kayıtlar silinmez; geçerli durum her görevde canlı GitHub commit/CI/Release verisiyle yeniden doğrulanır. `AGENTS.md` ve `docs/LANU_PREMIUM_PRODUCTION_STANDARD.md` ile birlikte bağlayıcıdır. Çatışmada kullanıcı verisini, güvenliği, telifi ve geri alınabilirliği en çok koruyan kural uygulanır.
 
 ## Değişmez sıralama: Anayasa → Geri dön → Eksikleri kapat → Yeni iş
